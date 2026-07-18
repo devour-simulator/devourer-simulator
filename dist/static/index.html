@@ -228,6 +228,13 @@
             box-shadow: 0 5px 15px rgba(255, 154, 86, 0.3);
         }
 
+        .skill-card.rarity-normal { background:linear-gradient(135deg,#f3f4f6,#d9dde3); border-color:#9ca3af; }
+        .skill-card.rarity-rare { background:linear-gradient(135deg,#d9f0ff,#75bfff); border-color:#2588e8; }
+        .skill-card.rarity-epic { background:linear-gradient(135deg,#f0d9ff,#b77aff); border-color:#8338d4; }
+        .skill-card.rarity-legendary { background:linear-gradient(120deg,#ff6161,#ffd34e,#65dc93,#60b7ff,#c178ff,#ff6161); background-size:300% 300%; border-color:#ffe36b; animation:legendary-shift 3s linear infinite; }
+        .rarity-tag { display:inline-block; margin-right:8px; padding:2px 7px; border-radius:999px; color:#fff; font-size:11px; background:rgba(25,25,40,.42); }
+        @keyframes legendary-shift { 0% { background-position:0% 50%; } 100% { background-position:100% 50%; } }
+
         .skill-name {
             font-weight: bold;
             color: #c0392b;
@@ -420,6 +427,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=2.6.7"></script>
+    <script src="game.js?v=2.6.8"></script>
 </body>
 </html>

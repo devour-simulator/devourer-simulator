@@ -219,17 +219,13 @@ refreshHeroPrices();
 
 // ============ 技能定义 ============
 const SKILLS = [
-    { name: '强化拳击', desc: '攻击+5', type: 'attack', value: 5 },
-    { name: '坚硬皮肤', desc: '防御+4', type: 'defense', value: 4 },
-    { name: '快速冲刺', desc: '速度+3', type: 'speed', value: 3 },
-    { name: '生命活力', desc: '最大HP+20', type: 'hp', value: 20 },
-    { name: '凶猛打击', desc: '攻击+8 (稀有)', type: 'attack', value: 8 },
-    { name: '铁壁防守', desc: '防御+6 (稀有)', type: 'defense', value: 6 },
-    { name: '闪电速度', desc: '速度+5 (稀有)', type: 'speed', value: 5 },
-    { name: '生命恢复', desc: '最大HP+35 (稀有)', type: 'hp', value: 35 },
-    { name: '狂暴之力', desc: '攻击+10 防御-2 (传奇)', type: 'mixed', value: { attack: 10, defense: -2 } },
-    { name: '终极守护', desc: '防御+8 速度-1 (传奇)', type: 'mixed', value: { defense: 8, speed: -1 } }
+    { name:'强化爪击', desc:'攻击 +4', type:'attack', value:4, rarity:'normal' }, { name:'坚硬皮肤', desc:'防御 +3', type:'defense', value:3, rarity:'normal' }, { name:'轻盈步伐', desc:'速度 +2', type:'speed', value:2, rarity:'normal' }, { name:'生命活力', desc:'最大生命 +18', type:'hp', value:18, rarity:'normal' }, { name:'自然恢复', desc:'脱战回血 +1/秒', type:'regen', value:1, rarity:'normal' }, { name:'精准感知', desc:'暴击率 +5%', type:'crit', value:.05, rarity:'normal' }, { name:'技能增幅', desc:'实体技能伤害 +10%', type:'skillPower', value:.10, rarity:'normal' }, { name:'敏捷反应', desc:'主动技能冷却 -8%', type:'cooldown', value:.08, rarity:'normal' },
+    { name:'凶猛打击', desc:'攻击 +8', type:'attack', value:8, rarity:'rare' }, { name:'铁壁防守', desc:'防御 +6', type:'defense', value:6, rarity:'rare' }, { name:'闪电速度', desc:'速度 +4', type:'speed', value:4, rarity:'rare' }, { name:'生命恢复', desc:'最大生命 +35', type:'hp', value:35, rarity:'rare' }, { name:'战斗自愈', desc:'脱战回血 +3/秒', type:'regen', value:3, rarity:'rare' }, { name:'弱点洞察', desc:'暴击率 +10%', type:'crit', value:.10, rarity:'rare' }, { name:'生命汲取', desc:'普攻吸血 +5%', type:'lifesteal', value:.05, rarity:'rare' }, { name:'实体过载', desc:'实体技能伤害 +25%', type:'skillPower', value:.25, rarity:'rare' },
+    { name:'猎手本能', desc:'攻击 +10，速度 +2', type:'compound', value:{attack:10,speed:2}, rarity:'epic' }, { name:'不屈护甲', desc:'防御 +10，最大生命 +40', type:'compound', value:{defense:10,hp:40}, rarity:'epic' }, { name:'疾风回响', desc:'速度 +6，主动技能冷却 -18%', type:'compound', value:{speed:6,cooldown:.18}, rarity:'epic' }, { name:'嗜血连击', desc:'攻击 +7，吸血 +12%', type:'compound', value:{attack:7,lifesteal:.12}, rarity:'epic' }, { name:'元素共鸣', desc:'实体技能伤害 +45%，暴击率 +10%', type:'compound', value:{skillPower:.45,crit:.10}, rarity:'epic' },
+    { name:'战神降临', desc:'攻击 +18，暴击率 +20%', type:'compound', value:{attack:18,crit:.20}, rarity:'legendary' }, { name:'不灭之躯', desc:'最大生命 +100，脱战回血 +8/秒', type:'compound', value:{hp:100,regen:8}, rarity:'legendary' }, { name:'时空掌控', desc:'速度 +8，主动技能冷却 -35%，实体技能伤害 +35%', type:'compound', value:{speed:8,cooldown:.35,skillPower:.35}, rarity:'legendary' }, { name:'全能王冠', desc:'攻击 +10，防御 +10，速度 +4，最大生命 +50', type:'compound', value:{attack:10,defense:10,speed:4,hp:50}, rarity:'legendary' }
 ];
+
+const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:28}, epic:{label:'史诗',weight:13}, legendary:{label:'传奇',weight:4} };
 
 const RANK_TIERS = ['青铜', '白银', '黄金', '铂金', '钻石'];
 function loadRank() {
@@ -574,6 +570,11 @@ class Character {
         this.empoweredDamage = 0;
         this.shieldHits = 0;
         this.shieldReduction = 0;
+        this.regenBonus = 0;
+        this.critChance = 0;
+        this.lifesteal = 0;
+        this.skillPower = 0;
+        this.activeCooldownReduction = 0;
         this.passiveAbility = ABILITIES[type].passive;
         this.activeAbility = ABILITIES[type].active;
         this.applyPassive();
@@ -602,23 +603,18 @@ class Character {
     }
 
     applySkill(skill) {
-        if (skill.type === 'attack') {
-            this.attack += skill.value;
-        } else if (skill.type === 'defense') {
-            this.defense += skill.value;
-        } else if (skill.type === 'speed') {
-            this.speed += skill.value;
-        } else if (skill.type === 'hp') {
-            const hpIncrease = Number(skill.value) || 0;
-            this.maxHp += hpIncrease;
-            this.hp = this.maxHp;
-            gameState.lastUpgradeNotice = `生命上限 +${hpIncrease}，当前 ${this.maxHp} HP`;
-        } else if (skill.type === 'mixed') {
-            // 混合技能不一定同时包含三种属性，避免未定义值把属性变成 NaN。
-            if (typeof skill.value.attack === 'number') this.attack += skill.value.attack;
-            if (typeof skill.value.defense === 'number') this.defense += skill.value.defense;
-            if (typeof skill.value.speed === 'number') this.speed += skill.value.speed;
-        }
+        const applyBonus = bonus => {
+            if (typeof bonus.attack === 'number') this.attack += bonus.attack;
+            if (typeof bonus.defense === 'number') this.defense += bonus.defense;
+            if (typeof bonus.speed === 'number') this.speed += bonus.speed;
+            if (typeof bonus.hp === 'number') { this.maxHp += bonus.hp; this.hp = this.maxHp; gameState.lastUpgradeNotice = `生命上限 +${bonus.hp}，当前 ${this.maxHp} HP`; }
+            if (typeof bonus.regen === 'number') this.regenBonus += bonus.regen;
+            if (typeof bonus.crit === 'number') this.critChance += bonus.crit;
+            if (typeof bonus.lifesteal === 'number') this.lifesteal += bonus.lifesteal;
+            if (typeof bonus.skillPower === 'number') this.skillPower += bonus.skillPower;
+            if (typeof bonus.cooldown === 'number') this.activeCooldownReduction = Math.min(.7, this.activeCooldownReduction + bonus.cooldown);
+        };
+        applyBonus(skill.type === 'compound' || skill.type === 'mixed' ? skill.value : { [skill.type]: skill.value });
         this.skills.push(skill);
     }
 
@@ -662,7 +658,7 @@ class Character {
         }
 
         spawnSkillEffect(this, active);
-        this.activeCooldown = active.cooldown * TARGET_FPS;
+        this.activeCooldown = active.cooldown * (1 - this.activeCooldownReduction) * TARGET_FPS;
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 3) {
             const enemy = new Enemy('rabbit', this.x + 300, this.y);
             enemy.name = '训练小兔';
@@ -865,10 +861,10 @@ class SkillEffect {
         if (active.effect === 'empower') {
             this.kind = 'projectile'; this.radius = 20; this.life = 55;
             this.vx = owner.facing.x * 10; this.vy = owner.facing.y * 10;
-            this.damage = owner.attack + active.bonus;
+            this.damage = Math.ceil((owner.attack + active.bonus) * (1 + owner.skillPower));
         } else if (active.effect === 'dash') {
             this.kind = 'impact'; this.radius = 58; this.life = 16;
-            this.damage = Math.ceil(owner.attack * 1.35);
+            this.damage = Math.ceil(owner.attack * 1.35 * (1 + owner.skillPower));
         } else {
             this.kind = 'aura'; this.radius = active.effect === 'grow' ? 62 : 48; this.life = 75;
             this.damage = 0;
@@ -961,6 +957,7 @@ function rollBattleDamage(attacker) {
         attacker.empoweredHits--;
         if (attacker.empoweredHits === 0) attacker.empoweredDamage = 0;
     }
+    if (Math.random() < attacker.critChance) damage *= 2;
     return damage;
 }
 
@@ -975,6 +972,7 @@ function attackOnce(attacker, defender) {
         attacker.lastActionText = attacker.bossSkillName || '王者猛击';
     } else attacker.bossRoar = false;
     defender.takeDamage(damage);
+    if (attacker.lifesteal > 0) attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.ceil(damage * attacker.lifesteal));
     attacker.cooldown = Math.max(18, 42 - attacker.speed * 2);
     attacker.attackFlash = canUseBossSkill ? 18 : 10;
     if (attacker === gameState.player || defender === gameState.player) gameState.player.lastCombatTime = gameState.world.time;
@@ -1672,9 +1670,20 @@ function showLevelUpSkills() {
     gameState.levelUpShown = true;
     
     const skillsToShow = [];
-    for (let i = 0; i < 3; i++) {
-        skillsToShow.push(SKILLS[Math.floor(Math.random() * SKILLS.length)]);
-    }
+    const pickSkill = () => {
+        const roll = Math.random() * 100;
+        let total = 0;
+        let rarity = 'normal';
+        for (const key of ['normal', 'rare', 'epic', 'legendary']) {
+            total += RARITY_INFO[key].weight;
+            if (roll < total) { rarity = key; break; }
+        }
+        const pool = SKILLS.filter(skill => skill.rarity === rarity && !skillsToShow.includes(skill));
+        const fallback = SKILLS.filter(skill => !skillsToShow.includes(skill));
+        const source = pool.length ? pool : fallback;
+        return source[Math.floor(Math.random() * source.length)];
+    };
+    for (let i = 0; i < 3; i++) skillsToShow.push(pickSkill());
 
     const grid = document.getElementById('skillsGrid');
     grid.innerHTML = '';
@@ -1682,9 +1691,9 @@ function showLevelUpSkills() {
 
     skillsToShow.forEach((skill, index) => {
         const card = document.createElement('div');
-        card.className = 'skill-card';
+        card.className = `skill-card rarity-${skill.rarity}`;
         card.innerHTML = `
-            <div class="skill-name">${skill.name}</div>
+            <div class="skill-name"><span class="rarity-tag">${RARITY_INFO[skill.rarity].label}</span>${skill.name}</div>
             <div class="skill-desc">${skill.desc}${skill.type === 'hp' ? `（当前上限 ${gameState.player.maxHp} → ${gameState.player.maxHp + skill.value}）` : ''}</div>
         `;
         card.onclick = () => {
@@ -1885,7 +1894,7 @@ function gameLoop(timestamp = performance.now()) {
         handleInput();
         gameState.world.time += elapsedSeconds;
         if (gameState.player.lastCombatTime !== undefined && gameState.world.time - gameState.player.lastCombatTime >= 5) {
-            gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + elapsedSeconds * 3);
+            gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + elapsedSeconds * (3 + gameState.player.regenBonus));
         }
         gameState.player.update(frameScale);
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 0 && Math.hypot(gameState.player.vx, gameState.player.vy) > .05) {
