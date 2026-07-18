@@ -97,6 +97,8 @@
         .enemy-label .enemy-hp > i { display:block; height:100%; background:linear-gradient(90deg,#ff6a6a,#df2222); }
         .enemy-label.boss { color:#ffe274; font-size:12px; }
         .enemy-label.chest-reward { color:#28334b; background:rgba(255,255,255,.94); border:2px solid #ffd84d; border-radius:12px; padding:3px 7px; font-size:11px; text-shadow:none; box-shadow:0 2px 8px rgba(0,0,0,.28); }
+        .damage-number { position:absolute; z-index:4; transform:translate(-50%,-100%); color:#fff; font-size:19px; font-weight:900; white-space:nowrap; text-shadow:0 2px 3px #111, 0 0 5px #111; pointer-events:none; }
+        .damage-number.critical { color:#ffe14d; font-size:25px; text-shadow:0 2px 3px #8b2500, 0 0 8px #ff571f; }
         #tutorialCoach { position:absolute; z-index:300; display:none; width:220px; transform:translate(-50%,-100%); pointer-events:none; text-align:center; }
         #tutorialArrow { color:#ffe63b; font-size:46px; line-height:.8; text-shadow:0 3px 4px #4d3c00; animation:tutorial-bob .7s ease-in-out infinite alternate; }
         #tutorialHint { margin-top:7px; padding:8px 10px; border:2px solid #ffe63b; border-radius:12px; color:#fff; background:rgba(23,45,69,.9); font-size:13px; font-weight:bold; line-height:1.4; box-shadow:0 3px 12px rgba(0,0,0,.35); }
@@ -327,7 +329,7 @@
             <div class="lobby-status"><div class="lobby-pill" id="hallRank"></div><div class="lobby-pill" id="hallCoins"></div></div>
             <div class="mode-grid">
                 <button class="mode-card" id="towerModeButton" type="button"><strong>🗼 爬塔模式</strong>清空当前层敌人，逐层挑战；每 5 层出现 Boss，获胜可得额外经验和满血奖励。</button>
-                <button class="mode-card" id="rankedModeButton" type="button"><strong>⚔️ 排位模式</strong>赢一局加一星，输一局扣一星；青铜、白银、黄金、铂金、钻石、星耀，最终晋升王者。</button>
+                <button class="mode-card" id="rankedModeButton" type="button"><strong>⚔️ 排位模式</strong>排位爬塔会自动存档，关闭游戏后可继续挑战；青铜、白银、黄金、铂金、钻石、星耀，最终晋升王者。</button>
                 <button class="mode-card" id="teamModeButton" type="button"><strong>👥 5v5 团队模式</strong>带领 4 名 AI 队友，对抗 5 名敌方英雄；全队被击败即失败。</button>
             </div>
             <div class="tip" id="hallHeroes"></div>
@@ -427,6 +429,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=2.6.9"></script>
+    <script src="game.js?v=2.7.0"></script>
 </body>
 </html>

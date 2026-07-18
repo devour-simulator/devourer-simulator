@@ -274,6 +274,7 @@ let gameState = {
     particles: [],
     skillEffects: [],
     chests: [],
+    damageNumbers: [],
     levelUpShown: false,  // 防止升级界面重复生成
     world: {
         level: 1,
@@ -292,6 +293,57 @@ let gameState = {
 
 let controlMode = localStorage.getItem('controlMode') || 'desktop';
 const mobileInput = { x: 0, y: 0, active: false };
+const RANKED_RUN_SAVE_KEY = 'rankedTowerRun';
+let lastRankedSaveAt = 0;
+
+function spawnDamageNumber(target, amount, critical = false, source = '') {
+    if (!target || !Number.isFinite(amount)) return;
+    gameState.damageNumbers.push({
+        x: target.x + (Math.random() - .5) * 24,
+        y: target.y - target.radius - 8,
+        amount: Math.max(0, Math.round(amount)),
+        critical,
+        source,
+        life: 42,
+        maxLife: 42
+    });
+}
+
+function saveRankedRun() {
+    const player = gameState.player;
+    if (gameState.mode !== 'ranked' || gameState.screen !== 'playing' || !player) return;
+    const fields = ['level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+    const playerState = { type: player.type };
+    fields.forEach(field => { playerState[field] = player[field]; });
+    localStorage.setItem(RANKED_RUN_SAVE_KEY, JSON.stringify({
+        player: playerState,
+        level: gameState.world.level,
+        time: gameState.world.time,
+        killCount: gameState.stats.killCount,
+        savedAt: Date.now()
+    }));
+}
+
+function getSavedRankedRun() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(RANKED_RUN_SAVE_KEY) || 'null');
+        return saved && saved.player && ANIMALS[saved.player.type] ? saved : null;
+    } catch (_) {
+        localStorage.removeItem(RANKED_RUN_SAVE_KEY);
+        return null;
+    }
+}
+
+function clearRankedRun() { localStorage.removeItem(RANKED_RUN_SAVE_KEY); }
+
+function resumeRankedRun() {
+    const saved = getSavedRankedRun();
+    if (!saved) return false;
+    gameState.mode = 'ranked';
+    document.getElementById('hallModal').classList.add('hidden');
+    startGame(saved.player.type, saved);
+    return true;
+}
 
 function updateControlLayout() {
     const joystick = document.getElementById('mobileJoystick');
@@ -534,6 +586,18 @@ function renderEnemyLabels() {
         label.className = 'enemy-label chest-reward';
         label.style.left = `${(point.x*.5+.5)*100}%`; label.style.top = `${(-point.y*.5+.5)*100}%`;
         label.innerHTML = `<span>${particle.type === 'heal' ? `HP+${particle.value}` : `EXP+${particle.value}`}</span>`;
+        threeLabels.appendChild(label);
+    });
+    gameState.damageNumbers.forEach(number => {
+        const pos = toWorld(number);
+        const point = new Three.Vector3(pos.x, 1.35, pos.z).project(threeCamera);
+        if (point.z < -1 || point.z > 1) return;
+        const label = document.createElement('div');
+        label.className = `damage-number${number.critical ? ' critical' : ''}`;
+        label.style.left = `${(point.x * .5 + .5) * 100}%`;
+        label.style.top = `${(-point.y * .5 + .5) * 100}%`;
+        label.style.opacity = Math.max(0, number.life / number.maxLife);
+        label.textContent = `${number.critical ? '暴击! ' : ''}${number.source ? `${number.source} ` : ''}-${number.amount}`;
         threeLabels.appendChild(label);
     });
 }
@@ -910,7 +974,8 @@ function updateSkillEffects(frameScale = 1) {
             for (const enemy of gameState.enemies) {
                 if (effect.hitEnemies.has(enemy)) continue;
                 if (Math.hypot(effect.x - enemy.x, effect.y - enemy.y) < effect.radius + enemy.radius) {
-                    enemy.takeDamage(effect.damage);
+                    const actualDamage = enemy.takeDamage(effect.damage);
+                    spawnDamageNumber(enemy, actualDamage, false, '技能');
                     // 敌人仍保留 1 点生命交给碰撞战斗结算，避免投射物击杀后跳过层数与奖励流程。
                     enemy.hp = Math.max(1, enemy.hp);
                     enemy.attackFlash = 8;
@@ -919,6 +984,15 @@ function updateSkillEffects(frameScale = 1) {
             }
         }
         if (effect.life <= 0 || effect.x < -80 || effect.x > GAME_WIDTH + 80 || effect.y < -80 || effect.y > GAME_HEIGHT + 80) gameState.skillEffects.splice(i, 1);
+    }
+}
+
+function updateDamageNumbers(frameScale = 1) {
+    for (let i = gameState.damageNumbers.length - 1; i >= 0; i--) {
+        const number = gameState.damageNumbers[i];
+        number.y -= .65 * frameScale;
+        number.life -= frameScale;
+        if (number.life <= 0) gameState.damageNumbers.splice(i, 1);
     }
 }
 
@@ -957,7 +1031,8 @@ function rollBattleDamage(attacker) {
         attacker.empoweredHits--;
         if (attacker.empoweredHits === 0) attacker.empoweredDamage = 0;
     }
-    if (Math.random() < attacker.critChance) damage *= 2;
+    attacker.lastCritical = Math.random() < attacker.critChance;
+    if (attacker.lastCritical) damage *= 2;
     return damage;
 }
 
@@ -971,7 +1046,8 @@ function attackOnce(attacker, defender) {
         attacker.bossRoar = true;
         attacker.lastActionText = attacker.bossSkillName || '王者猛击';
     } else attacker.bossRoar = false;
-    defender.takeDamage(damage);
+    const actualDamage = defender.takeDamage(damage);
+    spawnDamageNumber(defender, actualDamage, attacker.lastCritical, canUseBossSkill ? 'BOSS!' : '');
     if (attacker.lifesteal > 0) attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.ceil(damage * attacker.lifesteal));
     attacker.cooldown = Math.max(18, 42 - attacker.speed * 2);
     attacker.attackFlash = canUseBossSkill ? 18 : 10;
@@ -1318,6 +1394,13 @@ function confirmPurchase(key) {
 }
 
 function chooseMode(mode) {
+    if (mode === 'ranked' && getSavedRankedRun()) {
+        if (window.confirm('检测到未完成的排位爬塔挑战。\n确定：继续上次进度\n取消：开始新的挑战')) {
+            resumeRankedRun();
+            return;
+        }
+        clearRankedRun();
+    }
     gameState.mode = mode;
     document.getElementById('hallModal').classList.add('hidden');
     document.getElementById('selectTitle').textContent = mode === 'ranked' ? `⚔️ 排位赛 · ${rankLabel()}` : mode === 'team' ? '👥 5v5 团队模式：选择英雄' : '🗼 爬塔模式：选择英雄';
@@ -1371,7 +1454,7 @@ function showAnimalSelection() {
     document.getElementById('selectModal').classList.remove('hidden');
 }
 
-function startGame(animalType) {
+function startGame(animalType, savedRun = null) {
     document.getElementById('selectModal').classList.add('hidden');
     gameState.screen = 'playing';
     gameState.levelUpShown = false;  // 重置升级标志
@@ -1380,9 +1463,20 @@ function startGame(animalType) {
     gameState.particles = [];
     gameState.skillEffects = [];
     gameState.chests = [];
+    gameState.damageNumbers = [];
     gameState.stats.killCount = 0;
     gameState.world.level = 1;
     gameState.world.time = 0;
+    if (savedRun && gameState.mode === 'ranked') {
+        const savedPlayer = savedRun.player;
+        const fields = ['level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+        fields.forEach(field => { if (savedPlayer[field] !== undefined) gameState.player[field] = savedPlayer[field]; });
+        gameState.world.level = Math.max(1, savedRun.level || 1);
+        gameState.world.time = Math.max(0, savedRun.time || 0);
+        gameState.stats.killCount = Math.max(0, savedRun.killCount || 0);
+    } else if (gameState.mode === 'ranked') {
+        clearRankedRun();
+    }
     lastFrameTime = null;
     updateControlLayout();
 
@@ -1392,6 +1486,7 @@ function startGame(animalType) {
         spawnAmbientPickups();
         spawnChest();
     }
+    saveRankedRun();
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
     requestAnimationFrame(gameLoop);
 }
@@ -1544,6 +1639,7 @@ function checkCollisions() {
 
 function finishRankedMatch(won, rankRewardOverride = null) {
     gameState.screen = 'gameover';
+    if (gameState.mode === 'ranked') clearRankedRun();
     accountExp(won ? 45 : 20);
     let rankReward = 0;
     if (gameState.mode === 'ranked') {
@@ -1788,7 +1884,8 @@ window.addEventListener('keyup', (e) => {
 
 // 移动控制
 function handleInput() {
-    const speed = 2.5;
+    // 速度同时决定移动速度和攻击间隔：每 1 点速度约增加 0.24 像素/帧移动。
+    const speed = 2.1 + gameState.player.speed * 0.24;
     gameState.player.vx = 0;
     gameState.player.vy = 0;
 
@@ -1848,6 +1945,19 @@ function render() {
             particle.draw(ctx);
         });
         gameState.skillEffects.forEach(effect => effect.draw(ctx));
+        gameState.damageNumbers.forEach(number => {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, number.life / number.maxLife);
+            ctx.font = `900 ${number.critical ? 28 : 20}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = number.critical ? '#ffe14d' : '#fff';
+            ctx.strokeStyle = number.critical ? '#8b2500' : '#111';
+            ctx.lineWidth = 4;
+            const text = `${number.critical ? '暴击! ' : ''}${number.source ? `${number.source} ` : ''}-${number.amount}`;
+            ctx.strokeText(text, number.x, number.y);
+            ctx.fillText(text, number.x, number.y);
+            ctx.restore();
+        });
 
         // 绘制玩家
         gameState.player.draw(ctx);
@@ -1864,7 +1974,7 @@ function updateUI() {
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
     document.getElementById('playerDefense').textContent = player.defense;
-    document.getElementById('playerSpeed').textContent = player.speed;
+    document.getElementById('playerSpeed').textContent = `${player.speed}（移动 ${Math.round((2.1 + player.speed * .24) * 10) / 10} / 攻速）`;
     document.getElementById('playerLevel').textContent = player.level;
 
     // 专属能力
@@ -1928,10 +2038,15 @@ function gameLoop(timestamp = performance.now()) {
             }
         }
         updateSkillEffects(frameScale);
+        updateDamageNumbers(frameScale);
         
         checkCollisions();
         checkRankedAIBattles();
         checkTeamBattles();
+        if (gameState.mode === 'ranked' && gameState.world.time - lastRankedSaveAt >= 1) {
+            saveRankedRun();
+            lastRankedSaveAt = gameState.world.time;
+        }
         updateUI();
         render();
     } else if (gameState.screen === 'levelup') {
@@ -1946,3 +2061,4 @@ window.addEventListener('load', () => {
     init();
     init3DRenderer();
 });
+window.addEventListener('pagehide', saveRankedRun);
