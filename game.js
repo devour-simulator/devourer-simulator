@@ -227,10 +227,10 @@ const SKILLS = [
 
 const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:28}, epic:{label:'史诗',weight:13}, legendary:{label:'传奇',weight:4} };
 
-const RANK_TIERS = ['青铜', '白银', '黄金', '铂金', '钻石'];
+const RANK_TIERS = ['青铜', '白银', '黄金', '铂金', '钻石', '星耀', '王者'];
 function loadRank() {
     return {
-        tier: Math.max(0, Math.min(4, parseInt(localStorage.getItem('rankTier')) || 0)),
+        tier: Math.max(0, Math.min(RANK_TIERS.length - 1, parseInt(localStorage.getItem('rankTier')) || 0)),
         division: Math.max(1, Math.min(3, parseInt(localStorage.getItem('rankDivision')) || 3)),
         stars: Math.max(0, Math.min(2, parseInt(localStorage.getItem('rankStars')) || 0))
     };
@@ -1201,6 +1201,21 @@ function claimMail(index) {
     openAccountPanel('mail');
 }
 
+function useRenameCard() {
+    if ((gameState.account.inventory.renameCard || 0) < 1) return window.alert('你还没有改名卡。');
+    if (!window.confirm('确定要使用一张改名卡吗？')) return;
+    const banned = /傻[逼比]|妈的|操|fuck|shit|外挂|作弊/i;
+    const nextName = window.prompt('请输入新的名字（2 到 12 个字符）：', gameState.account.name);
+    if (nextName === null) return;
+    const name = nextName.trim();
+    if (name.length < 2 || banned.test(name)) return window.alert('名字不符合规范，请换一个名字。');
+    gameState.account.name = name.slice(0, 12);
+    gameState.account.inventory.renameCard--;
+    saveAccount();
+    window.alert('改名成功！');
+    openAccountPanel('bag');
+}
+
 function initAccount() {
     if (!gameState.account.name) {
         const banned = /傻[逼比]|妈的|操|fuck|shit|外挂|作弊/i;
@@ -1253,7 +1268,7 @@ function openAccountPanel(kind) {
         content.innerHTML = cards(Object.entries(ANIMALS).map(([, h]) => `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${h.emoji}</div><div class="animal-name">${h.name}</div><div class="animal-stats">${h.unlocked ? '已解锁' : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div></div>`).join(''));
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
-        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div></div>`);
+        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div>`);
     } else if (kind === 'shop') {
         title.textContent = '🛒 商城';
         content.innerHTML = cards(Object.entries(ANIMALS)
@@ -1844,6 +1859,7 @@ function updateUI() {
     const player = gameState.player;
 
     // 玩家信息
+    document.getElementById('playerAvatar').textContent = player.emoji;
     document.getElementById('playerName').textContent = player.name;
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
