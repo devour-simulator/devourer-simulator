@@ -1291,8 +1291,15 @@ function setTutorialStep(step) {
     let x = 50, y = 49, direction = '⬇';
     if (step === 1) { x = 64; y = 50; }
     if (step === 2) { x = 74; y = 50; }
-    if (step === 3) { x = 16; y = 31; }
     if (step === 4) { x = 82; y = 50; }
+    coach.style.transform = 'translate(-50%, -100%)';
+    if (step === 3) {
+        // 技能按钮会随着全屏、窗口宽度和面板布局移动，直接读取它的位置。
+        const containerRect = document.getElementById('gameContainer').getBoundingClientRect();
+        const skillRect = document.getElementById('activeSkillButton').getBoundingClientRect();
+        x = ((skillRect.left + skillRect.width / 2 - containerRect.left) / containerRect.width) * 100;
+        y = ((skillRect.top - containerRect.top) / containerRect.height) * 100;
+    }
     coach.style.left = `${x}%`; coach.style.top = `${y}%`;
     arrow.textContent = direction;
     hint.textContent = step === 0
