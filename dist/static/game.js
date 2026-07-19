@@ -1762,7 +1762,7 @@ function checkCollisions() {
 
                 // 升级会暂停游戏，不能在同一帧继续结算其他碰撞或拾取。
                 if (gameState.screen !== 'playing') return;
-            } else if (player.hp <= 0) {
+            } else if (player.hp <= 0 && gameState.mode !== 'team') {
                 // 玩家失败
                 endGame();
                 return;
@@ -1870,7 +1870,7 @@ function updateTeamTargets() {
     if (gameState.mode !== 'team') return;
     const closest = (unit, targets) => targets.reduce((best, target) => !best || Math.hypot(unit.x-target.x, unit.y-target.y) < Math.hypot(unit.x-best.x, unit.y-best.y) ? target : best, null);
     gameState.allies.forEach(ally => { const target = closest(ally, gameState.enemies); if (target) { ally.targetX = target.x; ally.targetY = target.y; } });
-    gameState.enemies.forEach(enemy => { const targets = [gameState.player, ...gameState.allies]; const target = closest(enemy, targets); if (target) { enemy.targetX = target.x; enemy.targetY = target.y; } });
+    gameState.enemies.forEach(enemy => { const targets = [...(gameState.player.hp > 0 ? [gameState.player] : []), ...gameState.allies]; const target = closest(enemy, targets); if (target) { enemy.targetX = target.x; enemy.targetY = target.y; } });
 }
 
 function endGame() {
