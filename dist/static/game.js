@@ -2367,13 +2367,20 @@ document.getElementById('activeSkillButton').addEventListener('click', () => {
     if (gameState.player) gameState.player.useActiveSkill();
 });
 document.getElementById('provokeButton').addEventListener('click', () => {
-    if (!['ranked', 'tower'].includes(gameState.mode) || !gameState.player || gameState.provokeActive) return;
-    gameState.provokeActive = true;
+    if (!['ranked', 'tower'].includes(gameState.mode) || !gameState.player) return;
+    gameState.provokeActive = !gameState.provokeActive;
     gameState.enemies.forEach(enemy => {
-        enemy.targetX = gameState.player.x;
-        enemy.targetY = gameState.player.y;
-        enemy.lastActionText = '正在赶来';
-        enemy.attackFlash = 10;
+        if (gameState.provokeActive) {
+            enemy.targetX = gameState.player.x;
+            enemy.targetY = gameState.player.y;
+            enemy.lastActionText = '正在赶来';
+            enemy.attackFlash = 10;
+        } else if (!enemy.isBoss) {
+            enemy.targetX = Math.random() * GAME_WIDTH;
+            enemy.targetY = Math.random() * GAME_HEIGHT;
+            enemy.changeDirectionTimer = Math.random() * 100 + 50;
+            enemy.lastActionText = '已解除锁定';
+        }
     });
     saveRankedRun();
     updateUI();
@@ -2521,8 +2528,8 @@ function updateUI() {
     const provokeButton = document.getElementById('provokeButton');
     const canProvoke = ['ranked', 'tower'].includes(gameState.mode) && gameState.screen === 'playing';
     provokeButton.style.display = canProvoke ? 'block' : 'none';
-    provokeButton.disabled = gameState.provokeActive;
-    provokeButton.textContent = gameState.provokeActive ? '💢 找死已开启' : '💢 找死·全员来战';
+    provokeButton.disabled = !canProvoke;
+    provokeButton.textContent = gameState.provokeActive ? '🕊️ 取消找死' : '💢 找死·全员来战';
 
     // HP条
     const hpPercent = Math.max(0, player.hp / player.maxHp) * 100;
