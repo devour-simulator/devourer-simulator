@@ -1170,9 +1170,18 @@ class Particle {
     }
 
     update(frameScale = 1, player = null) {
-        // 掉落物需要由玩家亲自靠近收集，不能自动飞入角色体内。
+        // 只有击杀掉落会自动飞向玩家；宝箱与地图上的物品仍需主动靠近。
         if (this.pickupDelay > 0) {
             this.pickupDelay = Math.max(0, this.pickupDelay - frameScale);
+        } else if (this.autoCollect && player) {
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance > 0) {
+                const pull = Math.max(0.8, (1 - Math.min(distance, 260) / 260) * 1.5) * frameScale;
+                this.vx += (dx / distance) * pull;
+                this.vy += (dy / distance) * pull;
+            }
         }
 
         if (!this.isAmbient) {
@@ -1350,6 +1359,7 @@ function spawnParticles(x, y, count = 5) {
         }
         
         const particle = new Particle(x, y, type, value);
+        particle.autoCollect = true;
         // 掉落会向四周弹开，保证玩家能先看见再收集。
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
         const distance = 30 + Math.random() * 35;
