@@ -69,7 +69,10 @@
         #playerStats, #gameStats { background:rgba(255,255,255,.72); padding:6px 9px; font-size:12px; max-width:260px; }
         #playerStats .stat-bar { margin:2px 0; }
         #playerStats .stat-bar-fill { width:92px; }
-        #playerStats .ability-info, #playerStats #upgradeNotice { display:none; }
+        #playerStats .ability-info { display:block; margin:3px 0 0; padding:0; border:0; }
+        #playerStats .ability-info > div { display:none; }
+        #playerStats .active-skill-btn { margin:0; padding:5px 7px; font-size:10px; }
+        #playerStats #upgradeNotice { display:none; }
         #fullscreenButton { position:absolute; z-index:260; right:12px; bottom:12px; }
         #gameContainer:fullscreen, #gameContainer:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
 
@@ -452,6 +455,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=2.8.7"></script>
+    <script src="game.js?v=2.8.8"></script>
 </body>
 </html>

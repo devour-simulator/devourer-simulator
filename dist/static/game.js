@@ -373,12 +373,9 @@ function resumeRankedRun(mode = 'ranked') {
     const saved = getSavedRankedRun(mode);
     if (!saved) return false;
     gameState.mode = mode;
-    if (kind === 'mail' && getMails().some(mail => !mail.claimed)) {
-        const allButton = document.createElement('button');
-        allButton.className = 'btn btn-success'; allButton.type = 'button'; allButton.textContent = '🎁 一键领取全部附件';
-        allButton.onclick = claimAllMails; content.prepend(allButton);
-    }
+    gameState.screen = 'playing';
     document.getElementById('hallModal').classList.add('hidden');
+    document.getElementById('saveChoiceModal').classList.add('hidden');
     startGame(saved.player.type, saved);
     return true;
 }
