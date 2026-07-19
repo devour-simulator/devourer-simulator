@@ -403,6 +403,8 @@ function saveRankedRun() {
         level: gameState.world.level,
         time: gameState.world.time,
         killCount: gameState.stats.killCount,
+        skillRerolls: gameState.skillRerolls || 0,
+        chestAvailable: gameState.world.level === 1 && gameState.chests.length > 0,
         enemies: gameState.enemies.map(serializeEnemy),
         savedAt: Date.now()
     }));
@@ -1168,16 +1170,15 @@ class Particle {
     }
 
     update(frameScale = 1, player = null) {
-        // 玩家靠近时会吸附粒子，让经验和治疗掉落更容易辨认和收集。
+        // 只有击杀掉落会自动飞向玩家；宝箱与地图上的物品仍需主动靠近。
         if (this.pickupDelay > 0) {
             this.pickupDelay = Math.max(0, this.pickupDelay - frameScale);
-        } else if (player) {
+        } else if (this.autoCollect && player) {
             const dx = player.x - this.x;
             const dy = player.y - this.y;
             const distance = Math.hypot(dx, dy);
-            if (distance > 0 && distance < 180) {
-                this.isAmbient = false;
-                const pull = (1 - distance / 180) * 0.65 * frameScale;
+            if (distance > 0) {
+                const pull = Math.max(0.8, (1 - Math.min(distance, 260) / 260) * 1.5) * frameScale;
                 this.vx += (dx / distance) * pull;
                 this.vy += (dy / distance) * pull;
             }
@@ -1358,6 +1359,7 @@ function spawnParticles(x, y, count = 5) {
         }
         
         const particle = new Particle(x, y, type, value);
+        particle.autoCollect = true;
         // 掉落会向四周弹开，保证玩家能先看见再收集。
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
         const distance = 30 + Math.random() * 35;
@@ -1426,12 +1428,13 @@ function spawnChestRewards(x, y) {
         const value = type === 'exp' ? 12 + Math.floor(Math.random() * 4) * 6 : 10 + Math.floor(Math.random() * 3) * 5;
         const particle = new Particle(x, y, type, value);
         const angle = (Math.PI * 2 * i) / 14 + (Math.random() - .5) * .35;
-        const distance = 35 + Math.random() * 28;
+        const distance = 46 + (i % 2) * 7;
         particle.x += Math.cos(angle) * distance;
         particle.y += Math.sin(angle) * distance;
-        particle.vx = Math.cos(angle) * (3 + Math.random() * 3);
-        particle.vy = Math.sin(angle) * (3 + Math.random() * 3) - 3;
-        particle.pickupDelay = 45;
+        // 直接摆成一圈，不再向远处飞散。
+        particle.vx = 0;
+        particle.vy = 0;
+        particle.pickupDelay = 16;
         particle.chestReward = true;
         gameState.particles.push(particle);
     }
@@ -1899,6 +1902,7 @@ function startGame(animalType, savedRun = null) {
         gameState.world.level = Math.max(1, savedRun.level || 1);
         gameState.world.time = Math.max(0, savedRun.time || 0);
         gameState.stats.killCount = Math.max(0, savedRun.killCount || 0);
+        gameState.skillRerolls = Math.max(0, savedRun.skillRerolls || 0);
     } else if (['ranked','tower'].includes(gameState.mode)) {
         clearRankedRun();
     }
@@ -1910,11 +1914,11 @@ function startGame(animalType, savedRun = null) {
     else if (savedRun && ['ranked','tower'].includes(gameState.mode) && Array.isArray(savedRun.enemies)) {
         gameState.enemies = restoreSavedEnemies(savedRun.enemies);
         spawnAmbientPickups();
-        spawnChest();
+        if (savedRun.chestAvailable) spawnChest();
     } else {
         spawnEnemies();
         spawnAmbientPickups();
-        spawnChest();
+        if (gameState.world.level === 1) spawnChest();
     }
     saveRankedRun();
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
@@ -2159,6 +2163,25 @@ function updateTeamTargets() {
     const closest = (unit, targets) => targets.reduce((best, target) => !best || Math.hypot(unit.x-target.x, unit.y-target.y) < Math.hypot(unit.x-best.x, unit.y-best.y) ? target : best, null);
     gameState.allies.forEach(ally => { const target = closest(ally, gameState.enemies); if (target) { ally.targetX = target.x; ally.targetY = target.y; } });
     gameState.enemies.forEach(enemy => { const targets = [...(gameState.player.hp > 0 ? [gameState.player] : []), ...gameState.allies]; const target = closest(enemy, targets); if (target) { enemy.targetX = target.x; enemy.targetY = target.y; } });
+}
+
+// Boss 不必等到与玩家重叠才会施放技能；进入威胁范围后会主动使用专属攻击。
+function updateBossSkills() {
+    const player = gameState.player;
+    if (!player || player.hp <= 0) return;
+    for (const boss of gameState.enemies) {
+        if (!boss.isBoss || boss.bossSkillCooldown > 0) continue;
+        const distance = Math.hypot(boss.x - player.x, boss.y - player.y);
+        if (distance > 230) continue;
+        const damage = Math.ceil(boss.attack * 2.25 + 8);
+        const actualDamage = player.takeDamage(damage);
+        boss.bossSkillCooldown = 7 * TARGET_FPS;
+        boss.bossRoar = true;
+        boss.lastActionText = boss.bossSkillName || '王者猛击';
+        boss.attackFlash = 18;
+        player.lastCombatTime = gameState.world.time;
+        spawnDamageNumber(player, actualDamage, false, 'BOSS!');
+    }
 }
 
 function endGame() {
@@ -2530,6 +2553,12 @@ function gameLoop(timestamp = performance.now()) {
         updateTeamTargets();
         gameState.allies.forEach(ally => ally.update(frameScale));
         gameState.enemies.forEach(enemy => enemy.update(frameScale));
+        updateBossSkills();
+        if (gameState.mode !== 'team' && gameState.player.hp <= 0) {
+            endGame();
+            requestAnimationFrame(gameLoop);
+            return;
+        }
         
         // 更新粒子
         for (let i = gameState.particles.length - 1; i >= 0; i--) {
