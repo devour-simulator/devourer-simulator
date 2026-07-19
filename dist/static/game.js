@@ -234,7 +234,7 @@ Object.assign(ANIMALS, {
         : {passive:{name:'猎手本能',desc:'攻击 +1',bonus:{attack:1}},active:{name:'实体突袭',desc:'发射穿透地图的实体攻击',effect:'empower',bonus:10,hits:1,cooldown:10}};
 });
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'];
-const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'];
+const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
 function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':'land'; }
 
 // 商城价格由英雄强度决定，不再受加入游戏的先后顺序影响。
@@ -759,6 +759,16 @@ function build3DMesh(entity, kind) {
     if (type === 'monkey') { add(new Three.SphereGeometry(.13,8,6),material,-.3*size,.78*size,0); add(new Three.SphereGeometry(.13,8,6),material,.3*size,.78*size,0); const tail=add(new Three.TorusGeometry(.28*size,.045*size,6,10,Math.PI),material,0,.42*size,.55*size); tail.rotation.x=Math.PI/2; }
     if (type === 'otter' || type === 'axolotl') { const tail=add(new Three.ConeGeometry(.18*size,.65*size,5),material,0,.36*size,.65*size); tail.rotation.x=Math.PI/2; if(type==='axolotl') [-.38,.38].forEach(x=>add(new Three.ConeGeometry(.08*size,.28*size,4),new Three.MeshStandardMaterial({color:0xff6fae}),x*size,.75*size,0)); }
     if (['eagle','owl','crane','phoenix','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'].includes(type)) { wing(-.48); wing(.48); add(new Three.ConeGeometry(.11*size,.35*size,4), type==='phoenix' ? new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0x551100}) : new Three.MeshStandardMaterial({color:0xffcc4a}), 0,.62*size,-.44*size).rotation.x=-Math.PI/2; }
+    if (type === 'flamingo') {
+        // 火烈鸟是涉水地面鸟：长腿行走，不会漂浮在天空场景。
+        legs.forEach(leg => group.remove(leg)); legs.length = 0;
+        [-.13, .13].forEach(x => {
+            const longLeg = add(new Three.CylinderGeometry(.032 * size, .04 * size, .78 * size, 6), material, x * size, .2 * size, .08 * size);
+            legs.push(longLeg);
+        });
+        const neck = add(new Three.CylinderGeometry(.07 * size, .1 * size, .62 * size, 7), material, 0, 1.02 * size, .04 * size);
+        neck.rotation.z = -.22;
+    }
     if (type === 'owl') { add(new Three.SphereGeometry(.16,8,6),light,-.15*size,.72*size,-.34*size); add(new Three.SphereGeometry(.16,8,6),light,.15*size,.72*size,-.34*size); }
     if (type === 'crane') { const neck=add(new Three.CylinderGeometry(.08*size,.12*size,.7*size,7),light,0,1.05*size,.08*size); neck.rotation.z=.18; }
     if (type === 'phoenix') { for(let i=-2;i<=2;i++){ const flame=add(new Three.ConeGeometry(.1*size,.55*size,5),new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0xaa2200,emissiveIntensity:.6}),i*.12*size,1.1*size,.2*size); flame.rotation.z=i*.18; } }
@@ -772,7 +782,7 @@ function build3DMesh(entity, kind) {
         group.userData.playerMarker = marker;
     }
     if (entity.isBoss) { const crown = add(new Three.ConeGeometry(.38 * size, .55 * size, 5), new Three.MeshStandardMaterial({ color: 0xffd54a, emissive: 0x775500 }), 0, 1.65 * size, 0); crown.rotation.y = Math.PI / 5; }
-    group.userData.flying = ['eagle', 'owl', 'crane', 'phoenix', 'bat', 'parrot', 'falcon', 'albatross', 'hummingbird', 'swan', 'condor', 'pelican', 'flamingo', 'raven', 'pigeon', 'goose', 'cockatoo', 'kitebird'].includes(type);
+    group.userData.flying = ['eagle', 'owl', 'crane', 'phoenix', 'bat', 'parrot', 'falcon', 'albatross', 'hummingbird', 'swan', 'condor', 'pelican', 'raven', 'pigeon', 'goose', 'cockatoo', 'kitebird'].includes(type);
     group.userData.wings = group.children.filter(child => child.geometry && child.geometry.type === 'ConeGeometry' && Math.abs(child.rotation.z) > 1);
     group.userData.legs = legs;
     group.userData.body = head;
