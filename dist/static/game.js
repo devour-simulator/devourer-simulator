@@ -209,7 +209,7 @@ Object.assign(ABILITIES, {
 Object.assign(ANIMALS, {
     seal:{name:'海豹',emoji:'🦭',baseAttack:7,baseDefense:5,baseSpeed:7,baseHp:48,color:'#9fb9c5',unlocked:false},
     whale:{name:'蓝鲸',emoji:'🐋',baseAttack:11,baseDefense:8,baseSpeed:4,baseHp:78,color:'#4f82a6',unlocked:false},
-    orca:{name:'虎鲸',emoji:'🐳',baseAttack:12,baseDefense:5,baseSpeed:8,baseHp:55,color:'#26374b',unlocked:false},
+    orca:{name:'虎鲸',emoji:'🐋',baseAttack:12,baseDefense:5,baseSpeed:8,baseHp:55,color:'#101114',unlocked:false},
     octopus:{name:'章鱼',emoji:'🐙',baseAttack:8,baseDefense:5,baseSpeed:6,baseHp:52,color:'#a65b9c',unlocked:false},
     jellyfish:{name:'水母',emoji:'🪼',baseAttack:6,baseDefense:3,baseSpeed:9,baseHp:38,color:'#78bfe7',unlocked:false},
     falcon:{name:'猎鹰',emoji:'🦅',baseAttack:10,baseDefense:3,baseSpeed:11,baseHp:38,color:'#8b6a48',unlocked:false},
@@ -544,6 +544,11 @@ function build3DMesh(entity, kind) {
         add(new Three.SphereGeometry(.055, 7, 6), dark, .16, .64, -.7);
         const belly = new Three.MeshStandardMaterial({ color: 0xdde6e8, roughness: .8, flatShading: true });
         add(new Three.SphereGeometry(.28, 10, 6), belly, 0, .38, -.05, 1.35, .25, 1.9);
+        if (entity.type === 'orca') {
+            // 虎鲸的白色眼斑和白色腹部：与黑色背部形成现实中的典型配色。
+            add(new Three.SphereGeometry(.13, 8, 6), belly, -.26, .69, -.58, .9, .45, .18);
+            add(new Three.SphereGeometry(.13, 8, 6), belly, .26, .69, -.58, .9, .45, .18);
+        }
         const fin = (x, y, z, scaleX, rotationZ = 0) => {
             const part = add(new Three.ConeGeometry(.18, .62, 4), material, x, y, z, scaleX, 1, 1);
             part.rotation.z = rotationZ; return part;
