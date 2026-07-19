@@ -430,6 +430,16 @@
         <div id="upgradeNotice" style="margin-top:7px; font-size:11px; color:#c05b16;"></div>
     </div>
 
+    <div id="saveChoiceModal" class="modal hidden">
+        <div class="modal-content game-over-container">
+            <div class="modal-title">💾 发现未完成的挑战</div>
+            <div class="rank-info">请选择接下来要做什么：</div>
+            <button id="resumeSaveButton" class="btn btn-success" type="button">▶ 继续游戏</button>
+            <button id="deleteSaveButton" class="btn" type="button">🗑️ 取消存档，开始新游戏</button>
+            <button id="saveChoiceBackButton" class="btn" type="button">🏠 返回大厅</button>
+        </div>
+    </div>
+
     <!-- 游戏统计 -->
     <div id="gameStats" class="ui-overlay">
         <div style="margin-bottom: 10px;">🎯 <span id="killCount">0</span> 个敌人被击杀</div>
@@ -442,6 +452,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=2.8.5"></script>
+    <script src="game.js?v=2.8.6"></script>
 </body>
 </html>

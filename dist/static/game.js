@@ -326,6 +326,7 @@ const mobileInput = { x: 0, y: 0, active: false };
 const RANKED_RUN_SAVE_KEY = 'rankedTowerRun';
 const TOWER_RUN_SAVE_KEY = 'towerRun';
 let lastRankedSaveAt = 0;
+let pendingSaveMode = null;
 
 function spawnDamageNumber(target, amount, critical = false, source = '') {
     if (!target || !Number.isFinite(amount)) return;
@@ -1539,14 +1540,9 @@ function confirmPurchase(key) {
 
 function chooseMode(mode) {
     if (['ranked','tower'].includes(mode) && getSavedRankedRun(mode)) {
-        const choice = String(window.prompt('检测到未完成的挑战：\n输入 1：继续游戏\n输入 2：取消存档并开始新游戏\n输入 3：返回大厅', '1') || '3').trim();
-        if (choice === '1') {
-            if (resumeRankedRun(mode)) return;
-            window.alert('存档读取失败，已返回大厅。');
-            return;
-        }
-        if (choice === '2') clearRankedRun(mode);
-        else return;
+        pendingSaveMode = mode;
+        document.getElementById('saveChoiceModal').classList.remove('hidden');
+        return;
     }
     gameState.mode = mode;
     document.getElementById('hallModal').classList.add('hidden');
@@ -1995,6 +1991,19 @@ const keys = {};
 document.getElementById('towerModeButton').addEventListener('click', () => chooseMode('tower'));
 document.getElementById('rankedModeButton').addEventListener('click', () => chooseMode('ranked'));
 document.getElementById('teamModeButton').addEventListener('click', () => chooseMode('team'));
+document.getElementById('resumeSaveButton').addEventListener('click', () => {
+    const mode = pendingSaveMode; pendingSaveMode = null;
+    document.getElementById('saveChoiceModal').classList.add('hidden');
+    if (!resumeRankedRun(mode)) window.alert('存档读取失败，请选择开始新游戏。');
+});
+document.getElementById('deleteSaveButton').addEventListener('click', () => {
+    const mode = pendingSaveMode; pendingSaveMode = null;
+    document.getElementById('saveChoiceModal').classList.add('hidden');
+    clearRankedRun(mode); chooseMode(mode);
+});
+document.getElementById('saveChoiceBackButton').addEventListener('click', () => {
+    pendingSaveMode = null; document.getElementById('saveChoiceModal').classList.add('hidden'); showHall();
+});
 document.getElementById('fullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('selectBackButton').addEventListener('click', cancelAnimalSelection);
 document.getElementById('signButton').addEventListener('click', claimDailySignIn);
