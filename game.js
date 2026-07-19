@@ -1463,7 +1463,7 @@ function showHall() {
     document.getElementById('hallCoins').textContent = `🪙 ${gameState.stats.coins} 金币`;
     document.getElementById('accountName').textContent = `👤 ${gameState.account.name}`;
     document.getElementById('accountLevel').textContent = `Lv.${gameState.account.level} · ${gameState.account.exp}/${gameState.account.level * 100} 账号经验`;
-    document.getElementById('reputationText').textContent = `信誉分 ${gameState.account.reputation}/100`;
+    // 信誉分系统已移除，账号只保留等级与金币进度。
     document.getElementById('hallHeroes').textContent = `英雄图鉴：${unlocked}/${Object.keys(ANIMALS).length} 已解锁（进入模式后可购买英雄）`;
     const signedToday = localStorage.getItem('signDate') === new Date().toDateString();
     const signDay = Math.min(7, parseInt(localStorage.getItem('signDay')) || 0);
@@ -1539,9 +1539,10 @@ function confirmPurchase(key) {
 
 function chooseMode(mode) {
     if (['ranked','tower'].includes(mode) && getSavedRankedRun(mode)) {
-        const choice = window.prompt('检测到未完成的挑战：\n输入 1：继续游戏\n输入 2：取消存档并开始新游戏\n输入 3：返回大厅', '1');
+        const choice = String(window.prompt('检测到未完成的挑战：\n输入 1：继续游戏\n输入 2：取消存档并开始新游戏\n输入 3：返回大厅', '1') || '3').trim();
         if (choice === '1') {
-            resumeRankedRun(mode);
+            if (resumeRankedRun(mode)) return;
+            window.alert('存档读取失败，已返回大厅。');
             return;
         }
         if (choice === '2') clearRankedRun(mode);
