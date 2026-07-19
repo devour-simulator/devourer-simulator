@@ -2159,9 +2159,10 @@ function updateUI() {
     document.getElementById('passiveSkill').textContent = `被动·${player.passiveAbility.name}：${player.passiveAbility.desc}`;
     const activeButton = document.getElementById('activeSkillButton');
     const cooldownSeconds = Math.ceil(player.activeCooldown / TARGET_FPS);
+    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '⚡' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
     activeButton.textContent = cooldownSeconds > 0
-        ? `${player.activeAbility.name}（${cooldownSeconds}s）`
-        : `${player.activeAbility.name}（${controlMode === 'mobile' ? '点击' : '空格'}）`;
+        ? `${skillIcon} ${player.activeAbility.name} · 冷却 ${cooldownSeconds}s`
+        : `${skillIcon} ${player.activeAbility.name}（${controlMode === 'mobile' ? '点击' : '空格'}）`;
     activeButton.title = player.activeAbility.desc;
     activeButton.disabled = player.activeCooldown > 0;
 
@@ -2237,7 +2238,10 @@ function gameLoop(timestamp = performance.now()) {
 // 启动游戏
 window.addEventListener('load', () => {
     const container = document.getElementById('gameContainer');
-    container.append(document.getElementById('playerStats'), document.getElementById('gameStats'));
+    // 全屏时把所有弹窗也放进全屏容器，升级/胜负确认不会再卡在容器外。
+    ['hallModal','subPageModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','playerStats','gameStats'].forEach(id => {
+        const element = document.getElementById(id); if (element) container.append(element);
+    });
     init();
     init3DRenderer();
 });
