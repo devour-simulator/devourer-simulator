@@ -1617,6 +1617,7 @@ function startGame(animalType, savedRun = null) {
     gameState.chests = [];
     gameState.damageNumbers = [];
     gameState.stats.killCount = 0;
+    gameState.skillRerolls = 0;
     gameState.world.level = 1;
     gameState.world.time = 0;
     gameState.environment = environmentFor(animalType);
@@ -1964,6 +1965,8 @@ function showLevelUpSkills() {
     grid.innerHTML = '';
     document.getElementById('levelUpInfo').textContent = `升级到 Lv.${gameState.player.level}!`;
 
+    const renderSkills = () => {
+    grid.innerHTML = '';
     skillsToShow.forEach((skill, index) => {
         const card = document.createElement('div');
         card.className = `skill-card rarity-${skill.rarity}`;
@@ -1983,6 +1986,22 @@ function showLevelUpSkills() {
         };
         grid.appendChild(card);
     });
+    if (['tower','ranked'].includes(gameState.mode)) {
+        const rerolls = gameState.skillRerolls || 0;
+        const cost = rerolls === 0 ? 0 : rerolls * 10;
+        const button = document.createElement('button'); button.className = 'btn';
+        button.textContent = cost ? `🔄 刷新技能（🪙 ${cost}）` : '🔄 免费刷新技能（本局一次）';
+        button.onclick = () => {
+            if (cost && gameState.stats.coins < cost) return window.alert('金币不足！');
+            if (cost) { gameState.stats.coins -= cost; localStorage.setItem('coins', gameState.stats.coins); }
+            gameState.skillRerolls = rerolls + 1;
+            skillsToShow.length = 0; for (let i=0;i<3;i++) skillsToShow.push(pickSkill());
+            renderSkills();
+        };
+        grid.appendChild(button);
+    }
+    };
+    renderSkills();
 
     document.getElementById('levelUpModal').classList.remove('hidden');
 }
