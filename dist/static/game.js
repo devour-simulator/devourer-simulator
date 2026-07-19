@@ -1265,7 +1265,11 @@ function init() {
     gameState.screen = 'hall';
     showHall();
     // 首次进入不再弹出大厅说明，而是直接进入一局可操作的新手实战。
-    if (!localStorage.getItem('tutorialComplete')) startTutorialBattle();
+    if (!localStorage.getItem('tutorialComplete')) {
+        const useMobile = window.confirm('新手教程：你使用手机玩吗？\n确定：手机摇杆\n取消：电脑键盘');
+        setControlMode(useMobile ? 'mobile' : 'desktop');
+        startTutorialBattle();
+    }
 }
 
 const TUTORIAL_STEPS = [
@@ -1273,7 +1277,7 @@ const TUTORIAL_STEPS = [
     '跟着箭头吃掉这个经验点：会获得经验并回复 1 点生命。',
     '靠近宝箱打开它。奖励会落在宝箱周围，记得亲自拾取。',
     '点击左上角的主动技能按钮，试试小猫的成长呼噜。',
-    '最后靠近小兔子并击败它。碰到敌人会自动攻击。'
+    '最后靠近小兔子并击败它。碰到敌人会自动攻击；脱战 5 秒会自动回血。升级后可选择普通、稀有、史诗或传奇技能。'
 ];
 
 function setTutorialStep(step) {
