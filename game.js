@@ -657,9 +657,10 @@ function build3DMesh(entity, kind) {
             const flipper = add(new Three.SphereGeometry(.18, 8, 6), fur, side * .48, .37, .06, .42, .22, .95);
             flipper.rotation.z = side * .45;
         });
+        // 海豹明显分叉的后鳍尾巴，放在身体后方而不是藏在身体里面。
         [-1, 1].forEach(side => {
-            const rearFlipper = add(new Three.ConeGeometry(.13, .42, 5), fur, side * .16, .39, .78);
-            rearFlipper.rotation.x = Math.PI / 2; rearFlipper.rotation.z = side * .45;
+            const rearFlipper = add(new Three.SphereGeometry(.18, 8, 6), fur, side * .19, .42, 1.02, .7, .22, 1.35);
+            rearFlipper.rotation.z = side * .5;
         });
         [-1, 1].forEach(side => {
             const whisker = add(new Three.CylinderGeometry(.008, .008, .26, 4), light, side * .14, .59, -.86);
@@ -1254,6 +1255,36 @@ function spawnSkillEffect(owner, active) {
     gameState.skillEffects.push(new SkillEffect(owner, active));
 }
 
+function defeatEnemyBySkill(enemy) {
+    const player = gameState.player;
+    const index = gameState.enemies.indexOf(enemy);
+    if (!player || index < 0) return;
+    gameState.stats.killCount++;
+    gameState.stats.coins += enemy.isBoss ? 80 : 12;
+    localStorage.setItem('coins', gameState.stats.coins);
+    player.addExp(Math.floor(10 * (1 + enemy.level * 0.5)));
+    spawnParticles(enemy.x, enemy.y, 5);
+    gameState.enemies.splice(index, 1);
+    if (gameState.enemies.length !== 0) return;
+    if (gameState.mode === 'tutorial') return completeTutorialBattle();
+    if (gameState.mode === 'team') return finishRankedMatch(true);
+    if (gameState.mode === 'ranked') {
+        if (gameState.world.level >= 50) return finishRankedMatch(true, 4);
+        if (enemy.isBoss) { player.hp = player.maxHp; spawnParticles(enemy.x, enemy.y, 10); }
+        gameState.world.level++;
+        spawnEnemies();
+        player.addExp(500);
+        return;
+    }
+    if (enemy.isBoss) {
+        player.addExp(50 + gameState.world.level * 10);
+        player.hp = player.maxHp;
+        spawnParticles(enemy.x, enemy.y, 10);
+    }
+    gameState.world.level++;
+    spawnEnemies();
+}
+
 function updateSkillEffects(frameScale = 1) {
     for (let i = gameState.skillEffects.length - 1; i >= 0; i--) {
         const effect = gameState.skillEffects[i];
@@ -1264,10 +1295,9 @@ function updateSkillEffects(frameScale = 1) {
                 if (Math.hypot(effect.x - enemy.x, effect.y - enemy.y) < effect.radius + enemy.radius) {
                     const actualDamage = enemy.takeDamage(effect.damage);
                     spawnDamageNumber(enemy, actualDamage, false, '技能');
-                    // 敌人仍保留 1 点生命交给碰撞战斗结算，避免投射物击杀后跳过层数与奖励流程。
-                    enemy.hp = Math.max(1, enemy.hp);
                     enemy.attackFlash = 8;
                     effect.hitEnemies.add(enemy);
+                    if (enemy.hp <= 0) { defeatEnemyBySkill(enemy); return; }
                 }
             }
         }
