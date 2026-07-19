@@ -346,10 +346,30 @@ function spawnDamageNumber(target, amount, critical = false, source = '') {
 }
 
 function runSaveKey(mode = gameState.mode) { return mode === 'ranked' ? RANKED_RUN_SAVE_KEY : TOWER_RUN_SAVE_KEY; }
+function serializeEnemy(enemy) {
+    return {
+        type: enemy.type, x: enemy.x, y: enemy.y, hp: enemy.hp, maxHp: enemy.maxHp,
+        attack: enemy.attack, defense: enemy.defense, speed: enemy.speed, level: enemy.level,
+        name: enemy.name, emoji: enemy.emoji, radius: enemy.radius, isBoss: !!enemy.isBoss,
+        bossSkillCooldown: enemy.bossSkillCooldown, bossSkillName: enemy.bossSkillName
+    };
+}
+function restoreSavedEnemies(savedEnemies) {
+    if (!Array.isArray(savedEnemies)) return null;
+    return savedEnemies.map(saved => {
+        if (!saved || !ANIMALS[saved.type]) return null;
+        const enemy = new Enemy(saved.type, saved.x, saved.y);
+        ['hp','maxHp','attack','defense','speed','level','name','emoji','radius','bossSkillCooldown','bossSkillName'].forEach(field => {
+            if (saved[field] !== undefined) enemy[field] = saved[field];
+        });
+        enemy.isBoss = !!saved.isBoss;
+        return enemy;
+    }).filter(Boolean);
+}
 function saveRankedRun() {
     const player = gameState.player;
     if (!['ranked','tower'].includes(gameState.mode) || gameState.screen !== 'playing' || !player) return;
-    const fields = ['level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+    const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
     const playerState = { type: player.type };
     fields.forEach(field => { playerState[field] = player[field]; });
     localStorage.setItem(runSaveKey(), JSON.stringify({
@@ -357,6 +377,7 @@ function saveRankedRun() {
         level: gameState.world.level,
         time: gameState.world.time,
         killCount: gameState.stats.killCount,
+        enemies: gameState.enemies.map(serializeEnemy),
         savedAt: Date.now()
     }));
 }
@@ -1757,7 +1778,7 @@ function startGame(animalType, savedRun = null) {
     if (gameState.mode === 'tutorial' && gameState.environment === 'land') placeTutorialPlayerSafely(gameState.player);
     if (savedRun && ['ranked','tower'].includes(gameState.mode)) {
         const savedPlayer = savedRun.player;
-        const fields = ['level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+        const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
         fields.forEach(field => { if (savedPlayer[field] !== undefined) gameState.player[field] = savedPlayer[field]; });
         gameState.world.level = Math.max(1, savedRun.level || 1);
         gameState.world.time = Math.max(0, savedRun.time || 0);
@@ -1769,8 +1790,15 @@ function startGame(animalType, savedRun = null) {
     updateControlLayout();
 
     if (gameState.mode === 'tutorial') spawnTutorialBattle();
-    else {
-        if (gameState.mode === 'team') spawnTeamBattle(); else { spawnEnemies(); spawnAmbientPickups(); spawnChest(); }
+    else if (gameState.mode === 'team') spawnTeamBattle();
+    else if (savedRun && ['ranked','tower'].includes(gameState.mode) && Array.isArray(savedRun.enemies)) {
+        gameState.enemies = restoreSavedEnemies(savedRun.enemies);
+        spawnAmbientPickups();
+        spawnChest();
+    } else {
+        spawnEnemies();
+        spawnAmbientPickups();
+        spawnChest();
     }
     saveRankedRun();
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
