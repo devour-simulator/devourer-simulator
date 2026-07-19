@@ -371,6 +371,11 @@ function resumeRankedRun(mode = 'ranked') {
     const saved = getSavedRankedRun(mode);
     if (!saved) return false;
     gameState.mode = mode;
+    if (kind === 'mail' && getMails().some(mail => !mail.claimed)) {
+        const allButton = document.createElement('button');
+        allButton.className = 'btn btn-success'; allButton.type = 'button'; allButton.textContent = '🎁 一键领取全部附件';
+        allButton.onclick = claimAllMails; content.prepend(allButton);
+    }
     document.getElementById('hallModal').classList.add('hidden');
     startGame(saved.player.type, saved);
     return true;
@@ -1352,8 +1357,36 @@ function claimMail(index) {
     }
     mail.claimed = true; mail.read = true;
     saveMails(mails); saveAccount();
+    showRewardToast(rewards);
     openAccountPanel('mail');
 }
+
+function rewardText(rewards) {
+    const items=[];
+    if (rewards.coins) items.push(`🪙 金币 ×${rewards.coins}`);
+    if (rewards.renameCard) items.push(`🎫 改名卡 ×${rewards.renameCard}`);
+    if (rewards.hero && ANIMALS[rewards.hero]) items.push(`${ANIMALS[rewards.hero].emoji} ${ANIMALS[rewards.hero].name}`);
+    return items.length ? items.join('\n') : '没有可领取的附件';
+}
+function showRewardToast(rewards) { window.alert(`领取成功！\n${rewardText(rewards)}`); }
+function claimAllMails() {
+    const mails=getMails(); const rewards={coins:0,renameCard:0}; const heroes=[];
+    let count=0;
+    mails.forEach(mail => {
+        if (mail.claimed) return;
+        const r=mail.rewards||{}; count++;
+        if (r.coins) { gameState.stats.coins+=r.coins; rewards.coins+=r.coins; }
+        if (r.renameCard) { gameState.account.inventory.renameCard=(gameState.account.inventory.renameCard||0)+r.renameCard; rewards.renameCard+=r.renameCard; }
+        if (r.hero && ANIMALS[r.hero]) { ANIMALS[r.hero].unlocked=true; heroes.push(`${ANIMALS[r.hero].emoji} ${ANIMALS[r.hero].name}`); }
+        mail.claimed=true; mail.read=true;
+    });
+    if (!count) return window.alert('没有可领取的邮件附件。');
+    localStorage.setItem('coins', gameState.stats.coins); saveUnlockedHeroes(); saveMails(mails); saveAccount();
+    window.alert(`一键领取成功！\n${rewardText(rewards)}${heroes.length ? `\n${heroes.join('\n')}` : ''}`);
+    openAccountPanel('mail');
+}
+
+function showCoinHelp() { window.alert('🪙 金币用途：\n1. 在商城购买可购买的英雄。\n2. 账号升级奖励、战斗奖励和签到奖励都会获得金币。'); }
 
 function useRenameCard() {
     if ((gameState.account.inventory.renameCard || 0) < 1) return window.alert('你还没有改名卡。');
@@ -1423,6 +1456,8 @@ function openAccountPanel(kind) {
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
         content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div>`);
+        const coinCard = content.querySelector('.animal-card');
+        if (coinCard) { coinCard.style.cursor = 'pointer'; coinCard.title = '点击查看金币用途'; coinCard.onclick = showCoinHelp; }
     } else if (kind === 'shop') {
         title.textContent = '🛒 商城';
         content.innerHTML = cards(heroesByPower()
@@ -1472,11 +1507,13 @@ function confirmPurchase(key) {
 
 function chooseMode(mode) {
     if (['ranked','tower'].includes(mode) && getSavedRankedRun(mode)) {
-        if (window.confirm('检测到未完成的排位爬塔挑战。\n确定：继续上次进度\n取消：开始新的挑战')) {
+        const choice = window.prompt('检测到未完成的挑战：\n输入 1：继续游戏\n输入 2：取消存档并开始新游戏\n输入 3：返回大厅', '1');
+        if (choice === '1') {
             resumeRankedRun(mode);
             return;
         }
-        clearRankedRun(mode);
+        if (choice === '2') clearRankedRun(mode);
+        else return;
     }
     gameState.mode = mode;
     document.getElementById('hallModal').classList.add('hidden');
