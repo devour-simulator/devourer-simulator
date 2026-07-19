@@ -302,6 +302,7 @@ let gameState = {
     particles: [],
     skillEffects: [],
     chests: [],
+    obstacles: [],
     damageNumbers: [],
     levelUpShown: false,  // 防止升级界面重复生成
     world: {
@@ -430,7 +431,7 @@ let nextParticleId = 1;
 // ============ 3D 渲染层 ============
 // 3D 库异步加载；失败时保留原 Canvas 画面，保证游戏仍可游玩。
 let render3DReady = false;
-let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels;
+let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround;
 
 async function init3DRenderer() {
     try {
@@ -457,16 +458,18 @@ async function init3DRenderer() {
         sun.position.set(-8, 14, 7);
         threeScene.add(sun);
 
-        const ground = new THREE.Mesh(new THREE.PlaneGeometry(26, 19), new THREE.MeshStandardMaterial({ color: 0x579c63, roughness: 0.95 }));
-        ground.rotation.x = -Math.PI / 2;
-        threeScene.add(ground);
+        threeGround = new THREE.Mesh(new THREE.PlaneGeometry(26, 19), new THREE.MeshStandardMaterial({ color: 0x579c63, roughness: 0.95 }));
+        threeGround.rotation.x = -Math.PI / 2;
+        threeScene.add(threeGround);
         const grid = new THREE.GridHelper(26, 13, 0x8fcf91, 0x75b57d);
         grid.position.y = 0.01;
         threeScene.add(grid);
         // 大草原自然景物：低多边形树、石头与灌木，固定种子让每局地图稳定。
         const nature = new THREE.Group();
+        gameState.obstacles = [];
         for (let i = 0; i < 38; i++) {
             const x = (Math.random() - .5) * 24, z = (Math.random() - .5) * 17;
+            if (i % 3 !== 2) gameState.obstacles.push({ x:x * 42 + GAME_WIDTH / 2, y:z * 42 + GAME_HEIGHT / 2, radius:i % 3 === 0 ? 34 : 24 });
             if (i % 3 === 0) {
                 const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.1, .16, .75, 6), new THREE.MeshStandardMaterial({ color: 0x70452d, flatShading: true }));
                 const crown = new THREE.Mesh(new THREE.ConeGeometry(.48, 1.15, 7), new THREE.MeshStandardMaterial({ color: 0x2f7b43, flatShading: true }));
@@ -479,11 +482,24 @@ async function init3DRenderer() {
                 bush.position.set(x, .25, z); nature.add(bush);
             }
         }
+        threeNature = nature;
         threeScene.add(nature);
         threeMeshes = new Map();
         render3DReady = true;
+        applySceneEnvironment();
     } catch (error) {
         console.warn('3D 渲染加载失败，已回退至 2D。', error);
+    }
+}
+
+function applySceneEnvironment() {
+    const ocean = gameState.environment === 'ocean';
+    const sky = gameState.environment === 'sky';
+    if (threeNature) threeNature.visible = !ocean && !sky;
+    if (threeGround) threeGround.material.color.setHex(ocean ? 0x1676a8 : sky ? 0xbce8ff : 0x579c63);
+    if (threeScene && Three) {
+        const color = ocean ? 0x1d6f9d : sky ? 0x91d5ff : 0x87b9e8;
+        threeScene.background = new Three.Color(color); threeScene.fog.color = new Three.Color(color);
     }
 }
 
@@ -827,6 +843,7 @@ class Character {
     }
 
     update(frameScale = 1) {
+        const previousX = this.x, previousY = this.y;
         // 移动
         this.x += this.vx * frameScale;
         this.y += this.vy * frameScale;
@@ -834,6 +851,9 @@ class Character {
         // 边界检测
         this.x = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x));
         this.y = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y));
+        if (gameState.environment === 'land' && gameState.obstacles?.some(obstacle => Math.hypot(this.x - obstacle.x, this.y - obstacle.y) < this.radius + obstacle.radius)) {
+            this.x = previousX; this.y = previousY;
+        }
 
         if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - frameScale);
         if (this.attackFlash > 0) this.attackFlash = Math.max(0, this.attackFlash - frameScale);
@@ -1597,10 +1617,7 @@ function startGame(animalType, savedRun = null) {
     gameState.world.level = 1;
     gameState.world.time = 0;
     gameState.environment = environmentFor(animalType);
-    if (render3DReady && threeScene) {
-        const sceneColor = gameState.environment === 'ocean' ? '#246d9c' : gameState.environment === 'sky' ? '#98d9ff' : '#87b9e8';
-        threeScene.background = new Three.Color(sceneColor); threeScene.fog.color = new Three.Color(sceneColor);
-    }
+    applySceneEnvironment();
     if (savedRun && ['ranked','tower'].includes(gameState.mode)) {
         const savedPlayer = savedRun.player;
         const fields = ['level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
