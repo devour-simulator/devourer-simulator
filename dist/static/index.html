@@ -65,13 +65,14 @@
             border-radius: 0 10px 10px 0;
             border-left: 1px solid #d8dee8;
         }
-        #playerStats { top:10px; left:50%; transform:translateX(-100%); border-radius:10px 0 0 10px; }
+        #playerStats { top:10px; left:10px; transform:none; border-radius:10px; }
+        #gameStats { top:174px; left:10px; transform:none; border-radius:10px; border-left:0; }
         #playerStats, #gameStats { background:rgba(255,255,255,.72); padding:6px 9px; font-size:12px; max-width:260px; }
         #playerStats .stat-bar { margin:2px 0; }
         #playerStats .stat-bar-fill { width:92px; }
         #playerStats .ability-info { display:block; margin:3px 0 0; padding:0; border:0; }
         #playerStats .ability-info > div { display:none; }
-        #playerStats .active-skill-btn { margin:0; padding:5px 7px; font-size:10px; }
+        #playerStats .active-skill-btn { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:50%; transform:translateY(-50%); width:auto; min-width:128px; margin:0; padding:11px 13px; font-size:12px; box-shadow:0 4px 16px rgba(0,0,0,.28); }
         #playerStats #upgradeNotice { display:none; }
         #fullscreenButton { position:absolute; z-index:260; right:12px; bottom:12px; }
         #gameContainer:fullscreen, #gameContainer:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
@@ -123,7 +124,7 @@
         .device-choice { display:flex; gap:8px; margin-top:10px; }
         .device-choice .btn { flex:1; }
         .device-choice .selected { outline:3px solid #ffd84d; background:#3fa66d; }
-        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100vh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #playerStats .stat-bar-fill { width:64px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
+        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100vh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:150px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
 
         .ability-info {
             margin-top: 10px;
@@ -480,6 +481,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3.0.3"></script>
+    <script src="game.js?v=3.0.4"></script>
 </body>
 </html>

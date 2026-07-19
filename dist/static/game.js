@@ -1034,7 +1034,6 @@ class Character {
     }
 
     update(frameScale = 1) {
-        const previousX = this.x, previousY = this.y;
         // 移动
         this.x += this.vx * frameScale;
         this.y += this.vy * frameScale;
@@ -1042,8 +1041,23 @@ class Character {
         // 边界检测
         this.x = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x));
         this.y = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y));
-        if (gameState.environment === 'land' && gameState.obstacles?.some(obstacle => Math.hypot(this.x - obstacle.x, this.y - obstacle.y) < this.radius + obstacle.radius)) {
-            this.x = previousX; this.y = previousY;
+        if (gameState.environment === 'land') {
+            // 树和石头使用圆形碰撞：推回圆边并移除朝内的速度，角色会沿边缘滑动。
+            for (const obstacle of gameState.obstacles || []) {
+                const minimumDistance = this.radius + obstacle.radius;
+                let dx = this.x - obstacle.x, dy = this.y - obstacle.y;
+                let distance = Math.hypot(dx, dy);
+                if (distance >= minimumDistance) continue;
+                if (distance < .001) { dx = this.vx || 1; dy = this.vy || 0; distance = Math.hypot(dx, dy) || 1; }
+                const normalX = dx / distance, normalY = dy / distance;
+                this.x = obstacle.x + normalX * minimumDistance;
+                this.y = obstacle.y + normalY * minimumDistance;
+                const inwardSpeed = this.vx * normalX + this.vy * normalY;
+                if (inwardSpeed < 0) {
+                    this.vx -= inwardSpeed * normalX;
+                    this.vy -= inwardSpeed * normalY;
+                }
+            }
         }
 
         if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - frameScale);
