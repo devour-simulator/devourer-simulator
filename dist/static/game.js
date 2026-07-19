@@ -1637,9 +1637,7 @@ function startGame(animalType, savedRun = null) {
 
     if (gameState.mode === 'tutorial') spawnTutorialBattle();
     else {
-        if (gameState.mode === 'team') spawnTeamBattle(); else spawnEnemies();
-        spawnAmbientPickups();
-        spawnChest();
+        if (gameState.mode === 'team') spawnTeamBattle(); else { spawnEnemies(); spawnAmbientPickups(); spawnChest(); }
     }
     saveRankedRun();
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
@@ -2040,6 +2038,8 @@ document.getElementById('tutorialNext').addEventListener('click', () => {
 document.getElementById('tutorialSkip').addEventListener('click', finishTutorial);
 document.getElementById('replayTutorialButton').addEventListener('click', () => {
     localStorage.removeItem('tutorialComplete');
+    const useMobile = window.confirm('新手教程：你使用手机玩吗？\n确定：手机摇杆\n取消：电脑键盘');
+    setControlMode(useMobile ? 'mobile' : 'desktop');
     startTutorialBattle();
 });
 document.getElementById('tutorialExitButton').addEventListener('click', finishTutorial);
