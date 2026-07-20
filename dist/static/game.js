@@ -235,6 +235,7 @@ Object.assign(ANIMALS, {
 });
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'];
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
+const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type));
 function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':'land'; }
 
 // 商城价格由英雄强度决定，不再受加入游戏的先后顺序影响。
@@ -649,21 +650,23 @@ function build3DMesh(entity, kind) {
     }
 
     if (kind !== 'particle' && entity.type === 'seal') {
-        const fur = new Three.MeshStandardMaterial({ color:0xaebbc2, roughness:.82, flatShading:true });
+        const fur = new Three.MeshStandardMaterial({ color:0x7e96a2, roughness:.82, flatShading:true });
         const belly = new Three.MeshStandardMaterial({ color:0xe5edf0, roughness:.8, flatShading:true });
-        const body = add(new Three.SphereGeometry(.43, 12, 8), fur, 0, .47, .1, 1.18, .72, 1.7);
-        add(new Three.SphereGeometry(.32, 11, 8), fur, 0, .63, -.53, 1, .95, .9);
-        add(new Three.SphereGeometry(.22, 10, 7), belly, 0, .35, -.58, 1.05, .45, .45);
-        add(new Three.SphereGeometry(.045, 7, 6), dark, -.12, .72, -.78);
-        add(new Three.SphereGeometry(.045, 7, 6), dark, .12, .72, -.78);
-        add(new Three.SphereGeometry(.06, 7, 6), dark, 0, .61, -.84, 1.15, .55, .65);
+        const spots = new Three.MeshStandardMaterial({ color:0x405966, roughness:.9, flatShading:true });
+        const body = add(new Three.SphereGeometry(.43, 12, 8), fur, 0, .45, .12, 1.25, .68, 1.88);
+        add(new Three.SphereGeometry(.31, 11, 8), fur, 0, .62, -.59, 1.05, .92, .95);
+        add(new Three.SphereGeometry(.21, 10, 7), belly, 0, .42, -.78, 1.08, .52, .45);
+        add(new Three.SphereGeometry(.045, 7, 6), dark, -.12, .72, -.86);
+        add(new Three.SphereGeometry(.045, 7, 6), dark, .12, .72, -.86);
+        add(new Three.SphereGeometry(.06, 7, 6), dark, 0, .60, -.93, 1.2, .5, .58);
+        [[-.31,.64,.02],[.3,.55,.22],[-.2,.48,.48],[.2,.43,.62]].forEach(([x,y,z]) => add(new Three.SphereGeometry(.075, 7, 5), spots, x, y, z, 1.15, .35, 1));
         [-1, 1].forEach(side => {
-            const flipper = add(new Three.SphereGeometry(.18, 8, 6), fur, side * .48, .37, .06, .42, .22, .95);
-            flipper.rotation.z = side * .45;
+            const flipper = add(new Three.ConeGeometry(.17, .58, 5), fur, side * .48, .35, -.02, .78, 1, 1);
+            flipper.rotation.z = side * .86;
         });
         // 海豹明显分叉的后鳍尾巴，放在身体后方而不是藏在身体里面。
         [-1, 1].forEach(side => {
-            const rearFlipper = add(new Three.SphereGeometry(.18, 8, 6), fur, side * .19, .42, 1.02, .7, .22, 1.35);
+            const rearFlipper = add(new Three.ConeGeometry(.14, .48, 5), fur, side * .18, .39, 1.14, .75, 1, 1.1);
             rearFlipper.rotation.z = side * .5;
         });
         [-1, 1].forEach(side => {
@@ -734,6 +737,30 @@ function build3DMesh(entity, kind) {
         group.userData.body = sharkBody;
         threeScene.add(group);
         return group;
+    }
+
+    if (kind !== 'particle' && entity.type === 'crocodile') {
+        const scaleMat = new Three.MeshStandardMaterial({ color:0x46683a, roughness:.88, flatShading:true });
+        const bellyMat = new Three.MeshStandardMaterial({ color:0x9aa56e, roughness:.82, flatShading:true });
+        const body = add(new Three.SphereGeometry(.42, 12, 8), scaleMat, 0, .36, .14, 1.22, .55, 2.05);
+        add(new Three.SphereGeometry(.33, 11, 7), scaleMat, 0, .43, -.66, 1.1, .48, 1.15);
+        add(new Three.BoxGeometry(.52, .17, .52), bellyMat, 0, .29, -1.03, 1, 1, 1);
+        add(new Three.SphereGeometry(.047, 7, 6), dark, -.17, .59, -.94);
+        add(new Three.SphereGeometry(.047, 7, 6), dark, .17, .59, -.94);
+        [-.28, -.14, 0, .14, .28].forEach((x, index) => {
+            const ridge = add(new Three.ConeGeometry(.075, .22 + (index % 2) * .06, 5), dark, x, .7, .05 + index * .24);
+            ridge.rotation.x = Math.PI;
+        });
+        const tail = add(new Three.ConeGeometry(.28, 1.25, 5), scaleMat, 0, .36, 1.28, 1, 1, 1.25);
+        tail.rotation.x = Math.PI / 2;
+        const legs = [];
+        [-1, 1].forEach(side => [-.34, .46].forEach(z => {
+            const leg = add(new Three.CylinderGeometry(.085, .11, .26, 6), scaleMat, side * .38, .17, z);
+            leg.rotation.z = side * .68;
+            legs.push(leg);
+        }));
+        group.userData = { flying:false, swimming:false, wings:[], legs, body };
+        threeScene.add(group); return group;
     }
 
     const size = entity.isBoss ? 1.55 : 1;
@@ -1940,13 +1967,13 @@ function spawnEnemies() {
     for (let i = 0; i < enemyCount; i++) {
         // 敌人可以是任何角色，不受解锁限制
         const bronzePool = ['cat', 'rabbit', 'fox', 'bear'];
-        const midPool = [...bronzePool, 'tiger', 'eagle', 'wolf', 'deer', 'panda', 'monkey'];
+        const midPool = [...bronzePool, 'tiger', 'wolf', 'deer', 'panda', 'monkey'];
         const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : null;
-        const enemyPool = gameState.mode === 'ranked' && environmentPool
+        const enemyPool = environmentPool
             ? environmentPool
             : gameState.mode === 'ranked'
-            ? (gameState.world.level >= 25 ? Object.keys(ANIMALS) : gameState.world.level >= 10 ? midPool : gameState.rank.tier === 0 ? bronzePool : gameState.rank.tier <= 2 ? midPool : Object.keys(ANIMALS))
-            : Object.keys(ANIMALS);
+            ? (gameState.world.level >= 25 ? LAND_TYPES : gameState.world.level >= 10 ? midPool : gameState.rank.tier === 0 ? bronzePool : gameState.rank.tier <= 2 ? midPool : LAND_TYPES)
+            : LAND_TYPES;
         let animalType = enemyPool[Math.floor(Math.random() * enemyPool.length)];
 
         let x = Math.random() * GAME_WIDTH;
