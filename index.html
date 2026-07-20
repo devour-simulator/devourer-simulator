@@ -238,6 +238,11 @@
         .orca-icon b { position:absolute; display:block; background:#fff; z-index:1; }
         .orca-icon .orca-eye-patch { left:17px; top:13px; width:15px; height:8px; border-radius:60% 30% 55% 45%; transform:rotate(-18deg); }
         .orca-icon .orca-belly-patch { left:28px; top:25px; width:24px; height:7px; border-radius:50%; transform:rotate(-8deg); }
+        .black-bear-icon { position:relative; display:inline-block; width:54px; height:48px; vertical-align:middle; }
+        .black-bear-icon::before { content:""; position:absolute; left:8px; top:11px; width:39px; height:32px; border-radius:48% 48% 44% 44%; background:#16191d; box-shadow:inset -5px -4px 0 #050607; }
+        .black-bear-icon i { position:absolute; left:20px; top:25px; width:15px; height:10px; border-radius:50%; background:#3f4549; z-index:2; }
+        .black-bear-icon b { position:absolute; top:4px; width:16px; height:16px; border-radius:50%; background:#16191d; }
+        .black-bear-icon b:nth-of-type(1) { left:7px; } .black-bear-icon b:nth-of-type(2) { right:7px; }
         .bird-icon { position:relative; display:inline-block; width:70px; height:48px; vertical-align:middle; }
         .bird-icon i { position:absolute; left:28px; top:17px; width:16px; height:20px; border-radius:52% 52% 46% 46%; background:#734523; z-index:2; }
         .bird-icon b { position:absolute; top:12px; width:34px; height:20px; background:#8b5b32; clip-path:polygon(0 55%,100% 0,73% 100%); }
@@ -406,8 +411,8 @@
     <div id="subPageModal" class="modal hidden">
         <div class="modal-content" style="max-width:900px;">
             <div class="modal-title" id="subPageTitle">页面</div>
-            <div id="subPageContent"></div>
             <button class="btn" id="subPageBack" type="button">← 返回大厅</button>
+            <div id="subPageContent"></div>
         </div>
     </div>
 
@@ -471,6 +476,7 @@
             <div>⚔️ 攻击: <span id="playerAttack"></span></div>
             <div>🛡️ 防御: <span id="playerDefense"></span></div>
             <div>⚡ 速度: <span id="playerSpeed"></span></div>
+            <div>💥 暴击率: <span id="playerCritChance"></span></div>
             <div>📊 等级: <span id="playerLevel"></span></div>
         </div>
         <div class="ability-info">
@@ -503,6 +509,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3.1.0"></script>
+    <script src="game.js?v=3.1.1"></script>
 </body>
 </html>

@@ -41,12 +41,12 @@ const ANIMALS = {
     },
     bear: {
         name: '黑熊',
-        emoji: '🐻‍❄️',
+        emoji: '🐻‍⬛',
         baseAttack: 8,
         baseDefense: 6,
         baseSpeed: 3,
         baseHp: 50,
-        color: '#8B7355',
+        color: '#1d2226',
         unlocked: false,
         unlockThreshold: 10
     },
@@ -281,6 +281,7 @@ function heroesByPower(entries = Object.entries(ANIMALS)) {
 }
 function heroIconMarkup(key, hero) {
     if (key === 'orca') return '<span class="orca-icon" role="img" aria-label="虎鲸"><i></i><b class="orca-eye-patch"></b><b class="orca-belly-patch"></b></span>';
+    if (key === 'bear') return '<span class="black-bear-icon" role="img" aria-label="黑熊"><i></i><b></b><b></b></span>';
     const raptorIcons = { eagle:'eagle', falcon:'falcon', condor:'condor', kitebird:'kite' };
     if (raptorIcons[key]) return `<span class="bird-icon bird-icon-${raptorIcons[key]}" role="img" aria-label="${hero.name}"><i></i><b></b><b></b><em></em></span>`;
     return hero.emoji;
@@ -1945,7 +1946,7 @@ function openAccountPanel(kind) {
     const cards = (items) => `<div class="animals-grid">${items}</div>`;
     if (kind === 'hero') {
         title.textContent = '🦸 英雄图鉴';
-        content.innerHTML = cards(heroesByPower().map(([key, h]) => `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div></div>`).join(''));
+        content.innerHTML = cards(heroesByPower().map(([key, h]) => `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.rewardOnly ? '极地奖励专属' : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div></div>`).join(''));
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
         content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div>`);
@@ -1954,7 +1955,7 @@ function openAccountPanel(kind) {
     } else if (kind === 'shop') {
         title.textContent = '🛒 商城';
         content.innerHTML = cards(heroesByPower()
-            .filter(([, h]) => !h.unlocked && !h.signOnly)
+            .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
     } else {
         title.textContent = '✉️ 邮件';
@@ -1979,7 +1980,7 @@ function claimDailySignIn() {
 
 function buyHero(key) {
     const hero = ANIMALS[key];
-    if (hero.unlocked || gameState.stats.coins < hero.price) return false;
+    if (hero.unlocked || hero.rewardOnly || gameState.stats.coins < hero.price) return false;
     gameState.stats.coins -= hero.price;
     localStorage.setItem('coins', gameState.stats.coins);
     hero.unlocked = true;
@@ -1990,7 +1991,7 @@ function buyHero(key) {
 
 function confirmPurchase(key) {
     const hero = ANIMALS[key];
-    if (!hero || hero.unlocked || hero.signOnly) return;
+    if (!hero || hero.unlocked || hero.signOnly || hero.rewardOnly) return;
     if (!window.confirm(`确定要购买 ${hero.name} 吗？\n售价：${hero.price} 金币`)) return;
     if (gameState.stats.coins < hero.price) return window.alert('您的金币不足！');
     buyHero(key);
@@ -2028,7 +2029,9 @@ function showAnimalSelection() {
         
         let lockedHint = '';
         if (animal.unlocked === false) {
-            lockedHint = animal.signOnly
+            lockedHint = animal.rewardOnly
+                ? '❄️ 极地奖励专属：段位晋升或每 5 级账号奖励领取'
+                : animal.signOnly
                 ? `📅 签到专属：第 ${key === 'fox' ? 2 : 7} 天领取`
                 : `🪙 ${animal.price} 金币购买<br><small>当前金币: ${gameState.stats.coins}</small>`;
         }
@@ -2053,8 +2056,8 @@ function showAnimalSelection() {
         
         if (animal.unlocked === false) {
             card.style.opacity = '0.5';
-            card.style.cursor = animal.signOnly ? 'not-allowed' : (gameState.stats.coins >= animal.price ? 'pointer' : 'not-allowed');
-            if (!animal.signOnly) card.onclick = () => buyHero(key);
+            card.style.cursor = (animal.signOnly || animal.rewardOnly) ? 'not-allowed' : (gameState.stats.coins >= animal.price ? 'pointer' : 'not-allowed');
+            if (!animal.signOnly && !animal.rewardOnly) card.onclick = () => buyHero(key);
         } else {
             card.onclick = () => startGame(key);
         }
@@ -2696,6 +2699,7 @@ function updateUI() {
     document.getElementById('playerAttack').textContent = visibleAttack;
     document.getElementById('playerDefense').textContent = player.defense;
     document.getElementById('playerSpeed').textContent = `${player.speed}（移动 ${Math.round((2.1 + player.speed * .24) * 10) / 10} / 攻速）`;
+    document.getElementById('playerCritChance').textContent = `${Math.round(player.critChance * 100)}%`;
     document.getElementById('playerLevel').textContent = player.level;
 
     // 专属能力
