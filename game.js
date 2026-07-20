@@ -242,6 +242,8 @@ Object.assign(ANIMALS, {
     reindeer:{name:'驯鹿',emoji:'🦌',baseAttack:9,baseDefense:5,baseSpeed:9,baseHp:56,color:'#8b6c52',unlocked:false}
 });
 const POLAR_HERO_KEYS=['polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'];
+// 极地奖励按强度逐步发放：先史诗，再神话，最后才是传说。
+const POLAR_REWARD_ORDER=['penguin','snowOwl','reindeer','arcticWolf','narwhal','emperorPenguin','polarBear','walrus','muskOx','arcticFox','arcticHare','puffin'];
 POLAR_HERO_KEYS.forEach(key => { ANIMALS[key].rewardOnly = true; });
 ['seal','whale','orca','octopus','jellyfish','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird','polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'].forEach(type => {
     const hero=ANIMALS[type];
@@ -1645,6 +1647,7 @@ function battle(player, enemy) {
 function init() {
     initAccount();
     checkUnlocks();
+    rebalancePendingPolarRewards();
     grantEligiblePolarRewards();
     gameState.screen = 'hall';
     showHall();
@@ -1795,19 +1798,35 @@ function sendRewardMail(title, content, rewards = {}) {
     saveMails(mails);
 }
 
-function nextLockedPolarHero(startIndex = 0) {
+function nextLockedPolarHero() {
     const pending = new Set(getMails().filter(mail => !mail.claimed && mail.rewards?.hero).map(mail => mail.rewards.hero));
-    for (let i = 0; i < POLAR_TYPES.length; i++) {
-        const key = POLAR_TYPES[(startIndex + i) % POLAR_TYPES.length];
+    for (const key of POLAR_REWARD_ORDER) {
         if (!ANIMALS[key].unlocked && !pending.has(key)) return key;
     }
     return null;
 }
 
-function sendPolarHeroReward(title, startIndex) {
-    const hero = nextLockedPolarHero(startIndex);
+function sendPolarHeroReward(title) {
+    const hero = nextLockedPolarHero();
     if (!hero) return;
     sendRewardMail(title, `恭喜达成目标！北极英雄 ${ANIMALS[hero].name} 已送到邮件附件，请手动领取。`, { hero });
+}
+
+function rebalancePendingPolarRewards() {
+    const mails = getMails();
+    const unlocked = new Set(Object.keys(ANIMALS).filter(key => ANIMALS[key].unlocked));
+    const pendingPolarMails = mails.filter(mail => !mail.claimed && POLAR_TYPES.includes(mail.rewards?.hero));
+    let orderIndex = 0;
+    // 邮件数组最新在前，倒序处理可让最早达成的奖励优先取得史诗英雄。
+    [...pendingPolarMails].reverse().forEach(mail => {
+        while (orderIndex < POLAR_REWARD_ORDER.length && unlocked.has(POLAR_REWARD_ORDER[orderIndex])) orderIndex++;
+        const hero = POLAR_REWARD_ORDER[orderIndex++];
+        if (!hero) return;
+        mail.rewards.hero = hero;
+        mail.content = `恭喜达成目标！北极英雄 ${ANIMALS[hero].name} 已送到邮件附件，请手动领取。`;
+        unlocked.add(hero);
+    });
+    saveMails(mails);
 }
 
 function grantEligiblePolarRewards() {
@@ -1815,7 +1834,7 @@ function grantEligiblePolarRewards() {
     let rewardedRankTier = Math.max(0, parseInt(localStorage.getItem('polarRankRewardTier')) || 0);
     while (rewardedRankTier < reachedRankTier) {
         rewardedRankTier++;
-        sendPolarHeroReward(`段位晋升奖励 · ${RANK_TIERS[rewardedRankTier]}`, rewardedRankTier - 1);
+        sendPolarHeroReward(`段位晋升奖励 · ${RANK_TIERS[rewardedRankTier]}`);
     }
     localStorage.setItem('polarRankRewardTier', rewardedRankTier);
 
@@ -1823,7 +1842,7 @@ function grantEligiblePolarRewards() {
     let rewardedLevelMilestone = Math.max(0, parseInt(localStorage.getItem('polarLevelRewardMilestone')) || 0);
     while (rewardedLevelMilestone < reachedLevelMilestone) {
         rewardedLevelMilestone++;
-        sendPolarHeroReward(`账号 Lv.${rewardedLevelMilestone * 5} 奖励`, 5 + rewardedLevelMilestone);
+        sendPolarHeroReward(`账号 Lv.${rewardedLevelMilestone * 5} 奖励`);
     }
     localStorage.setItem('polarLevelRewardMilestone', rewardedLevelMilestone);
 }
