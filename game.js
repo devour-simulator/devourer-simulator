@@ -227,7 +227,23 @@ Object.assign(ANIMALS, {
     cockatoo:{name:'凤头鹦鹉',emoji:'🦜',baseAttack:7,baseDefense:4,baseSpeed:9,baseHp:40,color:'#f3dc62',unlocked:false},
     kitebird:{name:'风筝鹰',emoji:'🦅',baseAttack:10,baseDefense:3,baseSpeed:12,baseHp:38,color:'#8d5d45',unlocked:false}
 });
-['seal','whale','orca','octopus','jellyfish','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'].forEach(type => {
+Object.assign(ANIMALS, {
+    polarBear:{name:'北极熊',emoji:'🐻‍❄️',baseAttack:13,baseDefense:8,baseSpeed:5,baseHp:82,color:'#f2f6f7',unlocked:false},
+    arcticFox:{name:'北极狐',emoji:'🦊',baseAttack:8,baseDefense:4,baseSpeed:11,baseHp:42,color:'#f2f7fc',unlocked:false},
+    penguin:{name:'帝企鹅',emoji:'🐧',baseAttack:8,baseDefense:7,baseSpeed:6,baseHp:62,color:'#1f2935',unlocked:false},
+    walrus:{name:'海象',emoji:'🦭',baseAttack:12,baseDefense:9,baseSpeed:4,baseHp:88,color:'#9b725b',unlocked:false},
+    snowOwl:{name:'雪鸮',emoji:'🦉',baseAttack:10,baseDefense:5,baseSpeed:10,baseHp:48,color:'#f5f7f5',unlocked:false},
+    muskOx:{name:'麝牛',emoji:'🐂',baseAttack:11,baseDefense:9,baseSpeed:5,baseHp:78,color:'#4c4038',unlocked:false},
+    arcticHare:{name:'雪兔',emoji:'🐇',baseAttack:6,baseDefense:3,baseSpeed:13,baseHp:38,color:'#ffffff',unlocked:false},
+    arcticWolf:{name:'北极狼',emoji:'🐺',baseAttack:11,baseDefense:5,baseSpeed:9,baseHp:56,color:'#d9e2e8',unlocked:false},
+    puffin:{name:'海鹦',emoji:'🐧',baseAttack:7,baseDefense:4,baseSpeed:10,baseHp:44,color:'#283344',unlocked:false},
+    narwhal:{name:'独角鲸',emoji:'🐋',baseAttack:11,baseDefense:6,baseSpeed:8,baseHp:60,color:'#a5c5d8',unlocked:false},
+    emperorPenguin:{name:'王企鹅',emoji:'🐧',baseAttack:10,baseDefense:8,baseSpeed:6,baseHp:70,color:'#202733',unlocked:false},
+    reindeer:{name:'驯鹿',emoji:'🦌',baseAttack:9,baseDefense:5,baseSpeed:9,baseHp:56,color:'#8b6c52',unlocked:false}
+});
+const POLAR_HERO_KEYS=['polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'];
+POLAR_HERO_KEYS.forEach(key => { ANIMALS[key].rewardOnly = true; });
+['seal','whale','orca','octopus','jellyfish','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird','polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'].forEach(type => {
     const hero=ANIMALS[type];
     ABILITIES[type]=hero.baseSpeed>=10
         ? {passive:{name:'迅捷',desc:'速度 +1',bonus:{speed:1}},active:{name:'俯冲冲撞',desc:'沿面向冲撞并造成伤害',effect:'dash',distance:190,cooldown:9}}
@@ -235,8 +251,9 @@ Object.assign(ANIMALS, {
 });
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'];
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
-const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type));
-function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':'land'; }
+const POLAR_TYPES=POLAR_HERO_KEYS;
+const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type));
+function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':'land'; }
 
 // 商城价格由英雄强度决定，不再受加入游戏的先后顺序影响。
 function calculateHeroPrice(hero) {
@@ -300,6 +317,7 @@ function rankLabel() {
 }
 function changeRankStars(delta) {
     const rank = gameState.rank;
+    const tierBefore = rank.tier;
     if (delta > 0) {
         rank.stars++;
         if (rank.stars >= 3) {
@@ -313,6 +331,7 @@ function changeRankStars(delta) {
     localStorage.setItem('rankTier', rank.tier);
     localStorage.setItem('rankDivision', rank.division);
     localStorage.setItem('rankStars', rank.stars);
+    if (rank.tier > tierBefore) grantEligiblePolarRewards();
 }
 
 // ============ 游戏全局状态 ============
@@ -485,7 +504,7 @@ let nextParticleId = 1;
 // ============ 3D 渲染层 ============
 // 3D 库异步加载；失败时保留原 Canvas 画面，保证游戏仍可游玩。
 let render3DReady = false;
-let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround, threeGrid, threeOceanDecor;
+let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround, threeGrid, threeOceanDecor, threePolarDecor, threeSkyDecor, threeForestDecor;
 
 async function init3DRenderer() {
     try {
@@ -539,6 +558,23 @@ async function init3DRenderer() {
         }
         threeNature = nature;
         threeScene.add(nature);
+        // 森林氛围：野花、蘑菇与发光萤火虫，只负责视觉，不阻挡移动。
+        const forestDecor = new THREE.Group();
+        const flowerColors = [0xffd3e3, 0xffdd6e, 0xa98cff];
+        for (let i = 0; i < 56; i++) {
+            const x = (Math.random() - .5) * 24, z = (Math.random() - .5) * 17;
+            if (i % 3 === 0) {
+                const stem = new THREE.Mesh(new THREE.CylinderGeometry(.014, .02, .22, 5), new THREE.MeshStandardMaterial({ color:0x397743, flatShading:true }));
+                const bloom = new THREE.Mesh(new THREE.SphereGeometry(.08, 7, 6), new THREE.MeshStandardMaterial({ color:flowerColors[i % flowerColors.length], emissive:flowerColors[i % flowerColors.length], emissiveIntensity:.14, flatShading:true }));
+                stem.position.set(x,.11,z); bloom.position.set(x,.25,z); forestDecor.add(stem,bloom);
+            } else {
+                const firefly = new THREE.Mesh(new THREE.SphereGeometry(.035, 6, 5), new THREE.MeshStandardMaterial({ color:0xfff28a, emissive:0xffca3a, emissiveIntensity:1.4 }));
+                firefly.position.set(x,.4 + Math.random()*.8,z); firefly.userData.isFirefly=true; firefly.userData.phase=Math.random()*Math.PI*2;
+                forestDecor.add(firefly);
+            }
+        }
+        threeForestDecor = forestDecor;
+        threeScene.add(forestDecor);
         // 海洋场景装饰：珊瑚、海草和上浮气泡，只负责视觉效果，不会阻挡角色。
         const oceanDecor = new THREE.Group();
         const coralMaterials = [0xff847c, 0xffc06a, 0xa36ddd];
@@ -594,6 +630,41 @@ async function init3DRenderer() {
         }
         threeOceanDecor = oceanDecor;
         threeScene.add(oceanDecor);
+        // 极地场景：雪丘、浮冰、冰晶与飘雪。北极和南极共用这一套静谧冰原。
+        const polarDecor = new THREE.Group();
+        const iceMat = new THREE.MeshStandardMaterial({ color:0xc8f2ff, emissive:0x3b8aa5, emissiveIntensity:.12, roughness:.48, flatShading:true });
+        const snowMat = new THREE.MeshStandardMaterial({ color:0xf5fbff, roughness:.92, flatShading:true });
+        for (let i = 0; i < 30; i++) {
+            const x = (Math.random() - .5) * 24, z = (Math.random() - .5) * 17;
+            const ice = new THREE.Mesh(new THREE.DodecahedronGeometry(.18 + Math.random() * .32, 0), i % 3 ? iceMat : snowMat);
+            ice.position.set(x,.12,z); ice.scale.y=.55; polarDecor.add(ice);
+            if (i % 4 === 0) {
+                const crystal = new THREE.Mesh(new THREE.ConeGeometry(.12,.72 + Math.random()*.4,5), iceMat);
+                crystal.position.set(x+.18,.35,z-.12); polarDecor.add(crystal);
+            }
+        }
+        for (let i = 0; i < 40; i++) {
+            const snow = new THREE.Mesh(new THREE.SphereGeometry(.022 + Math.random()*.025, 6, 5), snowMat);
+            snow.position.set((Math.random()-.5)*24,.3+Math.random()*2.7,(Math.random()-.5)*17);
+            snow.userData.isSnow=true; snow.userData.snowSpeed=.008+Math.random()*.014; polarDecor.add(snow);
+        }
+        threePolarDecor = polarDecor;
+        threeScene.add(polarDecor);
+        // 天空场景：云海、浮岛与远处光环，让飞行英雄置身空中而不是草地。
+        const skyDecor = new THREE.Group();
+        const cloudMat = new THREE.MeshStandardMaterial({ color:0xf7fcff, emissive:0xcdeeff, emissiveIntensity:.2, roughness:.85, flatShading:true });
+        const islandMat = new THREE.MeshStandardMaterial({ color:0x6b7d6b, roughness:.9, flatShading:true });
+        for (let i=0;i<16;i++) {
+            const x=(Math.random()-.5)*24,z=(Math.random()-.5)*17;
+            if (i % 2 === 0) {
+                [-.22,0,.24].forEach((offset, n) => { const cloud=new THREE.Mesh(new THREE.SphereGeometry(.28+n*.06,8,6),cloudMat); cloud.position.set(x+offset,.35+Math.random()*.3,z); cloud.scale.set(1.5,.55,1); skyDecor.add(cloud); });
+            } else {
+                const island=new THREE.Mesh(new THREE.ConeGeometry(.35,.5,6),islandMat); island.position.set(x,.2,z); island.rotation.x=Math.PI; skyDecor.add(island);
+                const grass=new THREE.Mesh(new THREE.CylinderGeometry(.28,.33,.08,7),new THREE.MeshStandardMaterial({color:0x63a85c,flatShading:true})); grass.position.set(x,.46,z); skyDecor.add(grass);
+            }
+        }
+        threeSkyDecor = skyDecor;
+        threeScene.add(skyDecor);
         threeMeshes = new Map();
         render3DReady = true;
         applySceneEnvironment();
@@ -605,12 +676,16 @@ async function init3DRenderer() {
 function applySceneEnvironment() {
     const ocean = gameState.environment === 'ocean';
     const sky = gameState.environment === 'sky';
-    if (threeNature) threeNature.visible = !ocean && !sky;
+    const polar = gameState.environment === 'polar';
+    if (threeNature) threeNature.visible = !ocean && !sky && !polar;
+    if (threeForestDecor) threeForestDecor.visible = !ocean && !sky && !polar;
     if (threeOceanDecor) threeOceanDecor.visible = ocean;
-    if (threeGrid) threeGrid.visible = !ocean;
-    if (threeGround) threeGround.material.color.setHex(ocean ? 0xbba76e : sky ? 0xbce8ff : 0x579c63);
+    if (threePolarDecor) threePolarDecor.visible = polar;
+    if (threeSkyDecor) threeSkyDecor.visible = sky;
+    if (threeGrid) threeGrid.visible = !ocean && !sky && !polar;
+    if (threeGround) threeGround.material.color.setHex(ocean ? 0xbba76e : polar ? 0xe9f7ff : sky ? 0xa9d8fb : 0x579c63);
     if (threeScene && Three) {
-        const color = ocean ? 0x1d6f9d : sky ? 0x91d5ff : 0x87b9e8;
+        const color = ocean ? 0x1d6f9d : polar ? 0xaed8ed : sky ? 0x72b8ed : 0x87b9e8;
         threeScene.background = new Three.Color(color); threeScene.fog.color = new Three.Color(color);
     }
 }
@@ -675,6 +750,29 @@ function build3DMesh(entity, kind) {
         });
         group.userData = { flying:false, swimming:true, wings:[], legs:[], body };
         threeScene.add(group); return group;
+    }
+
+    if (kind !== 'particle' && ['penguin','emperorPenguin','puffin'].includes(entity.type)) {
+        const black = new Three.MeshStandardMaterial({ color:entity.type === 'puffin' ? 0x25374c : 0x202631, roughness:.8, flatShading:true });
+        const white = new Three.MeshStandardMaterial({ color:0xf4f6f2, roughness:.8, flatShading:true });
+        const orange = new Three.MeshStandardMaterial({ color:0xf3ad3a, roughness:.7, flatShading:true });
+        const body = add(new Three.SphereGeometry(.4,11,8), black,0,.5,.05,.9,1.25,.78);
+        add(new Three.SphereGeometry(.27,10,7), white,0,.46,-.31,.9,1.08,.22);
+        add(new Three.SphereGeometry(.23,10,7), black,0,.91,-.08,1,1,1);
+        const beak = add(new Three.ConeGeometry(.075,.26,4), orange,0,.84,-.31); beak.rotation.x=-Math.PI/2;
+        [-1,1].forEach(side => { const wing=add(new Three.ConeGeometry(.13,.5,4),black,side*.33,.54,.04); wing.rotation.z=side*.9; });
+        [-1,1].forEach(side => add(new Three.BoxGeometry(.16,.05,.19),orange,side*.12,.1,-.05));
+        group.userData={flying:false,swimming:true,wings:[],legs:[],body}; threeScene.add(group); return group;
+    }
+
+    if (kind !== 'particle' && entity.type === 'walrus') {
+        const hide = new Three.MeshStandardMaterial({ color:0x8f6c59, roughness:.88, flatShading:true });
+        const ivory = new Three.MeshStandardMaterial({ color:0xf5ead1, roughness:.65, flatShading:true });
+        const body = add(new Three.SphereGeometry(.46,12,8),hide,0,.46,.12,1.32,.78,1.75);
+        add(new Three.SphereGeometry(.34,11,8),hide,0,.63,-.52,1.08,.9,.85);
+        [-.14,.14].forEach(x => { const tusk=add(new Three.ConeGeometry(.055,.52,5),ivory,x,.36,-.82); tusk.rotation.x=Math.PI; });
+        [-1,1].forEach(side => { const flipper=add(new Three.ConeGeometry(.17,.56,5),hide,side*.5,.34,.05); flipper.rotation.z=side*.86; });
+        group.userData={flying:false,swimming:true,wings:[],legs:[],body}; threeScene.add(group); return group;
     }
 
     if (kind !== 'particle' && entity.type === 'jellyfish') {
@@ -781,7 +879,7 @@ function build3DMesh(entity, kind) {
     const type = entity.type;
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
     if (type === 'rabbit') { ear(-0.18, 0.6, 0.1); ear(0.18, 0.6, 0.1); }
-    if (type === 'bear' || type === 'panda') { add(new Three.SphereGeometry(0.15, 8, 6), dark, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), dark, 0.27 * size, 0.96 * size, 0); }
+    if (type === 'bear' || type === 'panda' || type === 'polarBear') { const earMat = type === 'polarBear' ? material : dark; add(new Three.SphereGeometry(0.15, 8, 6), earMat, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), earMat, 0.27 * size, 0.96 * size, 0); }
     if (type === 'panda') { add(new Three.SphereGeometry(0.16, 8, 6), dark, -0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); add(new Three.SphereGeometry(0.16, 8, 6), dark, 0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); }
     if (['deer','giraffe','zebra','llama','goat'].includes(type)) { ear(-0.22); ear(0.22); [-0.17, 0.17].forEach(x => { const horn = add(new Three.CylinderGeometry(.025 * size, .04 * size, .5 * size, 5), dark, x * size, 1.23 * size, 0); horn.rotation.z = x * .35; }); }
     if (type === 'elephant') { add(new Three.SphereGeometry(.26, 8, 6), material, -.38 * size, .63 * size, -.04 * size, 1.2, .5, .15); add(new Three.SphereGeometry(.26, 8, 6), material, .38 * size, .63 * size, -.04 * size, 1.2, .5, .15); const trunk = add(new Three.CylinderGeometry(.09 * size, .12 * size, .62 * size, 7), material, 0, .36 * size, -.43 * size); trunk.rotation.x = .7; }
@@ -828,6 +926,21 @@ function render3D() {
             if (!item.userData.isOceanBubble) return;
             item.position.y += item.userData.bubbleSpeed;
             if (item.position.y > 2.9) item.position.y = .18;
+        });
+    }
+    if (threePolarDecor?.visible) {
+        threePolarDecor.children.forEach(item => {
+            if (!item.userData.isSnow) return;
+            item.position.y -= item.userData.snowSpeed;
+            if (item.position.y < .08) item.position.y = 3;
+        });
+    }
+    if (threeForestDecor?.visible) {
+        const time = performance.now() * .003;
+        threeForestDecor.children.forEach(item => {
+            if (!item.userData.isFirefly) return;
+            item.material.emissiveIntensity = .5 + Math.sin(time + item.userData.phase) * .45;
+            item.position.y += Math.sin(time + item.userData.phase) * .002;
         });
     }
     const active = new Set();
@@ -1218,7 +1331,7 @@ class Particle {
         if (!this.isAmbient) {
             this.x += this.vx * frameScale;
             this.y += this.vy * frameScale;
-            if (!this.autoCollect) this.vy += 0.08 * frameScale; // 普通掉落才受重力影响
+            if (!this.autoCollect && !this.chestReward) this.vy += 0.08 * frameScale; // 宝箱奖励固定在宝箱周围
         }
         this.life -= frameScale;
     }
@@ -1467,6 +1580,8 @@ function spawnChestRewards(x, y) {
         particle.vy = 0;
         particle.pickupDelay = 16;
         particle.chestReward = true;
+        particle.life = 900;
+        particle.maxLife = 900;
         gameState.particles.push(particle);
     }
 }
@@ -1529,6 +1644,7 @@ function battle(player, enemy) {
 function init() {
     initAccount();
     checkUnlocks();
+    grantEligiblePolarRewards();
     gameState.screen = 'hall';
     showHall();
     // 首次进入不再弹出大厅说明，而是直接进入一局可操作的新手实战。
@@ -1677,6 +1793,39 @@ function sendRewardMail(title, content, rewards = {}) {
     mails.unshift({ title, content, rewards, system: true, read: false, claimed: false });
     saveMails(mails);
 }
+
+function nextLockedPolarHero(startIndex = 0) {
+    const pending = new Set(getMails().filter(mail => !mail.claimed && mail.rewards?.hero).map(mail => mail.rewards.hero));
+    for (let i = 0; i < POLAR_TYPES.length; i++) {
+        const key = POLAR_TYPES[(startIndex + i) % POLAR_TYPES.length];
+        if (!ANIMALS[key].unlocked && !pending.has(key)) return key;
+    }
+    return null;
+}
+
+function sendPolarHeroReward(title, startIndex) {
+    const hero = nextLockedPolarHero(startIndex);
+    if (!hero) return;
+    sendRewardMail(title, `恭喜达成目标！北极英雄 ${ANIMALS[hero].name} 已送到邮件附件，请手动领取。`, { hero });
+}
+
+function grantEligiblePolarRewards() {
+    const reachedRankTier = gameState.rank.tier;
+    let rewardedRankTier = Math.max(0, parseInt(localStorage.getItem('polarRankRewardTier')) || 0);
+    while (rewardedRankTier < reachedRankTier) {
+        rewardedRankTier++;
+        sendPolarHeroReward(`段位晋升奖励 · ${RANK_TIERS[rewardedRankTier]}`, rewardedRankTier - 1);
+    }
+    localStorage.setItem('polarRankRewardTier', rewardedRankTier);
+
+    const reachedLevelMilestone = Math.floor(gameState.account.level / 5);
+    let rewardedLevelMilestone = Math.max(0, parseInt(localStorage.getItem('polarLevelRewardMilestone')) || 0);
+    while (rewardedLevelMilestone < reachedLevelMilestone) {
+        rewardedLevelMilestone++;
+        sendPolarHeroReward(`账号 Lv.${rewardedLevelMilestone * 5} 奖励`, 5 + rewardedLevelMilestone);
+    }
+    localStorage.setItem('polarLevelRewardMilestone', rewardedLevelMilestone);
+}
 function claimMail(index) {
     const mails = getMails();
     const mail = mails[index];
@@ -1756,8 +1905,12 @@ function saveAccount() {
 }
 function accountExp(amount) {
     const a=gameState.account; a.exp+=amount;
-    const need=a.level*100;
-    if(a.exp>=need){a.exp-=need;a.level++; sendRewardMail('账号升级奖励',`恭喜升到 ${a.level} 级，附件含 ${a.level*50} 金币，请手动领取。`,{coins:a.level*50});}
+    while (a.exp >= a.level * 100) {
+        a.exp -= a.level * 100;
+        a.level++;
+        sendRewardMail('账号升级奖励',`恭喜升到 ${a.level} 级，附件含 ${a.level*50} 金币，请手动领取。`,{coins:a.level*50});
+    }
+    grantEligiblePolarRewards();
     saveAccount();
 }
 
@@ -1778,6 +1931,10 @@ function showHall() {
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
+    const unclaimedMailCount = getMails().filter(mail => !mail.claimed).length;
+    const mailBadge = document.getElementById('mailBadge');
+    mailBadge.hidden = unclaimedMailCount === 0;
+    mailBadge.textContent = unclaimedMailCount > 99 ? '99+' : unclaimedMailCount;
     updateControlLayout();
     document.getElementById('hallModal').classList.remove('hidden');
 }
@@ -1968,7 +2125,7 @@ function spawnEnemies() {
         // 敌人可以是任何角色，不受解锁限制
         const bronzePool = ['cat', 'rabbit', 'fox', 'bear'];
         const midPool = [...bronzePool, 'tiger', 'wolf', 'deer', 'panda', 'monkey'];
-        const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : null;
+        const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : gameState.environment === 'polar' ? POLAR_TYPES : null;
         const enemyPool = environmentPool
             ? environmentPool
             : gameState.mode === 'ranked'
