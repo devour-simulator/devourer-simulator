@@ -256,6 +256,33 @@ Object.assign(ABILITIES, {
     octopus:{ passive:{name:'拟态',desc:'速度 +1',bonus:{speed:1}}, active:{name:'墨汁喷射',desc:'附近敌人减速，自己加速 3 秒',effect:'ink',cooldown:11}},
     jellyfish:{ passive:{name:'电流毒素',desc:'攻击 +1',bonus:{attack:1}}, active:{name:'毒刺云',desc:'附近敌人中毒并持续掉血',effect:'poison',cooldown:12}}
 });
+
+// 第二轮技能重做：每种动物都用符合自身习性的可见攻击、冲撞或护体效果。
+const REALISTIC_SKILLS = {
+    lion:['狮吼震慑','咆哮光环让附近敌人减速', 'ink',{}], dog:['飞扑','向前飞扑撞击敌人','dash',{distance:170}], raccoon:['石块投掷','投出穿透石块','empower',{bonus:15,hits:1}],
+    koala:['桉叶护盾','桉叶护体减伤','shield',{hits:3,reduction:.5}], sloth:['藤蔓疗愈','藤蔓光环回复生命','heal',{amount:.35}], kangaroo:['袋鼠飞踢','连续跳踢冲撞','dash',{distance:185}],
+    zebra:['斑马冲锋','疾驰冲过敌群','dash',{distance:180}], hippo:['河马水盾','水花护体减伤','shield',{hits:3,reduction:.55}], rhino:['犀角冲撞','沿指示线发动犀角冲锋','dash',{distance:180}],
+    crocodile:['死亡翻滚','甩出旋转水刃','empower',{bonus:11,hits:2}], turtle:['缩壳','生成坚硬龟壳护盾','shield',{hits:4,reduction:.55}], penguin:['雪球投掷','投出一颗雪球','empower',{bonus:10,hits:1}],
+    dolphin:['破浪突袭','高速破浪冲撞','dash',{distance:190}], shark:['深海撕咬','射出鲨齿冲击波','empower',{bonus:18,hits:1}], bat:['超声波','超声光环让附近敌人减速','ink',{}],
+    parrot:['彩羽飞针','射出一根彩色羽针','empower',{bonus:11,hits:1}], chameleon:['长舌伏击','射出长舌冲击','empower',{bonus:16,hits:1}], llama:['口水弹','吐出穿透口水弹','empower',{bonus:10,hits:1}],
+    goat:['羊角顶撞','低头冲锋撞击','dash',{distance:170}], squirrel:['松果投掷','投出一颗松果','empower',{bonus:9,hits:2}], seal:['浪花拍击','发射浪花冲击','empower',{bonus:10,hits:1}],
+    whale:['鲸歌震波','鲸歌光环让附近敌人减速','ink',{}], orca:['破浪突袭','高速破浪冲撞','dash',{distance:195}], falcon:['猎隼俯冲','极速俯冲撞击','dash',{distance:195}],
+    albatross:['海风护翼','海风护翼减伤','shield',{hits:2,reduction:.45}], hummingbird:['花蜜针刺','射出高速花蜜针','empower',{bonus:9,hits:2}], swan:['羽翼守护','白羽护环减伤','shield',{hits:3,reduction:.45}],
+    condor:['安第斯俯冲','重型俯冲撞击','dash',{distance:185}], pelican:['鱼群抛射','抛出穿透鱼群','empower',{bonus:12,hits:1}], flamingo:['火烈鸟突刺','长腿突刺向前冲撞','dash',{distance:175}],
+    raven:['暗羽飞刃','射出黑羽飞刃','empower',{bonus:13,hits:1}], pigeon:['信笺飞投','投出一封穿透战场的信','empower',{bonus:9,hits:1}], goose:['振翅防风','振翅形成防风护盾','shield',{hits:3,reduction:.5}],
+    cockatoo:['冠羽飞针','射出明亮冠羽飞针','empower',{bonus:11,hits:1}], kitebird:['借风冲刺','借风向前超远冲刺','dash',{distance:205}], polarBear:['冰原熊掌','发射冰原熊掌冲击','empower',{bonus:16,hits:1}],
+    arcticFox:['雪影突袭','雪影穿过敌群','dash',{distance:195}], walrus:['长牙冲锋','长牙向前冲锋','dash',{distance:175}], snowOwl:['雪羽风暴','射出白色雪羽风暴','empower',{bonus:13,hits:1}],
+    muskOx:['麝牛顶撞','低头顶撞冲锋','dash',{distance:175}], arcticHare:['雪兔三段跳','快速跃过敌群','dash',{distance:200}], arcticWolf:['冰牙飞斩','射出冰牙飞斩','empower',{bonus:14,hits:1}],
+    puffin:['飞鱼投掷','投出一条飞鱼','empower',{bonus:11,hits:1}], narwhal:['独角穿刺','独角直线穿刺','dash',{distance:190}], emperorPenguin:['冰壁守护','冰壁护环抵挡伤害','shield',{hits:3,reduction:.55}],
+    reindeer:['鹿角雪橇冲锋','鹿角向前冲锋','dash',{distance:185}]
+};
+Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) => {
+    const hero = ANIMALS[type];
+    ABILITIES[type] = {
+        passive: hero.baseAttack >= 10 ? {name:'天生猎手',desc:'攻击 +1',bonus:{attack:1}} : hero.baseDefense >= 7 ? {name:'坚韧体魄',desc:'防御 +1',bonus:{defense:1}} : {name:'敏捷本能',desc:'速度 +1',bonus:{speed:1}},
+        active: {name, desc, effect, cooldown: effect === 'dash' ? 10 : effect === 'heal' ? 13 : 11, ...values}
+    };
+});
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'];
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
 const POLAR_TYPES=POLAR_HERO_KEYS;
@@ -2821,7 +2848,7 @@ function updateUI() {
     document.getElementById('passiveSkill').textContent = `被动·${player.passiveAbility.name}：${player.passiveAbility.desc}`;
     const activeButton = document.getElementById('activeSkillButton');
     const cooldownSeconds = Math.ceil(player.activeCooldown / TARGET_FPS);
-    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '⚡' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
+    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '🎯' : player.activeAbility.effect === 'ink' ? '🌊' : player.activeAbility.effect === 'poison' ? '☠️' : player.activeAbility.effect === 'reflect' ? '🦔' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
     activeButton.textContent = cooldownSeconds > 0
         ? `${skillIcon} ${player.activeAbility.name} · 冷却 ${cooldownSeconds}s`
         : `${skillIcon} ${player.activeAbility.name}（${controlMode === 'mobile' ? '点击' : '空格'}）`;
