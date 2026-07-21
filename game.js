@@ -229,14 +229,14 @@ Object.assign(ANIMALS, {
 });
 Object.assign(ANIMALS, {
     polarBear:{name:'北极熊',emoji:'🐻‍❄️',baseAttack:13,baseDefense:8,baseSpeed:5,baseHp:82,color:'#f2f6f7',unlocked:false},
-    arcticFox:{name:'北极狐',emoji:'🦊',baseAttack:8,baseDefense:4,baseSpeed:11,baseHp:42,color:'#f2f7fc',unlocked:false},
+    arcticFox:{name:'北极狐',emoji:'🦊',baseAttack:9,baseDefense:4,baseSpeed:11,baseHp:42,color:'#f2f7fc',unlocked:false},
     penguin:{name:'帝企鹅',emoji:'🐧',baseAttack:8,baseDefense:7,baseSpeed:6,baseHp:62,color:'#1f2935',unlocked:false},
     walrus:{name:'海象',emoji:'🦭',baseAttack:12,baseDefense:9,baseSpeed:4,baseHp:88,color:'#9b725b',unlocked:false},
     snowOwl:{name:'雪鸮',emoji:'🦉',baseAttack:10,baseDefense:5,baseSpeed:10,baseHp:48,color:'#f5f7f5',unlocked:false},
     muskOx:{name:'麝牛',emoji:'🐂',baseAttack:11,baseDefense:9,baseSpeed:5,baseHp:78,color:'#4c4038',unlocked:false},
-    arcticHare:{name:'雪兔',emoji:'🐇',baseAttack:6,baseDefense:3,baseSpeed:13,baseHp:38,color:'#ffffff',unlocked:false},
+    arcticHare:{name:'雪兔',emoji:'🐇',baseAttack:8,baseDefense:3,baseSpeed:14,baseHp:38,color:'#ffffff',unlocked:false},
     arcticWolf:{name:'北极狼',emoji:'🐺',baseAttack:11,baseDefense:5,baseSpeed:9,baseHp:56,color:'#d9e2e8',unlocked:false},
-    puffin:{name:'海鹦',emoji:'🐧',baseAttack:7,baseDefense:4,baseSpeed:10,baseHp:44,color:'#283344',unlocked:false},
+    puffin:{name:'海鹦',emoji:'🐧',baseAttack:9,baseDefense:4,baseSpeed:10,baseHp:44,color:'#283344',unlocked:false},
     narwhal:{name:'独角鲸',emoji:'🐋',baseAttack:11,baseDefense:6,baseSpeed:8,baseHp:60,color:'#a5c5d8',unlocked:false},
     emperorPenguin:{name:'王企鹅',emoji:'🐧',baseAttack:10,baseDefense:8,baseSpeed:6,baseHp:70,color:'#202733',unlocked:false},
     reindeer:{name:'驯鹿',emoji:'🦌',baseAttack:9,baseDefense:5,baseSpeed:9,baseHp:56,color:'#8b6c52',unlocked:false}
@@ -244,8 +244,9 @@ Object.assign(ANIMALS, {
 const POLAR_HERO_KEYS=['polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'];
 // 极地奖励按强度逐步发放：先史诗，再神话，最后才是传说。
 const POLAR_REWARD_ORDER=['penguin','snowOwl','reindeer','arcticWolf','narwhal','emperorPenguin','polarBear','walrus','muskOx','arcticFox','arcticHare','puffin'];
-const POLAR_RANK_REWARDS=['penguin','snowOwl','reindeer','arcticWolf','narwhal','emperorPenguin'];
-const POLAR_LEVEL_REWARDS=['polarBear','walrus','muskOx','arcticFox','arcticHare','puffin'];
+// 两条奖励路线都从史诗开始，再升到神话和传说，避免新玩家一开始就跳到传说英雄。
+const POLAR_RANK_REWARDS=['penguin','arcticFox','arcticHare','arcticWolf','narwhal','polarBear'];
+const POLAR_LEVEL_REWARDS=['snowOwl','reindeer','puffin','emperorPenguin','muskOx','walrus'];
 POLAR_HERO_KEYS.forEach(key => { ANIMALS[key].rewardOnly = true; });
 ['seal','whale','orca','octopus','jellyfish','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird','polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'].forEach(type => {
     const hero=ANIMALS[type];
@@ -321,6 +322,7 @@ function heroIconMarkup(key, hero) {
     if (key === 'bear') return '<span class="black-bear-icon" role="img" aria-label="黑熊"><i></i><b></b><b></b></span>';
     if (key === 'pigeon') return '<span class="pigeon-icon" role="img" aria-label="信鸽"><i>✉</i></span>';
     if (key === 'snowOwl') return '<span class="snow-owl-icon" role="img" aria-label="白色雪鸮">🦉</span>';
+    if (key === 'puffin') return '<span class="puffin-icon" role="img" aria-label="彩嘴海鹦"><i></i><b></b></span>';
     const raptorIcons = { eagle:'eagle', falcon:'falcon', condor:'condor', kitebird:'kite' };
     if (raptorIcons[key]) return `<span class="bird-icon bird-icon-${raptorIcons[key]}" role="img" aria-label="${hero.name}"><i></i><b></b><b></b><em></em></span>`;
     return hero.emoji;
@@ -817,8 +819,26 @@ function build3DMesh(entity, kind) {
         threeScene.add(group); return group;
     }
 
-    if (kind !== 'particle' && ['penguin','emperorPenguin','puffin'].includes(entity.type)) {
-        const black = new Three.MeshStandardMaterial({ color:entity.type === 'puffin' ? 0x25374c : 0x202631, roughness:.8, flatShading:true });
+    if (kind !== 'particle' && entity.type === 'puffin') {
+        // 海鹦不是企鹅：短身、橙红蓝相间的大嘴，以及较短的翅膀。
+        const black = new Three.MeshStandardMaterial({ color:0x172436, roughness:.8, flatShading:true });
+        const white = new Three.MeshStandardMaterial({ color:0xf7f4e9, roughness:.8, flatShading:true });
+        const orange = new Three.MeshStandardMaterial({ color:0xf28c28, roughness:.65, flatShading:true });
+        const red = new Three.MeshStandardMaterial({ color:0xd74d38, roughness:.65, flatShading:true });
+        const blue = new Three.MeshStandardMaterial({ color:0x4e83a7, roughness:.65, flatShading:true });
+        const body = add(new Three.SphereGeometry(.39,11,8), black,0,.47,.08,1.02,1.15,.82);
+        add(new Three.SphereGeometry(.28,10,7), white,0,.44,-.27,.86,1.02,.24);
+        add(new Three.SphereGeometry(.26,10,7), black,0,.84,-.08,1,1,1);
+        add(new Three.BoxGeometry(.42,.16,.30), orange,0,.82,-.42);
+        add(new Three.BoxGeometry(.32,.06,.23), red,0,.91,-.45);
+        add(new Three.BoxGeometry(.18,.05,.17), blue,0,.73,-.48);
+        [-1,1].forEach(side => { const wing=add(new Three.ConeGeometry(.12,.36,4),black,side*.31,.54,.05); wing.rotation.z=side*.92; });
+        [-1,1].forEach(side => add(new Three.BoxGeometry(.14,.05,.16),orange,side*.11,.09,-.06));
+        group.userData={flying:false,swimming:true,wings:[],legs:[],body}; threeScene.add(group); return group;
+    }
+
+    if (kind !== 'particle' && ['penguin','emperorPenguin'].includes(entity.type)) {
+        const black = new Three.MeshStandardMaterial({ color:0x202631, roughness:.8, flatShading:true });
         const white = new Three.MeshStandardMaterial({ color:0xf4f6f2, roughness:.8, flatShading:true });
         const orange = new Three.MeshStandardMaterial({ color:0xf3ad3a, roughness:.7, flatShading:true });
         const body = add(new Three.SphereGeometry(.4,11,8), black,0,.5,.05,.9,1.25,.78);
@@ -1919,13 +1939,15 @@ function polarUnlockCondition(key) {
 function sendSpecificPolarHeroReward(title, hero) {
     const pending = getMails().some(mail => !mail.claimed && mail.rewards?.hero === hero);
     if (!hero || ANIMALS[hero].unlocked || pending) return;
-    sendRewardMail(title, `恭喜达成目标！北极英雄 ${ANIMALS[hero].name} 已送到邮件附件，请手动领取。`, { hero });
+    const mails = getMails();
+    mails.unshift({ title, content:`恭喜达成目标！北极英雄 ${ANIMALS[hero].name} 已送到邮件附件，请手动领取。`, rewards:{ hero }, system:true, read:false, claimed:false, polarFixed:true });
+    saveMails(mails);
 }
 
 function rebalancePendingPolarRewards() {
     const mails = getMails();
     const unlocked = new Set(Object.keys(ANIMALS).filter(key => ANIMALS[key].unlocked));
-    const pendingPolarMails = mails.filter(mail => !mail.claimed && POLAR_TYPES.includes(mail.rewards?.hero));
+    const pendingPolarMails = mails.filter(mail => !mail.claimed && !mail.polarFixed && POLAR_TYPES.includes(mail.rewards?.hero));
     let orderIndex = 0;
     // 邮件数组最新在前，倒序处理可让最早达成的奖励优先取得史诗英雄。
     [...pendingPolarMails].reverse().forEach(mail => {
