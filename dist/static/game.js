@@ -162,7 +162,7 @@ const ABILITIES = {
 
 // 第二批英雄：全部沿用“被动 + 主动”的平衡模板。它们会自动出现在图鉴、选人页、商城和敌人池中。
 Object.assign(ANIMALS, {
-    lion: { name: '烈焰狮', emoji: '🦁', baseAttack: 11, baseDefense: 4, baseSpeed: 5, baseHp: 48, color: '#d99132', unlocked: false },
+    lion: { name: '非洲狮', emoji: '🦁', baseAttack: 11, baseDefense: 4, baseSpeed: 5, baseHp: 48, color: '#d99132', unlocked: false },
     dog: { name: '牧羊犬', emoji: '🐕', baseAttack: 6, baseDefense: 3, baseSpeed: 8, baseHp: 38, color: '#b9825a', unlocked: false },
     raccoon: { name: '浣熊', emoji: '🦝', baseAttack: 6, baseDefense: 4, baseSpeed: 7, baseHp: 42, color: '#6c6e78', unlocked: false },
     koala: { name: '考拉', emoji: '🐨', baseAttack: 4, baseDefense: 6, baseSpeed: 4, baseHp: 55, color: '#9fa4a7', unlocked: false },
@@ -181,7 +181,9 @@ Object.assign(ANIMALS, {
     chameleon: { name: '变色龙', emoji: '🦎', baseAttack: 6, baseDefense: 5, baseSpeed: 6, baseHp: 45, color: '#70a447', unlocked: false },
     llama: { name: '羊驼', emoji: '🦙', baseAttack: 6, baseDefense: 5, baseSpeed: 6, baseHp: 50, color: '#d7b78a', unlocked: false },
     goat: { name: '山羊', emoji: '🐐', baseAttack: 8, baseDefense: 4, baseSpeed: 7, baseHp: 45, color: '#d5d1c1', unlocked: false },
-    squirrel: { name: '松鼠', emoji: '🐿️', baseAttack: 5, baseDefense: 2, baseSpeed: 10, baseHp: 34, color: '#bf733e', unlocked: false }
+    squirrel: { name: '松鼠', emoji: '🐿️', baseAttack: 5, baseDefense: 2, baseSpeed: 10, baseHp: 34, color: '#bf733e', unlocked: false },
+    africanElephant: { name: '非洲象', emoji: '🐘', baseAttack: 11, baseDefense: 9, baseSpeed: 3, baseHp: 82, color: '#687078', unlocked: false },
+    northeastTiger: { name: '东北虎', emoji: '🐅', baseAttack: 12, baseDefense: 5, baseSpeed: 6, baseHp: 54, color: '#d98224', unlocked: false }
 });
 Object.assign(ABILITIES, {
     lion: { passive:{name:'百兽之王',desc:'攻击 +2',bonus:{attack:2}}, active:{name:'狮吼震慑',desc:'接下来 2 次攻击额外 +9 伤害',effect:'empower',bonus:9,hits:2,cooldown:11}},
@@ -277,7 +279,9 @@ const REALISTIC_SKILLS = {
     arcticFox:['雪影突袭','雪影穿过敌群','dash',{distance:195}], walrus:['长牙冲锋','长牙向前冲锋','dash',{distance:175}], snowOwl:['雪羽风暴','射出白色雪羽风暴','empower',{bonus:13,hits:1}],
     muskOx:['麝牛顶撞','低头顶撞冲锋','dash',{distance:175}], arcticHare:['雪兔三段跳','快速跃过敌群','dash',{distance:200}], arcticWolf:['冰牙飞斩','射出冰牙飞斩','empower',{bonus:14,hits:1}],
     puffin:['飞鱼投掷','投出一条飞鱼','empower',{bonus:11,hits:1}], narwhal:['独角穿刺','独角直线穿刺','dash',{distance:190}], emperorPenguin:['冰壁守护','冰壁护环抵挡伤害','shield',{hits:3,reduction:.55}],
-    reindeer:['鹿角雪橇冲锋','鹿角向前冲锋','dash',{distance:185}]
+    reindeer:['鹿角雪橇冲锋','鹿角向前冲锋','dash',{distance:185}],
+    africanElephant:['象牙践踏','低头发动象牙冲锋，撞开前方敌人','dash',{distance:185}],
+    northeastTiger:['山林扑杀','猛虎扑向前方，造成强力撞击','dash',{distance:190}]
 };
 Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) => {
     const hero = ANIMALS[type];
@@ -290,9 +294,10 @@ const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
 // 雪狼本身是极地动物，也应和北极英雄一起进入极地场景与敌人池。
 const POLAR_TYPES=[...POLAR_HERO_KEYS,'wolf'];
-const POND_TYPES=['crocodile','axolotl','otter','hippo'];
-const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type) && !POND_TYPES.includes(type));
-function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':'land'; }
+const POND_TYPES=['crocodile','axolotl','otter','hippo','flamingo','turtle','elephant'];
+const SAVANNA_TYPES=['lion','africanElephant','giraffe','zebra','rhino'];
+const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type) && !POND_TYPES.includes(type) && !SAVANNA_TYPES.includes(type));
+function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':SAVANNA_TYPES.includes(type)?'savanna':'land'; }
 
 // 商城价格由英雄强度决定，不再受加入游戏的先后顺序影响。
 function calculateHeroPrice(hero) {
@@ -573,7 +578,7 @@ let nextParticleId = 1;
 // ============ 3D 渲染层 ============
 // 3D 库异步加载；失败时保留原 Canvas 画面，保证游戏仍可游玩。
 let render3DReady = false;
-let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround, threeGrid, threeOceanDecor, threePolarDecor, threeSkyDecor, threeForestDecor, threePondDecor;
+let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround, threeGrid, threeOceanDecor, threePolarDecor, threeSkyDecor, threeForestDecor, threePondDecor, threeSavannaDecor;
 
 async function init3DRenderer() {
     try {
@@ -750,6 +755,27 @@ async function init3DRenderer() {
             else for(let blade=-1;blade<=1;blade++){ const reed=new THREE.Mesh(new THREE.CylinderGeometry(.018,.028,.55+Math.random()*.38,5),reedMat); reed.position.set(x+blade*.05,.35,z); reed.rotation.z=blade*.18; pondDecor.add(reed); }
         }
         threePondDecor=pondDecor; threeScene.add(pondDecor);
+        // 金色草原：金合欢树、干草簇和夕阳，所有景物仅作视觉装饰，不阻挡移动。
+        const savannaDecor = new THREE.Group();
+        const savannaTrunk = new THREE.MeshStandardMaterial({ color:0x69452d, roughness:.9, flatShading:true });
+        const savannaLeaves = new THREE.MeshStandardMaterial({ color:0x5d7833, roughness:.86, flatShading:true });
+        const dryGrass = new THREE.MeshStandardMaterial({ color:0xc89b45, roughness:.9, flatShading:true });
+        [[-10,-6],[9,-5],[-9,6],[10,5],[-3,-7],[4,7]].forEach(([x,z], index) => {
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.12,.2,1.25,6), savannaTrunk);
+            trunk.position.set(x,.62,z); savannaDecor.add(trunk);
+            const branch = new THREE.Mesh(new THREE.CylinderGeometry(.055,.08,.7,5), savannaTrunk);
+            branch.position.set(x+.18,1.12,z); branch.rotation.z=-.75; savannaDecor.add(branch);
+            const crown = new THREE.Mesh(new THREE.SphereGeometry(.58 + (index % 2)*.1,8,6), savannaLeaves);
+            crown.position.set(x+.12,1.43,z); crown.scale.set(1.85,.42,1.2); savannaDecor.add(crown);
+        });
+        for (let i=0;i<58;i++) {
+            const x=(Math.random()-.5)*24, z=(Math.random()-.5)*17;
+            const tuft = new THREE.Mesh(new THREE.ConeGeometry(.035,.25+Math.random()*.16,4), dryGrass);
+            tuft.position.set(x,.13,z); savannaDecor.add(tuft);
+        }
+        const savannaSun = new THREE.Mesh(new THREE.SphereGeometry(.9,12,8),new THREE.MeshStandardMaterial({color:0xffce70,emissive:0xff9d31,emissiveIntensity:.72}));
+        savannaSun.position.set(-9,2.5,-7); savannaDecor.add(savannaSun);
+        threeSavannaDecor=savannaDecor; threeScene.add(savannaDecor);
         threeMeshes = new Map();
         render3DReady = true;
         applySceneEnvironment();
@@ -763,16 +789,18 @@ function applySceneEnvironment() {
     const sky = gameState.environment === 'sky';
     const polar = gameState.environment === 'polar';
     const pond = gameState.environment === 'pond';
-    if (threeNature) threeNature.visible = !ocean && !sky && !polar && !pond;
-    if (threeForestDecor) threeForestDecor.visible = !ocean && !sky && !polar && !pond;
+    const savanna = gameState.environment === 'savanna';
+    if (threeNature) threeNature.visible = !ocean && !sky && !polar && !pond && !savanna;
+    if (threeForestDecor) threeForestDecor.visible = !ocean && !sky && !polar && !pond && !savanna;
     if (threeOceanDecor) threeOceanDecor.visible = ocean;
     if (threePolarDecor) threePolarDecor.visible = polar;
     if (threeSkyDecor) threeSkyDecor.visible = sky;
     if (threePondDecor) threePondDecor.visible = pond;
-    if (threeGrid) threeGrid.visible = !ocean && !sky && !polar && !pond;
-    if (threeGround) threeGround.material.color.setHex(ocean ? 0xbba76e : pond ? 0x2c6f73 : polar ? 0xe9f7ff : sky ? 0xa9d8fb : 0x579c63);
+    if (threeSavannaDecor) threeSavannaDecor.visible = savanna;
+    if (threeGrid) threeGrid.visible = !ocean && !sky && !polar && !pond && !savanna;
+    if (threeGround) threeGround.material.color.setHex(ocean ? 0xbba76e : pond ? 0x2c6f73 : polar ? 0xe9f7ff : sky ? 0xa9d8fb : savanna ? 0xb99349 : 0x579c63);
     if (threeScene && Three) {
-        const color = ocean ? 0x1d6f9d : pond ? 0x5fa8a8 : polar ? 0xaed8ed : sky ? 0x72b8ed : 0x87b9e8;
+        const color = ocean ? 0x1d6f9d : pond ? 0x5fa8a8 : polar ? 0xaed8ed : sky ? 0x72b8ed : savanna ? 0xdfa45a : 0x87b9e8;
         threeScene.background = new Three.Color(color); threeScene.fog.color = new Three.Color(color);
     }
 }
@@ -1014,7 +1042,13 @@ function build3DMesh(entity, kind) {
     if (type === 'bear' || type === 'panda' || type === 'polarBear') { const earMat = type === 'polarBear' ? material : dark; add(new Three.SphereGeometry(0.15, 8, 6), earMat, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), earMat, 0.27 * size, 0.96 * size, 0); }
     if (type === 'panda') { add(new Three.SphereGeometry(0.16, 8, 6), dark, -0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); add(new Three.SphereGeometry(0.16, 8, 6), dark, 0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); }
     if (['deer','giraffe','zebra','llama','goat'].includes(type)) { ear(-0.22); ear(0.22); [-0.17, 0.17].forEach(x => { const horn = add(new Three.CylinderGeometry(.025 * size, .04 * size, .5 * size, 5), dark, x * size, 1.23 * size, 0); horn.rotation.z = x * .35; }); }
-    if (type === 'elephant') { add(new Three.SphereGeometry(.26, 8, 6), material, -.38 * size, .63 * size, -.04 * size, 1.2, .5, .15); add(new Three.SphereGeometry(.26, 8, 6), material, .38 * size, .63 * size, -.04 * size, 1.2, .5, .15); const trunk = add(new Three.CylinderGeometry(.09 * size, .12 * size, .62 * size, 7), material, 0, .36 * size, -.43 * size); trunk.rotation.x = .7; }
+    if (['elephant','africanElephant'].includes(type)) {
+        const earScale = type === 'africanElephant' ? 1.55 : 1.2;
+        add(new Three.SphereGeometry(.26, 8, 6), material, -.38 * size, .63 * size, -.04 * size, earScale, .62, .17);
+        add(new Three.SphereGeometry(.26, 8, 6), material, .38 * size, .63 * size, -.04 * size, earScale, .62, .17);
+        const trunk = add(new Three.CylinderGeometry(.09 * size, .12 * size, .62 * size, 7), material, 0, .36 * size, -.43 * size); trunk.rotation.x = .7;
+        [-.16,.16].forEach(x => { const tusk=add(new Three.ConeGeometry(.055*size,.36*size,5),light,x*size,.47*size,-.43*size); tusk.rotation.x=-1.2; });
+    }
     if (type === 'boar') { [-.16,.16].forEach(x => { const tusk=add(new Three.ConeGeometry(.06*size,.34*size,5),light,x*size,.44*size,-.42*size); tusk.rotation.x=-1.3; }); }
     if (type === 'hedgehog') { for(let i=-3;i<=3;i++){ const spike=add(new Three.ConeGeometry(.11*size,.52*size,5),dark,i*.1*size,.77*size,.15*size); spike.rotation.z=i*.16; } }
     if (type === 'monkey') { add(new Three.SphereGeometry(.13,8,6),material,-.3*size,.78*size,0); add(new Three.SphereGeometry(.13,8,6),material,.3*size,.78*size,0); const tail=add(new Three.TorusGeometry(.28*size,.045*size,6,10,Math.PI),material,0,.42*size,.55*size); tail.rotation.x=Math.PI/2; }
@@ -2360,7 +2394,7 @@ function spawnEnemies() {
         // 敌人可以是任何角色，不受解锁限制
         const bronzePool = ['cat', 'rabbit', 'fox', 'bear'];
         const midPool = [...bronzePool, 'tiger', 'wolf', 'deer', 'panda', 'monkey'];
-        const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : gameState.environment === 'polar' ? POLAR_TYPES : gameState.environment === 'pond' ? POND_TYPES : null;
+        const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : gameState.environment === 'polar' ? POLAR_TYPES : gameState.environment === 'pond' ? POND_TYPES : gameState.environment === 'savanna' ? SAVANNA_TYPES : null;
         const enemyPool = environmentPool
             ? environmentPool
             : gameState.mode === 'ranked'
