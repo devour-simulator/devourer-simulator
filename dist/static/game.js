@@ -290,7 +290,7 @@ const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
 // 雪狼本身是极地动物，也应和北极英雄一起进入极地场景与敌人池。
 const POLAR_TYPES=[...POLAR_HERO_KEYS,'wolf'];
-const POND_TYPES=['crocodile','axolotl','otter'];
+const POND_TYPES=['crocodile','axolotl','otter','hippo'];
 const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type) && !POND_TYPES.includes(type));
 function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':'land'; }
 
@@ -464,6 +464,22 @@ function restoreSavedEnemies(savedEnemies) {
         return enemy;
     }).filter(Boolean);
 }
+function serializeParticle(particle) {
+    return ['x','y','type','value','vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].reduce((data, field) => {
+        data[field] = particle[field]; return data;
+    }, {});
+}
+function restoreSavedParticles(savedParticles) {
+    if (!Array.isArray(savedParticles)) return [];
+    return savedParticles.map(saved => {
+        if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return null;
+        const particle = new Particle(saved.x, saved.y, saved.type, saved.value);
+        ['vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].forEach(field => {
+            if (saved[field] !== undefined) particle[field] = saved[field];
+        });
+        return particle;
+    }).filter(Boolean);
+}
 function saveRankedRun() {
     const player = gameState.player;
     if (!['ranked','tower'].includes(gameState.mode) || gameState.screen !== 'playing' || !player) return;
@@ -477,6 +493,8 @@ function saveRankedRun() {
         killCount: gameState.stats.killCount,
         skillRerolls: gameState.skillRerolls || 0,
         chestAvailable: gameState.world.level === 1 && gameState.chests.length > 0,
+        chests: gameState.chests.map(chest => ({ x:chest.x, y:chest.y, radius:chest.radius, color:chest.color })),
+        particles: gameState.particles.map(serializeParticle),
         provokeActive: !!gameState.provokeActive,
         enemies: gameState.enemies.map(serializeEnemy),
         savedAt: Date.now()
@@ -955,6 +973,26 @@ function build3DMesh(entity, kind) {
         threeScene.add(group); return group;
     }
 
+    if (kind !== 'particle' && entity.type === 'hippo') {
+        // 河马有厚重紫灰身体、张开的粉色大嘴和两颗明显的大板牙。
+        const hide = new Three.MeshStandardMaterial({ color:0x76687e, roughness:.88, flatShading:true });
+        const mouth = new Three.MeshStandardMaterial({ color:0xf27e9b, roughness:.72, flatShading:true });
+        const ivory = new Three.MeshStandardMaterial({ color:0xf4e3bf, roughness:.58, flatShading:true });
+        const darkMouth = new Three.MeshStandardMaterial({ color:0x6b2440, roughness:.8, flatShading:true });
+        const body = add(new Three.SphereGeometry(.5,14,9), hide,0,.48,.12,1.42,.78,1.72);
+        add(new Three.SphereGeometry(.44,13,8), hide,0,.57,-.55,1.32,.72,.9);
+        add(new Three.SphereGeometry(.34,12,7), mouth,0,.43,-.9,1.22,.48,.26);
+        add(new Three.SphereGeometry(.25,11,7), darkMouth,0,.5,-.94,1.18,.30,.14);
+        [-.17,.17].forEach(x => {
+            add(new Three.BoxGeometry(.09,.18,.10), ivory,x,.46,-1.03);
+            add(new Three.SphereGeometry(.10,8,6), hide,x,.92,-.64);
+            add(new Three.SphereGeometry(.035,6,5), new Three.MeshStandardMaterial({color:0x16131b}),x,.94,-.72);
+        });
+        [-1,1].forEach(side => add(new Three.SphereGeometry(.13,8,6),hide,side*.38,.98,-.38));
+        const legs=[]; [-.36,.36].forEach(x => [-.38,.42].forEach(z => legs.push(add(new Three.CylinderGeometry(.1,.13,.24,7),hide,x,.17,z))));
+        group.userData={flying:false,swimming:true,wings:[],legs,body}; threeScene.add(group); return group;
+    }
+
     const size = entity.isBoss ? 1.55 : 1;
     const sphere = new Three.SphereGeometry(0.42, 10, 8);
     const head = add(sphere, material, 0, 0.62 * size, -0.05, size, size, size);
@@ -1316,6 +1354,16 @@ class Character {
                     this.vx -= inwardSpeed * normalX;
                     this.vy -= inwardSpeed * normalY;
                 }
+                if (this.isEnemyAI) {
+                    // AI 碰到树石时先沿圆边绕行一小段，不会一直顶着障碍物。
+                    const tangentX = -normalY, tangentY = normalX;
+                    const toTargetX = (this.targetX || this.x) - this.x;
+                    const toTargetY = (this.targetY || this.y) - this.y;
+                    const direction = (tangentX * toTargetX + tangentY * toTargetY) >= 0 ? 1 : -1;
+                    this.targetX = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x + tangentX * direction * 150));
+                    this.targetY = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y + tangentY * direction * 150));
+                    this.avoidTicks = 28;
+                }
             }
         }
 
@@ -1361,11 +1409,15 @@ class Enemy extends Character {
         this.targetX = x;
         this.targetY = y;
         this.changeDirectionTimer = Math.random() * 100 + 50;
+        this.isEnemyAI = true;
+        this.avoidTicks = 0;
     }
 
     update(frameScale = 1) {
         // Boss 会持续锁定玩家；普通敌人才保留随机巡逻行为。
-        if (gameState.mode === 'team') {
+        if (this.avoidTicks > 0) {
+            this.avoidTicks = Math.max(0, this.avoidTicks - frameScale);
+        } else if (gameState.mode === 'team') {
             // 团队模式的目标由 updateTeamTargets 分配，不能再被随机巡逻覆盖。
         } else if ((this.isBoss || gameState.provokeActive) && gameState.player) {
             this.targetX = gameState.player.x;
@@ -2285,8 +2337,9 @@ function startGame(animalType, savedRun = null) {
     else if (gameState.mode === 'team') spawnTeamBattle();
     else if (savedRun && ['ranked','tower'].includes(gameState.mode) && Array.isArray(savedRun.enemies)) {
         gameState.enemies = restoreSavedEnemies(savedRun.enemies);
-        spawnAmbientPickups();
-        if (savedRun.chestAvailable) spawnChest();
+        gameState.particles = restoreSavedParticles(savedRun.particles);
+        gameState.chests = Array.isArray(savedRun.chests) ? savedRun.chests.map(chest => ({ ...chest })) : [];
+        if (!Array.isArray(savedRun.chests) && savedRun.chestAvailable) spawnChest();
     } else {
         spawnEnemies();
         spawnAmbientPickups();
@@ -2319,7 +2372,7 @@ function spawnEnemies() {
         let y = Math.random() * GAME_HEIGHT;
 
         // 确保不与玩家重叠
-        while (Math.hypot(x - gameState.player.x, y - gameState.player.y) < 100) {
+        while (Math.hypot(x - gameState.player.x, y - gameState.player.y) < 100 || (gameState.environment === 'land' && (gameState.obstacles || []).some(obstacle => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 55))) {
             x = Math.random() * GAME_WIDTH;
             y = Math.random() * GAME_HEIGHT;
         }
