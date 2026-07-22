@@ -288,7 +288,8 @@ Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) 
 });
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish'];
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
-const POLAR_TYPES=POLAR_HERO_KEYS;
+// 雪狼本身是极地动物，也应和北极英雄一起进入极地场景与敌人池。
+const POLAR_TYPES=[...POLAR_HERO_KEYS,'wolf'];
 const POND_TYPES=['crocodile','axolotl','otter'];
 const LAND_TYPES=Object.keys(ANIMALS).filter(type => !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type) && !POND_TYPES.includes(type));
 function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':'land'; }
@@ -428,7 +429,7 @@ const TOWER_RUN_SAVE_KEY = 'towerRun';
 let lastRankedSaveAt = 0;
 let pendingSaveMode = null;
 
-function spawnDamageNumber(target, amount, critical = false, source = '') {
+function spawnDamageNumber(target, amount, critical = false, source = '', combo = false) {
     if (!target || !Number.isFinite(amount)) return;
     gameState.damageNumbers.push({
         x: target.x + (Math.random() - .5) * 24,
@@ -436,6 +437,7 @@ function spawnDamageNumber(target, amount, critical = false, source = '') {
         amount: Math.max(0, Math.round(amount)),
         critical,
         source,
+        combo,
         life: 42,
         maxLife: 42
     });
@@ -1122,7 +1124,7 @@ function renderEnemyLabels() {
         const point = new Three.Vector3(pos.x, 1.35, pos.z).project(threeCamera);
         if (point.z < -1 || point.z > 1) return;
         const label = document.createElement('div');
-        label.className = `damage-number${number.critical ? ' critical' : ''}${number.source === 'enemy' ? ' enemy-hit' : ''}`;
+        label.className = `damage-number${number.critical ? ' critical' : ''}${number.combo ? ' combo-hit' : ''}${number.source === 'enemy' ? ' enemy-hit' : ''}`;
         label.style.left = `${(point.x * .5 + .5) * 100}%`;
         label.style.top = `${(-point.y * .5 + .5) * 100}%`;
         label.style.opacity = Math.max(0, number.life / number.maxLife);
@@ -1667,7 +1669,7 @@ function attackOnce(attacker, defender) {
         comboHits++;
         const comboDamage = rollBattleDamage(attacker);
         const comboActual = defender.takeDamage(comboDamage, attacker);
-        spawnDamageNumber(defender, comboActual, attacker.lastCritical, source);
+        spawnDamageNumber(defender, comboActual, attacker.lastCritical, source, true);
     }
     if (attacker.lifesteal > 0) attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.ceil(damage * attacker.lifesteal));
     attacker.cooldown = Math.max(18, 42 - attacker.speed * 2);
@@ -2649,7 +2651,15 @@ function showLevelUpSkills() {
         const source = pool.length ? pool : fallback;
         return source[Math.floor(Math.random() * source.length)];
     };
-    for (let i = 0; i < 3; i++) skillsToShow.push(pickSkill());
+    const addSkillChoices = () => {
+        // 连击是这批新增的核心成长：未到上限时，每次升级至少给一张连击技能卡。
+        const comboPool = SKILLS.filter(skill => (skill.type === 'combo' || skill.value?.combo) && !skillsToShow.includes(skill));
+        if ((gameState.player.comboChance || 0) < .85 && comboPool.length) {
+            skillsToShow.push(comboPool[Math.floor(Math.random() * comboPool.length)]);
+        }
+        while (skillsToShow.length < 3) skillsToShow.push(pickSkill());
+    };
+    addSkillChoices();
 
     const grid = document.getElementById('skillsGrid');
     grid.innerHTML = '';
@@ -2687,7 +2697,7 @@ function showLevelUpSkills() {
             if (cost && gameState.stats.coins < cost) return window.alert('金币不足！');
             if (cost) { gameState.stats.coins -= cost; localStorage.setItem('coins', gameState.stats.coins); }
             gameState.skillRerolls = rerolls + 1;
-            skillsToShow.length = 0; for (let i=0;i<3;i++) skillsToShow.push(pickSkill());
+            skillsToShow.length = 0; addSkillChoices();
             renderSkills();
         };
         grid.appendChild(button);
@@ -2861,7 +2871,7 @@ function render() {
             ctx.globalAlpha = Math.max(0, number.life / number.maxLife);
             ctx.font = `900 ${number.critical ? 28 : 20}px Arial`;
             ctx.textAlign = 'center';
-            ctx.fillStyle = number.critical ? '#e53935' : number.source === 'enemy' ? '#ffcc39' : '#111';
+            ctx.fillStyle = number.combo ? '#9c4dff' : number.critical ? '#e53935' : number.source === 'enemy' ? '#ffcc39' : '#111';
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 3;
             const text = `-${number.amount}`;
