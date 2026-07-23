@@ -102,7 +102,7 @@ const ANIMALS = {
     owl: { name: '夜枭', emoji: '🦉', baseAttack: 7, baseDefense: 3, baseSpeed: 8, baseHp: 36, color: '#6A5ACD', unlocked: false, unlockThreshold: 55 },
     boar: { name: '野猪', emoji: '🐗', baseAttack: 9, baseDefense: 5, baseSpeed: 5, baseHp: 52, color: '#A0522D', unlocked: false, unlockThreshold: 60 },
     elephant: { name: '小象', emoji: '🐘', baseAttack: 8, baseDefense: 8, baseSpeed: 2, baseHp: 65, color: '#778899', unlocked: false, unlockThreshold: 70 },
-    hedgehog: { name: '刺猬', emoji: '🦔', baseAttack: 6, baseDefense: 6, baseSpeed: 5, baseHp: 44, color: '#8B4513', unlocked: false, unlockThreshold: 80 },
+    hedgehog: { name: '刺猬', emoji: '🦔', baseAttack: 8, baseDefense: 8, baseSpeed: 6, baseHp: 54, color: '#8B4513', unlocked: false, unlockThreshold: 80 },
     crane: { name: '仙鹤', emoji: '🦢', baseAttack: 5, baseDefense: 3, baseSpeed: 10, baseHp: 35, color: '#E6E6FA', unlocked: false, unlockThreshold: 90 },
     giraffe: { name: '长颈鹿', emoji: '🦒', baseAttack: 7, baseDefense: 4, baseSpeed: 6, baseHp: 48, color: '#DAA520', unlocked: false, unlockThreshold: 100 }
 };
@@ -337,11 +337,11 @@ function heroIconMarkup(key, hero) {
 
 // 皮肤不会改变面板数值，只改变进入对局后的配色；拥有英雄后即可在“英雄”页选择。
 const HERO_SKINS = {
-    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f'}],
-    tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'},{id:'white',name:'白纹猛虎',color:'#e7edf2'}],
-    northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee'}],
-    shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72'}],
-    flamingo:[{id:'default',name:'粉羽火烈鸟',color:'#ef7fa8'},{id:'coral',name:'珊瑚火烈鸟',color:'#ff6f79'}],
+    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',price:4000}],
+    tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'}],
+    northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee',price:4000}],
+    shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',price:4000}],
+    flamingo:[{id:'default',name:'粉羽火烈鸟',color:'#ef7fa8'},{id:'coral',name:'珊瑚火烈鸟',color:'#ff6f79',price:4000}],
     hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',price:10000}]
 };
 function ownedSkinKeys() {
@@ -1734,6 +1734,8 @@ class SkillEffect {
             this.kind = 'aura'; this.radius = active.effect === 'grow' ? 62 : 48; this.life = 75;
             this.damage = 0;
         }
+        // 极地的雪景很亮，所有会造成伤害的实体改成黑色，飞行轨迹更容易辨认。
+        if (gameState.environment === 'polar' && this.damage > 0) this.color = '#111820';
     }
 
     update(frameScale = 1) {
