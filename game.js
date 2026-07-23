@@ -337,7 +337,6 @@ function heroIconMarkup(key, hero) {
 
 // 皮肤不会改变面板数值，只改变进入对局后的配色；拥有英雄后即可在“英雄”页选择。
 const HERO_SKINS = {
-    cat:[{id:'default',name:'粉爪小猫',color:'#FFB6C1'},{id:'midnight',name:'月影小猫',color:'#39445a'},{id:'cream',name:'奶油小猫',color:'#f4d9a6'}],
     lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f'}],
     tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'},{id:'white',name:'白纹猛虎',color:'#e7edf2'}],
     northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee'}],
@@ -353,11 +352,13 @@ function ownsSkin(type, skin) { return !skin.price || ownedSkinKeys().has(skinKe
 function getSelectedHeroSkin(type) {
     const skins = HERO_SKINS[type];
     if (!skins) return null;
+    const trial = gameState?.skinTrial;
+    if (trial?.type === type) return skins.find(skin => skin.id === trial.skinId) || skins[0];
     const saved = localStorage.getItem(`heroSkin:${type}`) || 'default';
     const selected = skins.find(skin => skin.id === saved) || skins[0];
     return ownsSkin(type, selected) ? selected : skins[0];
 }
-function selectHeroSkin(type, skinId) {
+function selectHeroSkin(type, skinId, returnPanel = 'hero') {
     if (!ANIMALS[type]?.unlocked) return window.alert('请先解锁该英雄。');
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
     if (!skin) return;
@@ -371,9 +372,22 @@ function selectHeroSkin(type, skinId) {
         window.alert(`购买成功！已获得「${skin.name}」。`);
     }
     localStorage.setItem(`heroSkin:${type}`, skin.id);
-    openAccountPanel('hero');
+    openAccountPanel(returnPanel);
 }
 window.selectHeroSkin = selectHeroSkin;
+function startSkinTrial(type, skinId) {
+    const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
+    if (!skin) return;
+    gameState.skinTrial = { type, skinId };
+    gameState.mode = 'skinTrial';
+    document.getElementById('subPageModal').classList.add('hidden');
+    startGame(type);
+    // 试玩只安排一名训练对手，不产生宝箱、金币、段位或账号经验奖励。
+    const foe = new Enemy('rabbit', Math.min(GAME_WIDTH - 100, gameState.player.x + 270), gameState.player.y);
+    foe.name = '试玩训练兔'; foe.maxHp = 45; foe.hp = 45; foe.attack = 3; foe.defense = 1;
+    gameState.enemies = [foe]; gameState.particles = []; gameState.chests = [];
+}
+window.startSkinTrial = startSkinTrial;
 function refreshHeroPrices() {
     Object.values(ANIMALS).forEach(hero => {
         if (!hero.signOnly) hero.price = calculateHeroPrice(hero);
@@ -1727,14 +1741,17 @@ function defeatEnemyBySkill(enemy) {
     const player = gameState.player;
     const index = gameState.enemies.indexOf(enemy);
     if (!player || index < 0) return;
-    gameState.stats.killCount++;
-    gameState.stats.coins += enemy.isBoss ? 80 : 12;
-    localStorage.setItem('coins', gameState.stats.coins);
-    player.addExp(Math.floor(10 * (1 + enemy.level * 0.5)));
-    spawnParticles(enemy.x, enemy.y, 5);
+    if (gameState.mode !== 'skinTrial') {
+        gameState.stats.killCount++;
+        gameState.stats.coins += enemy.isBoss ? 80 : 12;
+        localStorage.setItem('coins', gameState.stats.coins);
+        player.addExp(Math.floor(10 * (1 + enemy.level * 0.5)));
+        spawnParticles(enemy.x, enemy.y, 5);
+    }
     gameState.enemies.splice(index, 1);
     if (gameState.enemies.length !== 0) return;
     if (gameState.mode === 'tutorial') return completeTutorialBattle();
+    if (gameState.mode === 'skinTrial') return finishSkinTrial(true);
     if (gameState.mode === 'team') return finishRankedMatch(true);
     if (gameState.mode === 'ranked') {
         if (gameState.world.level >= 50) return finishRankedMatch(true, 4);
@@ -2314,9 +2331,14 @@ function openAccountPanel(kind) {
         if (coinCard) { coinCard.style.cursor = 'pointer'; coinCard.title = '点击查看金币用途'; coinCard.onclick = showCoinHelp; }
     } else if (kind === 'shop') {
         title.textContent = '🛒 商城';
-        content.innerHTML = cards(heroesByPower()
+        const gameShop = cards(heroesByPower()
             .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
+        const skinShop = cards(Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price).map(skin => {
+            const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
+            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
+        })).join('') || '<div class="tip">皮肤正在制作中。</div>');
+        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div>`;
     } else {
         title.textContent = '✉️ 邮件';
         const mails = getMails();
@@ -2334,6 +2356,14 @@ function switchHeroRoad(tab) {
     rank.style.display = tab === 'rank' ? '' : 'none';
     level.style.display = tab === 'level' ? '' : 'none';
 }
+function switchShopTab(tab) {
+    const game = document.getElementById('shopGame');
+    const skin = document.getElementById('shopSkin');
+    if (!game || !skin) return;
+    game.style.display = tab === 'game' ? '' : 'none';
+    skin.style.display = tab === 'skin' ? '' : 'none';
+}
+window.switchShopTab = switchShopTab;
 
 function claimDailySignIn() {
     const today = new Date().toDateString();
@@ -2567,20 +2597,25 @@ function checkCollisions() {
 
             if (enemyDefeated) {
                 // 获胜
-                gameState.stats.killCount++;
-                gameState.stats.coins += enemy.isBoss ? 80 : 12;
-                localStorage.setItem('coins', gameState.stats.coins);
-                const expReward = Math.floor(10 * (1 + enemy.level * 0.5));
-                player.addExp(expReward);
-                
-                // 生成经验粒子
-                spawnParticles(enemy.x, enemy.y, 5);
+                if (gameState.mode !== 'skinTrial') {
+                    gameState.stats.killCount++;
+                    gameState.stats.coins += enemy.isBoss ? 80 : 12;
+                    localStorage.setItem('coins', gameState.stats.coins);
+                    const expReward = Math.floor(10 * (1 + enemy.level * 0.5));
+                    player.addExp(expReward);
+                    // 生成经验粒子
+                    spawnParticles(enemy.x, enemy.y, 5);
+                }
                 
                 gameState.enemies.splice(i, 1);
 
                 if (gameState.enemies.length === 0) {
                     if (gameState.mode === 'tutorial') {
                         completeTutorialBattle();
+                        return;
+                    }
+                    if (gameState.mode === 'skinTrial') {
+                        finishSkinTrial(true);
                         return;
                     }
                     if (gameState.mode === 'team') {
@@ -2676,6 +2711,18 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     document.getElementById('gameOverModal').classList.remove('hidden');
 }
 
+function finishSkinTrial(won) {
+    exitGameFullscreen();
+    gameState.screen = 'gameover';
+    gameState.skinTrial = null;
+    document.getElementById('gameOverTitle').textContent = won ? '🎨 皮肤试玩完成！' : '🎨 皮肤试玩结束';
+    document.getElementById('characterInfo').innerHTML = '本局仅用于体验皮肤，不会获得或扣除任何奖励。';
+    document.getElementById('finalScore').textContent = won ? '试玩胜利' : '试玩结束';
+    document.getElementById('rankInfo').innerHTML = '返回大厅后可前往商城购买喜欢的皮肤。';
+    document.getElementById('restartButton').textContent = '🏠 返回大厅';
+    document.getElementById('gameOverModal').classList.remove('hidden');
+}
+
 function spawnTeamBattle() {
     // 团队战跟随玩家所选英雄的生态场景，队友与敌人都不会混进别的栖息地。
     const types = gameState.environment === 'ocean' ? OCEAN_TYPES
@@ -2766,6 +2813,7 @@ function updateBossSkills() {
 
 function endGame() {
     exitGameFullscreen();
+    if (gameState.mode === 'skinTrial') return finishSkinTrial(false);
     if (gameState.mode === 'tower') clearRankedRun('tower');
     if (gameState.mode === 'ranked') {
         finishRankedMatch(false);
@@ -3132,7 +3180,7 @@ function updateUI() {
     document.getElementById('highScore').textContent = gameState.stats.highScore;
     document.getElementById('enemyCount').textContent = gameState.enemies.length;
     document.getElementById('worldLevel').textContent = gameState.world.level;
-    document.getElementById('modeLabel').textContent = gameState.mode === 'ranked' ? '排位' : `爬塔 ${gameState.world.level} 层`;
+    document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : `爬塔 ${gameState.world.level} 层`;
     document.getElementById('rankStatus').textContent = gameState.mode === 'ranked' ? `🏅 ${rankLabel()}` : '🗼 每 5 层 Boss';
 }
 
