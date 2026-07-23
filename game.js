@@ -2294,6 +2294,7 @@ function showHall() {
     const signedToday = localStorage.getItem('signDate') === new Date().toDateString();
     const signDay = Math.min(7, parseInt(localStorage.getItem('signDay')) || 0);
     const todayDay = signDay >= 7 ? 7 : (signedToday ? signDay : signDay + 1);
+    document.getElementById('signInCard').hidden = signDay >= 7;
     document.getElementById('signProgress').textContent = signDay >= 7 ? '新手七日签到已完成' : `今天是新手签到第 ${todayDay} 天（进度 ${signDay}/7）`;
     document.getElementById('signButton').disabled = signedToday || signDay >= 7;
     document.getElementById('signButton').textContent = signDay >= 7 ? '新手签到已完成' : (signedToday ? '今日已签到' : `签到第 ${todayDay} 天`);

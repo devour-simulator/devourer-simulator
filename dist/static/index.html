@@ -427,7 +427,7 @@
             <div class="sign-card"><button id="mailButton" class="btn mail-button" type="button" onclick="openAccountPanel('mail')">✉️ 邮件<span id="mailBadge" class="mail-badge" hidden>0</span></button><div id="accountPanel" style="font-size:12px;color:#555;flex:1;">系统邮件与好友邮件入口</div></div>
             <button class="btn" id="replayTutorialButton" type="button">🎓 重看新手教程</button>
             <div class="sign-card"><div><strong>🎮 游玩方式</strong><br><small id="deviceModeText">当前：电脑键盘</small></div><div class="device-choice"><button class="btn" id="desktopModeButton" type="button">🖥️ 电脑键鼠</button><button class="btn" id="mobileModeButton" type="button">📱 手机摇杆</button></div></div>
-            <div class="sign-card"><div><strong>📅 新手七日签到</strong><br><small id="signProgress">今天是新手签到第 1 天（进度 0/7）</small><br><small>第 2 天送小狐狸，第 7 天送火凤凰；奖励通过邮件手动领取。</small></div><button class="btn btn-success" id="signButton" type="button">签到第 1 天</button></div>
+            <div class="sign-card" id="signInCard"><div><strong>📅 新手七日签到</strong><br><small id="signProgress">今天是新手签到第 1 天（进度 0/7）</small><br><small>第 2 天送小狐狸，第 7 天送火凤凰；奖励通过邮件手动领取。</small></div><button class="btn btn-success" id="signButton" type="button">签到第 1 天</button></div>
         </div>
     </div>
 
@@ -533,6 +533,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3.3.3"></script>
+    <script src="game.js?v=3.3.4"></script>
 </body>
 </html>
