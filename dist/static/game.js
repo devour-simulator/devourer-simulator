@@ -906,6 +906,28 @@ function build3DMesh(entity, kind) {
             const edgeMat = new Three.MeshBasicMaterial({ color:shieldColor, transparent:true, opacity:.75, wireframe:true });
             const shell = new Three.Mesh(new Three.SphereGeometry(.82, 18, 12), shellMat); shell.position.y=.62; group.add(shell);
             const edges = new Three.Mesh(new Three.IcosahedronGeometry(.86, 2), edgeMat); edges.position.y=.62; group.add(edges);
+        } else if (entity.effect === 'reflect') {
+            // 刺猬反伤是贴身转动的荆棘甲：榴莲皮肤换成黄绿外壳和金色尖刺。
+            const durian = entity.owner?.skin?.id === 'durian';
+            const shellColor = durian ? 0x9ab43b : 0x214eaa;
+            const thornColor = durian ? 0xe8c944 : 0x76a9ff;
+            const shellMat = new Three.MeshStandardMaterial({ color:shellColor, emissive:shellColor, emissiveIntensity:1.05, transparent:true, opacity:.38, roughness:.3 });
+            const thornMat = new Three.MeshStandardMaterial({ color:thornColor, emissive:thornColor, emissiveIntensity:1.35, roughness:.22, flatShading:true });
+            const shell = new Three.Mesh(new Three.SphereGeometry(.74, 16, 12), shellMat); shell.position.y=.6; group.add(shell);
+            const ring = new Three.Mesh(new Three.TorusGeometry(.76, .035, 6, 18), thornMat); ring.rotation.x=Math.PI/2; ring.position.y=.6; group.add(ring);
+            for (let i=0; i<12; i++) {
+                const angle=i/12*Math.PI*2;
+                const spike=add(new Three.ConeGeometry(.105,.42,5), thornMat, Math.cos(angle)*.78, .62 + (i%2 ? .16 : -.12), Math.sin(angle)*.78);
+                spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
+            }
+        } else if (entity.effect === 'reflectBurst') {
+            const burstMat = new Three.MeshStandardMaterial({ color:0x163f9d, emissive:0x2f78ff, emissiveIntensity:1.8, transparent:true, opacity:.78, roughness:.18 });
+            const ring = new Three.Mesh(new Three.TorusGeometry(.55, .055, 6, 20), burstMat); ring.rotation.x=Math.PI/2; ring.position.y=.28; group.add(ring);
+            for (let i=0; i<10; i++) {
+                const angle=i/10*Math.PI*2;
+                const spike=add(new Three.ConeGeometry(.07,.52,4), burstMat, Math.cos(angle)*.58, .34, Math.sin(angle)*.58);
+                spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
+            }
         } else if (entity.kind === 'aura') {
             const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42, .055, 7, 16), skillMat);
             ring.rotation.x = -Math.PI / 2; ring.position.y = .09; group.add(ring);
@@ -1209,6 +1231,11 @@ function render3D() {
             mesh.scale.setScalar(1 + (entity.bossRoar ? .34 : .06) * hit);
             mesh.position.z -= (entity.bossRoar ? .38 : .1) * hit;
         } else mesh.scale.setScalar(1);
+        if (kind === 'skill' && (entity.effect === 'reflect' || entity.effect === 'reflectBurst')) {
+            const pulse = entity.effect === 'reflectBurst' ? 1 + Math.sin(phase * 3) * .16 : 1 + Math.sin(phase * 1.8) * .05;
+            mesh.rotation.y += entity.effect === 'reflectBurst' ? .24 : .075;
+            mesh.scale.setScalar(pulse);
+        }
     };
     if (gameState.screen === 'playing' && gameState.player) {
         sync(gameState.player, 'player', 'player');
@@ -1459,6 +1486,8 @@ class Character {
             const reflected = Math.max(1, Math.ceil(actualDamage * this.reflectRatio));
             source.hp -= reflected;
             spawnDamageNumber(source, reflected, false, 'reflect');
+            // 每次反伤都从刺猬身上炸出一圈尖刺，让命中反馈比单纯数字更清楚。
+            spawnSkillEffect(this, { name:'反伤尖刺', effect:'reflectBurst' });
         }
         return actualDamage;
     }
@@ -1695,6 +1724,12 @@ class SkillEffect {
             this.kind = 'charge'; this.radius = 42; this.life = Math.ceil(active.distance / 14) + 2;
             this.vx = owner.facing.x * 14; this.vy = owner.facing.y * 14;
             this.damage = Math.ceil(owner.attack * 1.35 * (1 + owner.skillPower));
+        } else if (active.effect === 'reflect') {
+            this.kind = 'aura'; this.radius = 56; this.life = 420; this.damage = 0;
+            this.color = owner.skin?.id === 'durian' ? '#c7d84a' : '#4d82ff';
+        } else if (active.effect === 'reflectBurst') {
+            this.kind = 'reflectBurst'; this.radius = 22; this.maxRadius = 105; this.life = 24; this.damage = 0;
+            this.color = '#1b4fb4';
         } else {
             this.kind = 'aura'; this.radius = active.effect === 'grow' ? 62 : 48; this.life = 75;
             this.damage = 0;
@@ -1710,9 +1745,11 @@ class SkillEffect {
             this.x = Math.max(this.owner.radius, Math.min(GAME_WIDTH - this.owner.radius, this.x));
             this.y = Math.max(this.owner.radius, Math.min(GAME_HEIGHT - this.owner.radius, this.y));
             this.owner.x = this.x; this.owner.y = this.y;
-        } else if (this.kind === 'aura') {
+        } else if (this.kind === 'aura' || this.kind === 'reflectBurst') {
             this.x = this.owner.x; this.y = this.owner.y;
         }
+        if (this.effect === 'reflect' && this.owner.reflectHits <= 0) this.life = 0;
+        if (this.kind === 'reflectBurst') this.radius = Math.min(this.maxRadius, this.radius + 4.5 * frameScale);
         this.life -= frameScale;
     }
 
@@ -1723,7 +1760,32 @@ class SkillEffect {
         ctx.strokeStyle = this.color;
         ctx.fillStyle = this.color;
         ctx.lineWidth = 4;
-        if (this.kind === 'aura') {
+        if (this.effect === 'reflect') {
+            const durian = this.owner.skin?.id === 'durian';
+            const spin = performance.now() * .008;
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = this.color;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = durian ? '#f2d14c' : '#88b6ff';
+            for (let i=0; i<12; i++) {
+                const angle = spin + i / 12 * Math.PI * 2;
+                const x = this.x + Math.cos(angle) * this.radius;
+                const y = this.y + Math.sin(angle) * this.radius;
+                ctx.save(); ctx.translate(x,y); ctx.rotate(angle + Math.PI/2);
+                ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(7,8); ctx.lineTo(-7,8); ctx.closePath(); ctx.fill(); ctx.restore();
+            }
+        } else if (this.kind === 'reflectBurst') {
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#16439e';
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = '#377eff';
+            for (let i=0; i<10; i++) {
+                const angle = i / 10 * Math.PI * 2;
+                const x = this.x + Math.cos(angle) * this.radius;
+                const y = this.y + Math.sin(angle) * this.radius;
+                ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + Math.cos(angle-.35)*12,y + Math.sin(angle-.35)*12); ctx.lineTo(x + Math.cos(angle+.35)*12,y + Math.sin(angle+.35)*12); ctx.closePath(); ctx.fill();
+            }
+        } else if (this.kind === 'aura') {
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
         } else {
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
