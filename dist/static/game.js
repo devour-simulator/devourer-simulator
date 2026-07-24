@@ -406,12 +406,13 @@ const SKILLS = [
     { name:'战神降临', desc:'攻击 +18，暴击率 +20%', type:'compound', value:{attack:18,crit:.20}, rarity:'legendary' }, { name:'不灭之躯', desc:'最大生命 +100，脱战回血 +8/秒', type:'compound', value:{hp:100,regen:8}, rarity:'legendary' }, { name:'时空掌控', desc:'速度 +8，主动技能冷却 -35%，实体技能伤害 +35%', type:'compound', value:{speed:8,cooldown:.35,skillPower:.35}, rarity:'legendary' }, { name:'全能王冠', desc:'攻击 +10，防御 +10，速度 +4，最大生命 +50', type:'compound', value:{attack:10,defense:10,speed:4,hp:50}, rarity:'legendary' }
 ];
 SKILLS.push(
-    { name:'连击节奏', desc:'连击率 +8%', type:'combo', value:.08, rarity:'normal' },
-    { name:'双重追击', desc:'攻击 +3，连击率 +14%', type:'compound', value:{attack:3,combo:.14}, rarity:'rare' },
-    { name:'疾影连斩', desc:'速度 +3，连击率 +20%', type:'compound', value:{speed:3,combo:.20}, rarity:'epic' },
-    { name:'无尽连击', desc:'攻击 +8，连击率 +28%', type:'compound', value:{attack:8,combo:.28}, rarity:'mythic' },
-    { name:'风暴连环', desc:'攻击 +14，连击率 +35%，暴击率 +10%', type:'compound', value:{attack:14,combo:.35,crit:.10}, rarity:'legendary' }
+    { name:'连击节奏', desc:'连击率 +6%', type:'combo', value:.06, rarity:'normal' },
+    { name:'双重追击', desc:'攻击 +3，连击率 +10%', type:'compound', value:{attack:3,combo:.10}, rarity:'rare' },
+    { name:'疾影连斩', desc:'速度 +3，连击率 +15%', type:'compound', value:{speed:3,combo:.15}, rarity:'epic' },
+    { name:'无尽连击', desc:'攻击 +8，连击率 +20%', type:'compound', value:{attack:8,combo:.20}, rarity:'mythic' },
+    { name:'风暴连环', desc:'攻击 +14，连击率 +25%，暴击率 +10%', type:'compound', value:{attack:14,combo:.25,crit:.10}, rarity:'legendary' }
 );
+const MAX_COMBO_CHANCE = .75;
 
 const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:26}, epic:{label:'史诗',weight:12}, mythic:{label:'神话',weight:5}, legendary:{label:'传奇',weight:2} };
 
@@ -1443,7 +1444,11 @@ class Character {
             if (typeof bonus.hp === 'number') { this.maxHp += bonus.hp; this.hp = this.maxHp; gameState.lastUpgradeNotice = `生命上限 +${bonus.hp}，当前 ${this.maxHp} HP`; }
             if (typeof bonus.regen === 'number') this.regenBonus += bonus.regen;
             if (typeof bonus.crit === 'number') this.critChance = Math.min(1, this.critChance + bonus.crit);
-            if (typeof bonus.combo === 'number') this.comboChance = Math.min(.85, this.comboChance + bonus.combo);
+            if (typeof bonus.combo === 'number') {
+                const before = this.comboChance;
+                this.comboChance = Math.min(MAX_COMBO_CHANCE, Math.max(0, this.comboChance + bonus.combo));
+                gameState.lastUpgradeNotice = `连击率 +${Math.round((this.comboChance - before) * 100)}%，当前 ${Math.round(this.comboChance * 100)}%`;
+            }
             if (typeof bonus.lifesteal === 'number') this.lifesteal += bonus.lifesteal;
             if (typeof bonus.skillPower === 'number') this.skillPower += bonus.skillPower;
             if (typeof bonus.cooldown === 'number') this.activeCooldownReduction = Math.min(.7, this.activeCooldownReduction + bonus.cooldown);
@@ -1950,7 +1955,7 @@ function attackOnce(attacker, defender) {
     const actualDamage = defender.takeDamage(damage, attacker);
     spawnDamageNumber(defender, actualDamage, attacker.lastCritical, source);
     let comboHits = 0;
-    while (attacker.hp > 0 && defender.hp > 0 && Math.random() < Math.min(.85, attacker.comboChance || 0) && comboHits < 5) {
+    while (attacker.hp > 0 && defender.hp > 0 && Math.random() < Math.min(MAX_COMBO_CHANCE, attacker.comboChance || 0) && comboHits < 5) {
         comboHits++;
         const comboDamage = rollBattleDamage(attacker);
         const comboActual = defender.takeDamage(comboDamage, attacker);
@@ -2607,7 +2612,7 @@ function startGame(animalType, savedRun = null) {
         const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
         fields.forEach(field => { if (savedPlayer[field] !== undefined) gameState.player[field] = savedPlayer[field]; });
         gameState.player.critChance = Math.min(1, Math.max(0, gameState.player.critChance || 0));
-        gameState.player.comboChance = Math.min(.85, Math.max(0, gameState.player.comboChance || 0));
+        gameState.player.comboChance = Math.min(MAX_COMBO_CHANCE, Math.max(0, gameState.player.comboChance || 0));
         gameState.world.level = Math.max(1, savedRun.level || 1);
         gameState.world.time = Math.max(0, savedRun.time || 0);
         gameState.stats.killCount = Math.max(0, savedRun.killCount || 0);
@@ -3014,9 +3019,9 @@ function showLevelUpSkills() {
         return source[Math.floor(Math.random() * source.length)];
     };
     const addSkillChoices = () => {
-        // 连击是这批新增的核心成长：未到上限时，每次升级至少给一张连击技能卡。
+        // 连击技能会定期出现，但不会每级强制塞入，避免太快叠到上限。
         const comboPool = SKILLS.filter(skill => (skill.type === 'combo' || skill.value?.combo) && !skillsToShow.includes(skill));
-        if ((gameState.player.comboChance || 0) < .85 && comboPool.length) {
+        if ((gameState.player.comboChance || 0) < MAX_COMBO_CHANCE && comboPool.length && Math.random() < .45) {
             skillsToShow.push(comboPool[Math.floor(Math.random() * comboPool.length)]);
         }
         while (skillsToShow.length < 3) skillsToShow.push(pickSkill());
@@ -3259,7 +3264,7 @@ function updateUI() {
     document.getElementById('playerDefense').textContent = player.defense;
     document.getElementById('playerSpeed').textContent = `${player.speed}（移动 ${Math.round((2.1 + player.speed * .24) * 10) / 10} / 攻速）`;
     document.getElementById('playerCritChance').textContent = `${Math.round(Math.min(1, player.critChance) * 100)}%`;
-    document.getElementById('playerComboChance').textContent = `${Math.round(Math.min(.85, player.comboChance || 0) * 100)}%`;
+    document.getElementById('playerComboChance').textContent = `${Math.round(Math.min(MAX_COMBO_CHANCE, Math.max(0, player.comboChance || 0)) * 100)}%`;
     document.getElementById('playerLevel').textContent = player.level;
 
     // 专属能力
