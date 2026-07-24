@@ -267,6 +267,10 @@
         .skin-dot.selected { transform:scale(1.18); box-shadow:0 0 0 2px #ffbe32; }
         .skin-dot.locked { opacity:.5; box-shadow:0 0 0 1px #8a96a3, inset 0 0 0 3px rgba(0,0,0,.35); }
         .hero-wardrobe { margin-top:9px; border:1px solid #8a62c9; background:#f2eaff; color:#5d349b; border-radius:8px; padding:5px 9px; font-size:12px; cursor:pointer; }
+        .battle-skin-switcher { display:flex; flex-wrap:wrap; justify-content:center; gap:5px; margin-top:10px; }
+        .battle-skin-switcher small { width:100%; color:#667; font-size:11px; }
+        .battle-skin-button { border:1px solid var(--skin-color); background:#fff; color:#344; border-radius:8px; padding:5px 7px; font-size:11px; cursor:pointer; }
+        .battle-skin-button.selected { background:var(--skin-color); color:#182127; font-weight:800; box-shadow:0 0 0 2px rgba(255,190,50,.7); }
         .skin-gallery-card { border-color:var(--skin-color); box-shadow:0 4px 14px color-mix(in srgb,var(--skin-color) 20%,transparent); }
         .skin-preview { height:78px; display:grid; place-items:center; font-size:55px; margin:6px 0; background:linear-gradient(135deg,#fff,var(--skin-color)); border-radius:12px; overflow:hidden; }
         .bird-icon { position:relative; display:inline-block; width:70px; height:48px; vertical-align:middle; }
@@ -537,6 +541,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3.4.2"></script>
+    <script src="game.js?v=3.4.3"></script>
 </body>
 </html>

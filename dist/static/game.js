@@ -2586,6 +2586,28 @@ function showAnimalSelection() {
             if (!animal.signOnly && !animal.rewardOnly) card.onclick = () => buyHero(key);
         } else {
             card.onclick = () => startGame(key);
+            // 选英雄时只允许切换已拥有皮肤；购买仍只能在商城完成。
+            const ownedSkins = (HERO_SKINS[key] || []).filter(skin => ownsSkin(key, skin));
+            if (ownedSkins.length > 1) {
+                const wardrobe = document.createElement('div');
+                wardrobe.className = 'battle-skin-switcher';
+                const selectedSkin = getSelectedHeroSkin(key);
+                wardrobe.innerHTML = `<small>👕 对局皮肤</small>`;
+                ownedSkins.forEach(skin => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = `battle-skin-button${selectedSkin?.id === skin.id ? ' selected' : ''}`;
+                    button.style.setProperty('--skin-color', skin.color);
+                    button.textContent = selectedSkin?.id === skin.id ? `✓ ${skin.name}` : skin.name;
+                    button.onclick = event => {
+                        event.stopPropagation();
+                        localStorage.setItem(`heroSkin:${key}`, skin.id);
+                        showAnimalSelection();
+                    };
+                    wardrobe.appendChild(button);
+                });
+                card.appendChild(wardrobe);
+            }
         }
         
         grid.appendChild(card);
