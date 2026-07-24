@@ -181,7 +181,7 @@ Object.assign(ANIMALS, {
     goat: { name: '山羊', emoji: '🐐', baseAttack: 8, baseDefense: 4, baseSpeed: 7, baseHp: 45, color: '#d5d1c1', unlocked: false },
     squirrel: { name: '松鼠', emoji: '🐿️', baseAttack: 5, baseDefense: 2, baseSpeed: 10, baseHp: 34, color: '#bf733e', unlocked: false },
     africanElephant: { name: '非洲象', emoji: '🐘', baseAttack: 11, baseDefense: 9, baseSpeed: 3, baseHp: 82, color: '#687078', unlocked: false },
-    northeastTiger: { name: '东北虎', emoji: '🐅', baseAttack: 12, baseDefense: 5, baseSpeed: 6, baseHp: 54, color: '#d98224', unlocked: false }
+    northeastTiger: { name: '东北虎', emoji: '🐅', baseAttack: 14, baseDefense: 6, baseSpeed: 8, baseHp: 62, color: '#d98224', unlocked: false }
 });
 Object.assign(ABILITIES, {
     lion: { passive:{name:'百兽之王',desc:'攻击 +2',bonus:{attack:2}}, active:{name:'狮吼震慑',desc:'接下来 2 次攻击额外 +9 伤害',effect:'empower',bonus:9,hits:2,cooldown:11}},
@@ -414,7 +414,7 @@ SKILLS.push(
     { name:'无尽连击', desc:'攻击 +8，连击率 +20%', type:'compound', value:{attack:8,combo:.20}, rarity:'mythic' },
     { name:'风暴连环', desc:'攻击 +14，连击率 +25%，暴击率 +10%', type:'compound', value:{attack:14,combo:.25,crit:.10}, rarity:'legendary' }
 );
-const MAX_COMBO_CHANCE = .75;
+const MAX_COMBO_CHANCE = .95;
 
 const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:26}, epic:{label:'史诗',weight:12}, mythic:{label:'神话',weight:5}, legendary:{label:'传奇',weight:2} };
 
