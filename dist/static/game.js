@@ -471,6 +471,7 @@ let gameState = {
     damageNumbers: [],
     provokeActive: false,
     levelUpShown: false,  // 防止升级界面重复生成
+    pendingLevelUpSkills: [], // 升级选项会随排位/爬塔存档保留
     world: {
         level: 1,
         time: 0,
@@ -555,7 +556,7 @@ function restoreSavedParticles(savedParticles) {
 }
 function saveRankedRun() {
     const player = gameState.player;
-    if (!['ranked','tower'].includes(gameState.mode) || gameState.screen !== 'playing' || !player) return;
+    if (!['ranked','tower'].includes(gameState.mode) || !['playing','levelup'].includes(gameState.screen) || !player) return;
     const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
     const playerState = { type: player.type };
     fields.forEach(field => { playerState[field] = player[field]; });
@@ -570,6 +571,8 @@ function saveRankedRun() {
         particles: gameState.particles.map(serializeParticle),
         provokeActive: !!gameState.provokeActive,
         enemies: gameState.enemies.map(serializeEnemy),
+        awaitingLevelUp: gameState.screen === 'levelup',
+        pendingLevelUpSkills: (gameState.pendingLevelUpSkills || []).map(skill => skill.name),
         savedAt: Date.now()
     }));
 }
@@ -2603,6 +2606,7 @@ function startGame(animalType, savedRun = null) {
     gameState.chests = [];
     gameState.damageNumbers = [];
     gameState.provokeActive = false;
+    gameState.pendingLevelUpSkills = [];
     gameState.stats.killCount = 0;
     gameState.skillRerolls = 0;
     gameState.world.level = 1;
@@ -2621,6 +2625,7 @@ function startGame(animalType, savedRun = null) {
         gameState.stats.killCount = Math.max(0, savedRun.killCount || 0);
         gameState.skillRerolls = Math.max(0, savedRun.skillRerolls || 0);
         gameState.provokeActive = !!savedRun.provokeActive;
+        gameState.pendingLevelUpSkills = Array.isArray(savedRun.pendingLevelUpSkills) ? savedRun.pendingLevelUpSkills.map(name => SKILLS.find(skill => skill.name === name)).filter(Boolean) : [];
     } else if (['ranked','tower'].includes(gameState.mode)) {
         clearRankedRun();
     }
@@ -2640,6 +2645,11 @@ function startGame(animalType, savedRun = null) {
         if (gameState.world.level === 1) spawnChest();
     }
     saveRankedRun();
+    // 如果退出时正在选升级技能，继续游戏后先恢复相同的三张卡，再继续战斗。
+    if (savedRun?.awaitingLevelUp) {
+        gameState.screen = 'levelup';
+        gameState.levelUpShown = false;
+    }
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
     requestAnimationFrame(gameLoop);
 }
@@ -3005,7 +3015,7 @@ function showLevelUpSkills() {
     exitGameFullscreen();
     gameState.levelUpShown = true;
     
-    const skillsToShow = [];
+    const skillsToShow = [...(gameState.pendingLevelUpSkills || [])];
     const canUseSkillDamage = ['empower', 'dash'].includes(gameState.player.activeAbility.effect);
     const pickSkill = () => {
         const roll = Math.random() * 100;
@@ -3029,7 +3039,12 @@ function showLevelUpSkills() {
         }
         while (skillsToShow.length < 3) skillsToShow.push(pickSkill());
     };
-    addSkillChoices();
+    if (skillsToShow.length !== 3) {
+        skillsToShow.length = 0;
+        addSkillChoices();
+    }
+    gameState.pendingLevelUpSkills = skillsToShow;
+    saveRankedRun();
 
     const grid = document.getElementById('skillsGrid');
     grid.innerHTML = '';
@@ -3045,6 +3060,7 @@ function showLevelUpSkills() {
             <div class="skill-desc">${skill.desc}${skill.type === 'hp' ? `（当前上限 ${gameState.player.maxHp} → ${gameState.player.maxHp + skill.value}）` : ''}</div>
         `;
         card.onclick = () => {
+            gameState.pendingLevelUpSkills = [];
             gameState.player.applySkill(skill);
             updateUI();
             document.getElementById('levelUpModal').classList.add('hidden');
@@ -3068,6 +3084,8 @@ function showLevelUpSkills() {
             if (cost) { gameState.stats.coins -= cost; localStorage.setItem('coins', gameState.stats.coins); }
             gameState.skillRerolls = rerolls + 1;
             skillsToShow.length = 0; addSkillChoices();
+            gameState.pendingLevelUpSkills = skillsToShow;
+            saveRankedRun();
             renderSkills();
         };
         grid.appendChild(button);
