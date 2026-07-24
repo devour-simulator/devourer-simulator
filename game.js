@@ -2415,14 +2415,8 @@ function openAccountPanel(kind) {
     if (kind === 'hero') {
         title.textContent = '🦸 英雄图鉴';
         content.innerHTML = cards(heroesByPower().map(([key, h]) => {
-            const skinChoices = h.unlocked && HERO_SKINS[key]?.length > 1
-                ? `<div class="hero-skin-list"><small>皮肤：</small>${HERO_SKINS[key].map(skin => {
-                    const selected = getSelectedHeroSkin(key)?.id === skin.id;
-                    const owned = ownsSkin(key, skin);
-                    const label = selected ? `✓ ${skin.name}` : owned ? `使用 ${skin.name}` : `购买 ${skin.name} · ${skin.price}🪙`;
-                    return `<button class="hero-skin-button${selected ? ' selected' : ''}" type="button" style="--skin-color:${skin.color}" onclick="selectHeroSkin('${key}','${skin.id}')">${label}</button>`;
-                }).join('')}</div>` : '';
-            return `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.rewardOnly ? `❄️ ${polarUnlockCondition(key)}` : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div>${skinChoices}</div>`;
+            const wardrobe = HERO_SKINS[key]?.length > 1 ? `<button class="hero-wardrobe" type="button" onclick="openHeroSkinGallery('${key}')">👕 查看皮肤</button>` : '';
+            return `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.rewardOnly ? `❄️ ${polarUnlockCondition(key)}` : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div>${wardrobe}</div>`;
         }).join(''));
     } else if (kind === 'road') {
         title.textContent = '🧭 英雄之路';
@@ -2453,6 +2447,23 @@ function openAccountPanel(kind) {
     document.getElementById('hallModal').classList.add('hidden');
     document.getElementById('subPageModal').classList.remove('hidden');
 }
+
+// 英雄图鉴只用于浏览皮肤；购买和启用皮肤都统一在商城，避免选英雄时误操作。
+function openHeroSkinGallery(key) {
+    const hero = ANIMALS[key], skins = HERO_SKINS[key];
+    if (!hero || !skins?.length) return;
+    document.getElementById('subPageTitle').textContent = `👕 ${hero.name} · 皮肤展柜`;
+    const cards = skins.map(skin => {
+        const how = skin.id === 'default' ? '英雄自带' : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
+        const owned = ownsSkin(key, skin);
+        const preview = key === 'hedgehog' ? (skin.id === 'durian' ? '<span class="durian-hedgehog-icon">🦔</span>' : '🦔') : heroIconMarkup(key, hero);
+        return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
+    }).join('');
+    document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里只展示皮肤；购买与使用请前往商城 → 皮肤。</div><div class="animals-grid">${cards}</div>`;
+    document.getElementById('hallModal').classList.add('hidden');
+    document.getElementById('subPageModal').classList.remove('hidden');
+}
+window.openHeroSkinGallery = openHeroSkinGallery;
 
 function switchHeroRoad(tab) {
     const rank = document.getElementById('heroRoadRank');
