@@ -1201,16 +1201,17 @@ function build3DMesh(entity, kind) {
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
     if (entity.evolution?.name === '九尾狐') {
-        // 九尾狐的九条尾巴从背后扇形舒展开，带有淡紫色发光，进化后的轮廓更容易辨认。
-        const tailMat = new Three.MeshStandardMaterial({ color:0xf2d4ff, emissive:0x9a4fbe, emissiveIntensity:.55, roughness:.48, flatShading:true });
+        // 九条尾巴从背部中心向两侧舒展，外侧更长、更开，形成粉色扇形尾群。
+        const tailMat = new Three.MeshStandardMaterial({ color:0xff8fc5, emissive:0xb81c67, emissiveIntensity:.8, roughness:.42, flatShading:true });
         for (let i = 0; i < 9; i++) {
-            const spread = (i - 4) * .18;
-            const tail = add(new Three.ConeGeometry(.11 * size, .92 * size, 7), tailMat, spread * size, (.58 + Math.abs(i - 4) * .025) * size, (.56 + Math.abs(i - 4) * .04) * size);
-            tail.rotation.x = -1.05;
-            tail.rotation.z = -spread * .75;
+            const offset = i - 4;
+            const outer = Math.abs(offset) / 4;
+            const tail = add(new Three.ConeGeometry((.12 + outer * .025) * size, (.62 + outer * .32) * size, 8), tailMat, offset * .105 * size, (.50 + outer * .10) * size, (.34 + outer * .20) * size);
+            tail.rotation.x = -1.26 + outer * .14;
+            tail.rotation.z = -offset * .14;
         }
     }
-    if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
+    if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
     if (type === 'rabbit') { ear(-0.18, 0.6, 0.1); ear(0.18, 0.6, 0.1); }
     if (type === 'bear' || type === 'panda' || type === 'polarBear') { const earMat = type === 'polarBear' ? material : dark; add(new Three.SphereGeometry(0.15, 8, 6), earMat, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), earMat, 0.27 * size, 0.96 * size, 0); }
     if (type === 'panda') { add(new Three.SphereGeometry(0.16, 8, 6), dark, -0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); add(new Three.SphereGeometry(0.16, 8, 6), dark, 0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); }
@@ -1238,10 +1239,33 @@ function build3DMesh(entity, kind) {
     }
     if (type === 'monkey') { add(new Three.SphereGeometry(.13,8,6),material,-.3*size,.78*size,0); add(new Three.SphereGeometry(.13,8,6),material,.3*size,.78*size,0); const tail=add(new Three.TorusGeometry(.28*size,.045*size,6,10,Math.PI),material,0,.42*size,.55*size); tail.rotation.x=Math.PI/2; }
     if (type === 'otter') { const tail=add(new Three.ConeGeometry(.18*size,.65*size,5),material,0,.36*size,.65*size); tail.rotation.x=Math.PI/2; }
+    if (type === 'kangaroo') {
+        legs.forEach(leg => group.remove(leg)); legs.length = 0;
+        const belly = new Three.MeshStandardMaterial({ color:0xe7bd86, roughness:.72, flatShading:true });
+        [-1, 1].forEach(side => {
+            const thigh = add(new Three.SphereGeometry(.21 * size, 8, 6), material, side * .23 * size, .31 * size, .24 * size, .88, 1.28, .88);
+            const foot = add(new Three.SphereGeometry(.13 * size, 8, 6), dark, side * .23 * size, .09 * size, -.19 * size, 1.05, .42, 1.75);
+            legs.push(thigh, foot);
+        });
+        add(new Three.SphereGeometry(.24 * size, 9, 7), belly, 0, .43 * size, -.38 * size, 1.12, .84, .48);
+        const tail = add(new Three.ConeGeometry(.17 * size, 1.28 * size, 7), material, 0, .34 * size, .76 * size); tail.rotation.x = Math.PI / 2;
+        ear(-.2, .5, .1); ear(.2, .5, .1);
+    }
     if (type === 'chameleon') {
-        // 变色龙最显眼的卷尾：两段弯曲尾巴与球状眼睛。
-        const curl=add(new Three.TorusGeometry(.3*size,.055*size,6,12,Math.PI*1.55),material,0,.45*size,.6*size); curl.rotation.x=Math.PI/2; curl.rotation.z=.45;
-        [-.2,.2].forEach(x => add(new Three.SphereGeometry(.11*size,8,6),light,x,.88*size,-.16*size));
+        legs.forEach(leg => group.remove(leg)); legs.length = 0;
+        const accent = new Three.MeshStandardMaterial({ color:0xc5df58, emissive:0x263c12, emissiveIntensity:.25, roughness:.62, flatShading:true });
+        [-1, 1].forEach(side => {
+            const frontLeg = add(new Three.CylinderGeometry(.045 * size, .065 * size, .42 * size, 6), material, side * .34 * size, .33 * size, -.13 * size); frontLeg.rotation.z = side * 1.05;
+            const rearLeg = add(new Three.CylinderGeometry(.05 * size, .075 * size, .46 * size, 6), material, side * .34 * size, .28 * size, .28 * size); rearLeg.rotation.z = side * 1.15;
+            legs.push(frontLeg, rearLeg);
+        });
+        const curl = add(new Three.TorusGeometry(.34 * size, .065 * size, 7, 14, Math.PI * 1.65), material, 0, .45 * size, .62 * size); curl.rotation.x = Math.PI / 2; curl.rotation.z = .48;
+        [-.2, .2].forEach(x => {
+            add(new Three.CylinderGeometry(.028 * size, .038 * size, .22 * size, 6), material, x * size, .98 * size, -.14 * size);
+            add(new Three.SphereGeometry(.12 * size, 8, 7), accent, x * size, 1.1 * size, -.18 * size);
+            add(new Three.SphereGeometry(.045 * size, 7, 6), dark, x * size, 1.1 * size, -.28 * size);
+        });
+        for (let i = -2; i <= 2; i++) { const crest = add(new Three.ConeGeometry(.055 * size, .18 * size, 5), accent, i * .11 * size, .86 * size, .12 * size); crest.rotation.x = -.22; }
     }
     if (type === 'squirrel') add(new Three.SphereGeometry(.3*size,9,7),material,0,.65*size,.58*size,.82,1.2,1.35);
     if (['deer','giraffe','zebra','llama','goat','elephant','africanElephant','hippo'].includes(type)) {
@@ -3303,6 +3327,39 @@ document.getElementById('tutorialExitButton').addEventListener('click', finishTu
 document.getElementById('activeSkillButton').addEventListener('click', () => {
     if (gameState.player) gameState.player.useActiveSkill();
 });
+let skillInfoHoldTimer = null;
+function openSkillInfo() {
+    skillInfoHoldTimer = null;
+    const player = gameState.player;
+    if (!player || gameState.screen !== 'playing') return;
+    const active = player.activeAbility;
+    const passive = player.passiveAbility;
+    document.getElementById('skillInfoTitle').textContent = `ⓘ ${player.name} · 技能介绍`;
+    document.getElementById('skillInfoContent').innerHTML = `
+        <div class="feedback-heading">被动 · ${passive.name}</div>
+        <div>${passive.desc}</div>
+        <hr style="border:0;border-top:1px solid #c9d5e2;margin:14px 0">
+        <div class="feedback-heading">主动 · ${active.name}</div>
+        <div>${active.desc}</div>
+        <div class="tip" style="margin-top:10px">冷却：${active.cooldown} 秒。${controlMode === 'mobile' ? '点击技能按钮即可释放主动技能。' : '按空格或点击技能按钮即可释放主动技能。'}</div>`;
+    gameState.screen = 'skillinfo';
+    document.getElementById('skillInfoModal').classList.remove('hidden');
+}
+function closeSkillInfo() {
+    document.getElementById('skillInfoModal').classList.add('hidden');
+    if (gameState.screen === 'skillinfo') gameState.screen = 'playing';
+}
+const skillInfoButton = document.getElementById('skillInfoButton');
+skillInfoButton.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    skillInfoHoldTimer = setTimeout(openSkillInfo, 600);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(eventName => skillInfoButton.addEventListener(eventName, () => {
+    if (skillInfoHoldTimer) clearTimeout(skillInfoHoldTimer);
+    skillInfoHoldTimer = null;
+}));
+skillInfoButton.addEventListener('contextmenu', event => event.preventDefault());
+document.getElementById('skillInfoClose').addEventListener('click', closeSkillInfo);
 document.getElementById('provokeButton').addEventListener('click', () => {
     if (!['ranked', 'tower', 'evolution'].includes(gameState.mode) || !gameState.player) return;
     gameState.provokeActive = !gameState.provokeActive;
@@ -3576,7 +3633,7 @@ function gameLoop(timestamp = performance.now()) {
 window.addEventListener('load', () => {
     const container = document.getElementById('gameContainer');
     // 全屏时把所有弹窗也放进全屏容器，升级/胜负确认不会再卡在容器外。
-    ['hallModal','subPageModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','playerStats','gameStats'].forEach(id => {
+    ['hallModal','subPageModal','skillInfoModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','playerStats','gameStats'].forEach(id => {
         const element = document.getElementById(id); if (element) container.append(element);
     });
     init();
