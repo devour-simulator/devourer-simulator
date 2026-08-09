@@ -1199,6 +1199,16 @@ function build3DMesh(entity, kind) {
     const ear = (x, tall = 0.28, wide = 0.14) => add(new Three.ConeGeometry(wide * size, tall * size, 4), material, x * size, (0.98 + tall / 2) * size, 0);
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
+    if (entity.evolution?.name === '九尾狐') {
+        // 九尾狐的九条尾巴从背后扇形舒展开，带有淡紫色发光，进化后的轮廓更容易辨认。
+        const tailMat = new Three.MeshStandardMaterial({ color:0xf2d4ff, emissive:0x9a4fbe, emissiveIntensity:.55, roughness:.48, flatShading:true });
+        for (let i = 0; i < 9; i++) {
+            const spread = (i - 4) * .18;
+            const tail = add(new Three.ConeGeometry(.11 * size, .92 * size, 7), tailMat, spread * size, (.58 + Math.abs(i - 4) * .025) * size, (.56 + Math.abs(i - 4) * .04) * size);
+            tail.rotation.x = -1.05;
+            tail.rotation.z = -spread * .75;
+        }
+    }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
     if (type === 'rabbit') { ear(-0.18, 0.6, 0.1); ear(0.18, 0.6, 0.1); }
     if (type === 'bear' || type === 'panda' || type === 'polarBear') { const earMat = type === 'polarBear' ? material : dark; add(new Three.SphereGeometry(0.15, 8, 6), earMat, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), earMat, 0.27 * size, 0.96 * size, 0); }
@@ -2666,7 +2676,7 @@ function showAnimalSelection() {
 
         card.innerHTML = `
             <div class="animal-emoji">${heroIconMarkup(key, animal)}</div>
-            <div>${heroRarityMarkup(animal)}</div>
+            ${gameState.mode === 'evolution' ? '' : `<div>${heroRarityMarkup(animal)}</div>`}
             <div class="animal-name">${animal.name}</div>
             <div class="animal-stats">
                 ⚔️ ${animal.baseAttack}<br>
@@ -3473,11 +3483,9 @@ function updateUI() {
 
     // 游戏统计
     document.getElementById('killCount').textContent = gameState.stats.killCount;
-    document.getElementById('highScore').textContent = gameState.stats.highScore;
     document.getElementById('enemyCount').textContent = gameState.enemies.length;
     document.getElementById('worldLevel').textContent = gameState.world.level;
     document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : `爬塔 ${gameState.world.level} 层`;
-    document.getElementById('rankStatus').textContent = gameState.mode === 'ranked' ? `🏅 ${rankLabel()}` : '🗼 每 5 层 Boss';
 }
 
 // ============ 游戏循环 ============
