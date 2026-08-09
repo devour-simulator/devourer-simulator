@@ -397,9 +397,9 @@ const SKIN_RARITY_INFO = {
     normal:{ label:'普通', color:'#8b97a5' }, rare:{ label:'稀有', color:'#3989e8' }, epic:{ label:'史诗', color:'#8f55d4' }, legendary:{ label:'传说', color:'#e59a20' }
 };
 function skinRarity(skin) {
-    if (!skin.price) return 'normal';
-    if (skin.price >= 10000) return 'legendary';
-    return skin.price >= 4000 ? 'epic' : 'rare';
+    // 默认外观不计入皮肤图鉴；商城的换色皮肤为普通，榴莲刺猬是史诗。
+    if (skin.id === 'durian') return 'epic';
+    return 'normal';
 }
 function skinRarityMarkup(skin) {
     const rarity = skinRarity(skin), info = SKIN_RARITY_INFO[rarity];
@@ -2594,12 +2594,12 @@ function openAccountPanel(kind) {
         }).join(''));
     } else if (kind === 'skinCodex') {
         title.textContent = '🎨 皮肤图鉴';
-        const allSkins = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.map(skin => ({ heroKey, skin })));
+        const allSkins = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.id !== 'default').map(skin => ({ heroKey, skin })));
         const ownedCount = allSkins.filter(({ heroKey, skin }) => ownsSkin(heroKey, skin)).length;
         const cardsMarkup = allSkins.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             const preview = heroIconMarkup(heroKey, hero, skin);
-            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${skin.id === 'default' ? '英雄自带' : `商城售价：🪙 ${skin.price}`}</div></div>`;
+            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>商城售价：🪙 ${skin.price}</div></div>`;
         }).join('');
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'road') {
@@ -2757,14 +2757,33 @@ function cancelAnimalSelection() {
     showHall();
 }
 
+let heroSelectionSort = localStorage.getItem('heroSelectionSort') || 'low';
+const HERO_QUALITY_ORDER = { normal:0, rare:1, epic:2, mythic:3, legendary:4 };
+function setHeroSelectionSort(order) {
+    heroSelectionSort = order === 'high' ? 'high' : 'low';
+    localStorage.setItem('heroSelectionSort', heroSelectionSort);
+    showAnimalSelection();
+}
 function showAnimalSelection() {
     const grid = document.getElementById('animalsGrid');
     grid.innerHTML = '';
+    document.getElementById('heroSortLowButton').classList.toggle('btn-primary', heroSelectionSort === 'low');
+    document.getElementById('heroSortHighButton').classList.toggle('btn-primary', heroSelectionSort === 'high');
 
     const heroEntries = gameState.mode === 'evolution'
         ? EVOLUTION_MODE_TYPES.map(key => [key, ANIMALS[key]])
         : heroesByPower();
-    heroEntries.forEach(([key, animal]) => {
+    const sortByQuality = entries => [...entries].sort(([, a], [, b]) => {
+        const quality = HERO_QUALITY_ORDER[heroRarity(a)] - HERO_QUALITY_ORDER[heroRarity(b)];
+        return (heroSelectionSort === 'high' ? -quality : quality) || (heroSelectionSort === 'high' ? calculateHeroPower(b) - calculateHeroPower(a) : calculateHeroPower(a) - calculateHeroPower(b));
+    });
+    const renderEntries = (entries, title) => {
+        if (!entries.length) return;
+        const sectionTitle = document.createElement('div');
+        sectionTitle.style.cssText = 'grid-column:1/-1;margin:12px 0 0;font-weight:900;color:#4c5dc7;font-size:17px';
+        sectionTitle.textContent = title;
+        grid.appendChild(sectionTitle);
+        entries.forEach(([key, animal]) => {
         const card = document.createElement('div');
         card.className = 'animal-card';
         const abilities = ABILITIES[key];
@@ -3345,8 +3364,15 @@ function showLevelUpSkills() {
                 enterGameFullscreen();
             }
         };
-        grid.appendChild(card);
-    });
+            grid.appendChild(card);
+        });
+    };
+    if (gameState.mode === 'evolution') {
+        renderEntries(sortByQuality(heroEntries), '✨ 可进化英雄');
+    } else {
+        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => animal.unlocked)), '✅ 已拥有英雄');
+        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => !animal.unlocked)), '🔒 未拥有英雄');
+    }
     if (['tower','ranked','evolution'].includes(gameState.mode)) {
         const rerolls = gameState.skillRerolls || 0;
         const cost = rerolls === 0 ? 0 : rerolls * 10;
@@ -3391,6 +3417,8 @@ document.getElementById('saveChoiceBackButton').addEventListener('click', () => 
 document.getElementById('fullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('hallFullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('selectBackButton').addEventListener('click', cancelAnimalSelection);
+document.getElementById('heroSortLowButton').addEventListener('click', () => setHeroSelectionSort('low'));
+document.getElementById('heroSortHighButton').addEventListener('click', () => setHeroSelectionSort('high'));
 document.getElementById('signButton').addEventListener('click', claimDailySignIn);
 document.getElementById('hundredSignButton').addEventListener('click', claimHundredSignIn);
 document.getElementById('desktopModeButton').addEventListener('click', () => setControlMode('desktop'));
