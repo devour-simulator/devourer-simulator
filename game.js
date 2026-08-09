@@ -288,6 +288,38 @@ Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) 
         active: {name, desc, effect, cooldown: effect === 'dash' ? 10 : effect === 'heal' ? 13 : 11, ...values}
     };
 });
+
+// 进化试炼是独立的实验玩法：仅开放少数基础英雄，升到 Lv.6 后才会觉醒为传说形态。
+const EVOLUTION_ROUTES = {
+    fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:6, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
+    pigeon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:6, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
+    wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:6, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
+    shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:6, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'深渊巨口',desc:'释放强化鲨齿冲击',effect:'empower',bonus:28,hits:3,cooldown:9} },
+    hedgehog: { name:'荆棘兽王', emoji:'🦔', color:'#7a4f31', level:6, bonus:{attack:7,defense:10,speed:3,hp:70}, active:{name:'万刺反击',desc:'受到攻击时反弹 70% 伤害',effect:'reflect',hits:6,ratio:.7,cooldown:10} }
+};
+const EVOLUTION_MODE_TYPES = Object.keys(EVOLUTION_ROUTES);
+
+function tryEvolvePlayer(player) {
+    if (gameState.mode !== 'evolution' || player.evolved) return false;
+    const route = EVOLUTION_ROUTES[player.type];
+    if (!route || player.level < route.level) return false;
+    player.evolved = true;
+    player.evolution = route;
+    player.name = route.name;
+    player.emoji = route.emoji;
+    player.color = route.color;
+    player.attack += route.bonus.attack;
+    player.defense += route.bonus.defense;
+    player.speed += route.bonus.speed;
+    player.maxHp += route.bonus.hp;
+    player.hp = player.maxHp;
+    player.radius += 7;
+    player.activeAbility = route.active;
+    const previousPlayerMesh = threeMeshes?.get('player');
+    if (previousPlayerMesh) { threeScene?.remove(previousPlayerMesh); threeMeshes.delete('player'); }
+    gameState.evolutionMessage = `✨ 传说进化！${route.name}觉醒，获得全新能力与强大属性。`;
+    return true;
+}
 const OCEAN_TYPES=['dolphin','shark','seal','whale','orca','octopus','jellyfish','narwhal'];
 const SKY_TYPES=['eagle','owl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','raven','pigeon','goose','cockatoo','kitebird'];
 // 雪狼本身是极地动物，也应和北极英雄一起进入极地场景与敌人池。
@@ -1260,7 +1292,8 @@ function render3D() {
     const sync = (entity, kind, id) => {
         active.add(id);
         let mesh = threeMeshes.get(id);
-        if (!mesh) { mesh = build3DMesh(entity, kind); threeMeshes.set(id, mesh); }
+        if (!mesh) { mesh = build3DMesh(entity, kind); mesh.userData.evolutionScale = entity.evolved ? 1.28 : 1; threeMeshes.set(id, mesh); }
+        const evolutionScale = mesh.userData.evolutionScale || 1;
         const pos = toWorld(entity);
         const phase = performance.now() * 0.008 + entity.x * 0.03;
         const flying = mesh.userData.flying;
@@ -1277,9 +1310,9 @@ function render3D() {
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
         if (entity.attackFlash > 0) {
             const hit = Math.min(1, entity.attackFlash / 10);
-            mesh.scale.setScalar(1 + (entity.bossRoar ? .34 : .06) * hit);
+            mesh.scale.setScalar(evolutionScale * (1 + (entity.bossRoar ? .34 : .06) * hit));
             mesh.position.z -= (entity.bossRoar ? .38 : .1) * hit;
-        } else mesh.scale.setScalar(1);
+        } else mesh.scale.setScalar(evolutionScale);
         if (kind === 'skill' && (entity.effect === 'reflect' || entity.effect === 'reflectBurst')) {
             const pulse = entity.effect === 'reflectBurst' ? 1 + Math.sin(phase * 3) * .16 : 1 + Math.sin(phase * 1.8) * .05;
             mesh.rotation.y += entity.effect === 'reflectBurst' ? .24 : .075;
@@ -1448,6 +1481,7 @@ class Character {
         this.expToLevel = this.calculateExpToLevel();
         // 升级时恢复HP
         this.hp = this.maxHp;
+        tryEvolvePlayer(this);
         gameState.screen = 'levelup';
         gameState.levelUpShown = false;  // 重置标志
         return true;
@@ -2598,7 +2632,7 @@ function chooseMode(mode) {
     }
     gameState.mode = mode;
     document.getElementById('hallModal').classList.add('hidden');
-    document.getElementById('selectTitle').textContent = mode === 'ranked' ? `⚔️ 排位赛 · ${rankLabel()}` : mode === 'team' ? '👥 5v5 团队模式：选择英雄' : '🗼 爬塔模式：选择英雄';
+    document.getElementById('selectTitle').textContent = mode === 'ranked' ? `⚔️ 排位赛 · ${rankLabel()}` : mode === 'team' ? '👥 5v5 团队模式：选择英雄' : mode === 'evolution' ? '✨ 进化试炼：选择可觉醒英雄' : '🗼 爬塔模式：选择英雄';
     gameState.screen = 'select';
     showAnimalSelection();
 }
@@ -2613,13 +2647,16 @@ function showAnimalSelection() {
     const grid = document.getElementById('animalsGrid');
     grid.innerHTML = '';
 
-    heroesByPower().forEach(([key, animal]) => {
+    const heroEntries = gameState.mode === 'evolution'
+        ? EVOLUTION_MODE_TYPES.map(key => [key, ANIMALS[key]])
+        : heroesByPower();
+    heroEntries.forEach(([key, animal]) => {
         const card = document.createElement('div');
         card.className = 'animal-card';
         const abilities = ABILITIES[key];
         
         let lockedHint = '';
-        if (animal.unlocked === false) {
+        if (animal.unlocked === false && gameState.mode !== 'evolution') {
             lockedHint = animal.rewardOnly
                 ? `❄️ ${polarUnlockCondition(key)}`
                 : animal.signOnly
@@ -2645,12 +2682,19 @@ function showAnimalSelection() {
             ${lockedHint ? `<div style="font-size: 11px; color: #999; margin-top: 8px;">${lockedHint}</div>` : ''}
         `;
         
-        if (animal.unlocked === false) {
+        if (animal.unlocked === false && gameState.mode !== 'evolution') {
             card.style.opacity = '0.5';
             card.style.cursor = (animal.signOnly || animal.rewardOnly) ? 'not-allowed' : (gameState.stats.coins >= animal.price ? 'pointer' : 'not-allowed');
             if (!animal.signOnly && !animal.rewardOnly) card.onclick = () => buyHero(key);
         } else {
             card.onclick = () => startGame(key);
+            if (gameState.mode === 'evolution') {
+                const route = EVOLUTION_ROUTES[key];
+                const evolutionHint = document.createElement('div');
+                evolutionHint.className = 'tip';
+                evolutionHint.textContent = `✨ Lv.${route.level} 进化：${route.name}`;
+                card.appendChild(evolutionHint);
+            }
             // 选英雄时只允许切换已拥有皮肤；购买仍只能在商城完成。
             const ownedSkins = (HERO_SKINS[key] || []).filter(skin => ownsSkin(key, skin));
             if (ownedSkins.length > 1) {
@@ -2694,6 +2738,7 @@ function startGame(animalType, savedRun = null) {
     gameState.damageNumbers = [];
     gameState.provokeActive = false;
     gameState.pendingLevelUpSkills = [];
+    gameState.evolutionMessage = '';
     gameState.stats.killCount = 0;
     gameState.skillRerolls = 0;
     gameState.world.level = 1;
@@ -3148,7 +3193,7 @@ function showLevelUpSkills() {
 
     const grid = document.getElementById('skillsGrid');
     grid.innerHTML = '';
-    document.getElementById('levelUpInfo').textContent = `升级到 Lv.${gameState.player.level}!`;
+    document.getElementById('levelUpInfo').textContent = gameState.evolutionMessage || `升级到 Lv.${gameState.player.level}!`;
 
     const renderSkills = () => {
     grid.innerHTML = '';
@@ -3167,6 +3212,7 @@ function showLevelUpSkills() {
         `;
         card.onclick = () => {
             gameState.pendingLevelUpSkills = [];
+            gameState.evolutionMessage = '';
             gameState.player.applySkill(skill);
             updateUI();
             document.getElementById('levelUpModal').classList.add('hidden');
@@ -3207,6 +3253,7 @@ const keys = {};
 document.getElementById('towerModeButton').addEventListener('click', () => chooseMode('tower'));
 document.getElementById('rankedModeButton').addEventListener('click', () => chooseMode('ranked'));
 document.getElementById('teamModeButton').addEventListener('click', () => chooseMode('team'));
+document.getElementById('evolutionModeButton').addEventListener('click', () => chooseMode('evolution'));
 document.getElementById('resumeSaveButton').addEventListener('click', () => {
     const mode = pendingSaveMode; pendingSaveMode = null;
     document.getElementById('saveChoiceModal').classList.add('hidden');
@@ -3385,7 +3432,7 @@ function updateUI() {
 
     // 玩家信息
     // 局内面板也使用当前皮肤图标，榴莲刺猬不会再显示成普通刺猬。
-    document.getElementById('playerAvatar').innerHTML = heroIconMarkup(player.type, ANIMALS[player.type]);
+    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type]);
     document.getElementById('playerName').textContent = player.name;
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
