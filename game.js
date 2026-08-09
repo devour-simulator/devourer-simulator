@@ -289,15 +289,16 @@ Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) 
     };
 });
 
-// 进化试炼是独立的实验玩法：仅开放少数基础英雄，升到 Lv.6 后才会觉醒为传说形态。
+// 进化试炼是独立的实验玩法：仅开放少数基础英雄，升到 Lv.25 后才会觉醒为传说形态。
 const EVOLUTION_ROUTES = {
-    fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:6, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
-    pigeon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:6, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
-    wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:6, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
-    shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:6, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'深渊巨口',desc:'释放强化鲨齿冲击',effect:'empower',bonus:28,hits:3,cooldown:9} },
-    hedgehog: { name:'荆棘兽王', emoji:'🦔', color:'#7a4f31', level:6, bonus:{attack:7,defense:10,speed:3,hp:70}, active:{name:'万刺反击',desc:'受到攻击时反弹 70% 伤害',effect:'reflect',hits:6,ratio:.7,cooldown:10} }
+    fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:25, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
+    pigeon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:25, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
+    wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:25, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
+    shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:25, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'深渊巨口',desc:'释放强化鲨齿冲击',effect:'empower',bonus:28,hits:3,cooldown:9} },
+    hedgehog: { name:'荆棘兽王', emoji:'🦔', color:'#7a4f31', level:25, bonus:{attack:7,defense:10,speed:3,hp:70}, active:{name:'万刺反击',desc:'受到攻击时反弹 70% 伤害',effect:'reflect',hits:6,ratio:.7,cooldown:10} }
 };
 const EVOLUTION_MODE_TYPES = Object.keys(EVOLUTION_ROUTES);
+function isRankProgressMode(mode = gameState.mode) { return mode === 'ranked' || mode === 'evolution'; }
 
 function tryEvolvePlayer(player) {
     if (gameState.mode !== 'evolution' || player.evolved) return false;
@@ -1915,7 +1916,7 @@ function defeatEnemyBySkill(enemy) {
     if (gameState.mode === 'tutorial') return completeTutorialBattle();
     if (gameState.mode === 'skinTrial') return finishSkinTrial(true);
     if (gameState.mode === 'team') return finishRankedMatch(true);
-    if (gameState.mode === 'ranked') {
+    if (isRankProgressMode()) {
         if (gameState.world.level >= 50) return finishRankedMatch(true, 4);
         if (enemy.isBoss) { player.hp = player.maxHp; spawnParticles(enemy.x, enemy.y, 10); }
         gameState.world.level++;
@@ -2799,7 +2800,7 @@ function startGame(animalType, savedRun = null) {
 function spawnEnemies() {
     gameState.enemies = [];
     gameState.allies = [];
-    const isBossFloor = (gameState.mode === 'tower' || gameState.mode === 'ranked') && gameState.world.level % 5 === 0;
+    const isBossFloor = (gameState.mode === 'tower' || isRankProgressMode()) && gameState.world.level % 5 === 0;
     const enemyCount = isBossFloor ? 1 : Math.min(3 + gameState.world.level, 10);
 
     for (let i = 0; i < enemyCount; i++) {
@@ -2809,7 +2810,7 @@ function spawnEnemies() {
         const environmentPool = gameState.environment === 'ocean' ? OCEAN_TYPES : gameState.environment === 'sky' ? SKY_TYPES : gameState.environment === 'polar' ? POLAR_TYPES : gameState.environment === 'pond' ? POND_TYPES : gameState.environment === 'savanna' ? SAVANNA_TYPES : null;
         const enemyPool = environmentPool
             ? environmentPool
-            : gameState.mode === 'ranked'
+            : isRankProgressMode()
             ? (gameState.world.level >= 25 ? LAND_TYPES : gameState.world.level >= 10 ? midPool : gameState.rank.tier === 0 ? bronzePool : gameState.rank.tier <= 2 ? midPool : LAND_TYPES)
             : LAND_TYPES;
         let animalType = enemyPool[Math.floor(Math.random() * enemyPool.length)];
@@ -2825,8 +2826,8 @@ function spawnEnemies() {
 
         const enemy = new Enemy(animalType, x, y);
         enemy.level = gameState.world.level;
-        const rankPressure = gameState.mode === 'ranked' ? Math.max(0, gameState.world.level - 5) * 0.09 : 0;
-        const scale = 1 + (gameState.world.level - 1) * (gameState.mode === 'ranked' ? 0.12 : 0.08) + rankPressure;
+        const rankPressure = isRankProgressMode() ? Math.max(0, gameState.world.level - 5) * 0.09 : 0;
+        const scale = 1 + (gameState.world.level - 1) * (isRankProgressMode() ? 0.12 : 0.08) + rankPressure;
         enemy.attack = Math.floor(enemy.attack * scale);
         enemy.defense = Math.floor(enemy.defense * scale);
         enemy.maxHp = Math.floor(enemy.maxHp * scale);
@@ -2898,7 +2899,7 @@ function checkCollisions() {
                         finishRankedMatch(true);
                         return;
                     }
-                    if (gameState.mode === 'ranked') {
+                    if (isRankProgressMode()) {
                         // 排位爬塔：清层后必定升级一次，再进入下一层。
                         if (gameState.world.level >= 50) {
                             finishRankedMatch(true, 4);
@@ -2956,8 +2957,9 @@ function checkCollisions() {
 function finishRankedMatch(won, rankRewardOverride = null) {
     gameState.screen = 'gameover';
     exitGameFullscreen();
+    const rankProgress = isRankProgressMode();
     if (gameState.mode === 'ranked') clearRankedRun();
-    if (gameState.mode === 'ranked' && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
+    if (rankProgress && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
     // 团队模式是轻量娱乐局；排位经验随抵达层数显著提高。
     const accountReward = gameState.mode === 'team'
         ? (won ? 12 : 5)
@@ -2965,7 +2967,7 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     accountExp(accountReward);
     let rankReward = 0;
     gameState.rankItemNotice = '';
-    if (gameState.mode === 'ranked') {
+    if (rankProgress) {
         const floor = gameState.world.level;
         // 排位爬塔：第 6/10/30 层分别 +1/+2/+3，50 层通关 +4；第 6 层前失败才扣星。
         if (rankRewardOverride !== null) rankReward = rankRewardOverride;
@@ -2988,9 +2990,9 @@ function finishRankedMatch(won, rankRewardOverride = null) {
         const times = Math.abs(rankReward);
         for (let i = 0; i < times; i++) changeRankStars(rankReward > 0 ? 1 : -1);
     }
-    document.getElementById('gameOverTitle').textContent = gameState.mode === 'team' ? (won ? '🏆 团队胜利！' : '💥 团队落败') : (rankRewardOverride !== null ? '👑 排位爬塔登顶！' : won ? '🏅 排位胜利！' : '💥 排位落败');
+    document.getElementById('gameOverTitle').textContent = gameState.mode === 'team' ? (won ? '🏆 团队胜利！' : '💥 团队落败') : gameState.mode === 'evolution' ? (rankRewardOverride !== null ? '✨ 进化试炼登顶！' : won ? '✨ 进化试炼胜利！' : '💥 进化试炼落败') : (rankRewardOverride !== null ? '👑 排位爬塔登顶！' : won ? '🏅 排位胜利！' : '💥 排位落败');
     document.getElementById('characterInfo').innerHTML = `本局使用：<strong>${gameState.player.name} ${gameState.player.emoji}</strong><br>击败敌人：<strong>${gameState.stats.killCount}</strong>`;
-    document.getElementById('finalScore').textContent = gameState.mode === 'ranked'
+    document.getElementById('finalScore').textContent = rankProgress
         ? `${rankReward > 0 ? '+' : ''}${rankReward} 星（第 ${gameState.world.level} 层）`
         : '团队模式不影响段位星数';
     document.getElementById('rankInfo').innerHTML = gameState.mode === 'team'
@@ -3104,7 +3106,7 @@ function endGame() {
     exitGameFullscreen();
     if (gameState.mode === 'skinTrial') return finishSkinTrial(false);
     if (gameState.mode === 'tower') clearRankedRun('tower');
-    if (gameState.mode === 'ranked') {
+    if (isRankProgressMode()) {
         finishRankedMatch(false);
         return;
     }
@@ -3236,7 +3238,7 @@ function showLevelUpSkills() {
         };
         grid.appendChild(card);
     });
-    if (['tower','ranked'].includes(gameState.mode)) {
+    if (['tower','ranked','evolution'].includes(gameState.mode)) {
         const rerolls = gameState.skillRerolls || 0;
         const cost = rerolls === 0 ? 0 : rerolls * 10;
         const button = document.createElement('button'); button.className = 'btn';
@@ -3302,7 +3304,7 @@ document.getElementById('activeSkillButton').addEventListener('click', () => {
     if (gameState.player) gameState.player.useActiveSkill();
 });
 document.getElementById('provokeButton').addEventListener('click', () => {
-    if (!['ranked', 'tower'].includes(gameState.mode) || !gameState.player) return;
+    if (!['ranked', 'tower', 'evolution'].includes(gameState.mode) || !gameState.player) return;
     gameState.provokeActive = !gameState.provokeActive;
     gameState.enemies.forEach(enemy => {
         if (gameState.provokeActive) {
@@ -3465,7 +3467,7 @@ function updateUI() {
     activeButton.classList.toggle('polar-skill', gameState.environment === 'polar');
 
     const provokeButton = document.getElementById('provokeButton');
-    const canProvoke = ['ranked', 'tower'].includes(gameState.mode) && gameState.screen === 'playing';
+    const canProvoke = ['ranked', 'tower', 'evolution'].includes(gameState.mode) && gameState.screen === 'playing';
     provokeButton.style.display = canProvoke ? 'block' : 'none';
     provokeButton.disabled = !canProvoke;
     provokeButton.textContent = gameState.provokeActive ? '🕊️ 取消找死' : '💢 找死·全员来战';
@@ -3485,7 +3487,7 @@ function updateUI() {
     document.getElementById('killCount').textContent = gameState.stats.killCount;
     document.getElementById('enemyCount').textContent = gameState.enemies.length;
     document.getElementById('worldLevel').textContent = gameState.world.level;
-    document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : `爬塔 ${gameState.world.level} 层`;
+    document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : gameState.mode === 'evolution' ? `进化试炼 ${gameState.world.level} 层` : `爬塔 ${gameState.world.level} 层`;
 }
 
 // ============ 游戏循环 ============
