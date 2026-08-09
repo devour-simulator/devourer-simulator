@@ -416,6 +416,12 @@ SKILLS.push(
 );
 const MAX_COMBO_CHANCE = 1;
 
+const SHOP_ITEMS = {
+    renameCard: { name:'改名卡', emoji:'🪪', price:10000, desc:'在背包中使用，用于修改玩家名字。' },
+    rankStarCard: { name:'排位加星卡', emoji:'⭐', price:3500, desc:'排位获胜时自动使用，在原有奖励基础上额外 +1 星。' },
+    rankProtectCard: { name:'排位保护卡', emoji:'🛡️', price:3500, desc:'排位失败需要扣星时自动使用，本局不扣星。' }
+};
+
 const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:26}, epic:{label:'史诗',weight:12}, mythic:{label:'神话',weight:5}, legendary:{label:'传奇',weight:2} };
 
 const RANK_TIERS = ['青铜', '白银', '黄金', '铂金', '钻石', '星耀', '王者'];
@@ -459,7 +465,7 @@ let gameState = {
         level: parseInt(localStorage.getItem('accountLevel')) || 1,
         exp: parseInt(localStorage.getItem('accountExp')) || 0,
         reputation: parseInt(localStorage.getItem('reputation')) || 100,
-        inventory: JSON.parse(localStorage.getItem('inventory') || '{"renameCard":0}')
+        inventory: JSON.parse(localStorage.getItem('inventory') || '{"renameCard":0,"rankStarCard":0,"rankProtectCard":0}')
     },
     player: null,
     enemies: [],
@@ -2311,6 +2317,8 @@ function claimMail(index) {
         localStorage.setItem('coins', gameState.stats.coins);
     }
     if (rewards.renameCard) gameState.account.inventory.renameCard = (gameState.account.inventory.renameCard || 0) + rewards.renameCard;
+    if (rewards.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + rewards.rankStarCard;
+    if (rewards.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + rewards.rankProtectCard;
     if (rewards.hero && ANIMALS[rewards.hero]) {
         ANIMALS[rewards.hero].unlocked = true;
         saveUnlockedHeroes();
@@ -2325,18 +2333,22 @@ function rewardText(rewards) {
     const items=[];
     if (rewards.coins) items.push(`🪙 金币 ×${rewards.coins}`);
     if (rewards.renameCard) items.push(`🎫 改名卡 ×${rewards.renameCard}`);
+    if (rewards.rankStarCard) items.push(`⭐ 排位加星卡 ×${rewards.rankStarCard}`);
+    if (rewards.rankProtectCard) items.push(`🛡️ 排位保护卡 ×${rewards.rankProtectCard}`);
     if (rewards.hero && ANIMALS[rewards.hero]) items.push(`${ANIMALS[rewards.hero].emoji} ${ANIMALS[rewards.hero].name}`);
     return items.length ? items.join('\n') : '没有可领取的附件';
 }
 function showRewardToast(rewards) { window.alert(`领取成功！\n${rewardText(rewards)}`); }
 function claimAllMails() {
-    const mails=getMails(); const rewards={coins:0,renameCard:0}; const heroes=[];
+    const mails=getMails(); const rewards={coins:0,renameCard:0,rankStarCard:0,rankProtectCard:0}; const heroes=[];
     let count=0;
     mails.forEach(mail => {
         if (mail.claimed) return;
         const r=mail.rewards||{}; count++;
         if (r.coins) { gameState.stats.coins+=r.coins; rewards.coins+=r.coins; }
         if (r.renameCard) { gameState.account.inventory.renameCard=(gameState.account.inventory.renameCard||0)+r.renameCard; rewards.renameCard+=r.renameCard; }
+        if (r.rankStarCard) { gameState.account.inventory.rankStarCard=(gameState.account.inventory.rankStarCard||0)+r.rankStarCard; rewards.rankStarCard+=r.rankStarCard; }
+        if (r.rankProtectCard) { gameState.account.inventory.rankProtectCard=(gameState.account.inventory.rankProtectCard||0)+r.rankProtectCard; rewards.rankProtectCard+=r.rankProtectCard; }
         if (r.hero && ANIMALS[r.hero]) { ANIMALS[r.hero].unlocked=true; heroes.push(`${ANIMALS[r.hero].emoji} ${ANIMALS[r.hero].name}`); }
         mail.claimed=true; mail.read=true;
     });
@@ -2363,7 +2375,29 @@ function useRenameCard() {
     openAccountPanel('bag');
 }
 
+function normalizeInventory() {
+    const inventory = gameState.account.inventory || (gameState.account.inventory = {});
+    inventory.renameCard = Math.max(0, inventory.renameCard || 0);
+    inventory.rankStarCard = Math.max(0, inventory.rankStarCard || 0);
+    inventory.rankProtectCard = Math.max(0, inventory.rankProtectCard || 0);
+}
+
+function checkReturnGift(hadAccount) {
+    const now = Date.now();
+    const lastLoginAt = Number(localStorage.getItem('lastLoginAt')) || 0;
+    if (hadAccount && lastLoginAt && now - lastLoginAt >= 15 * 24 * 60 * 60 * 1000) {
+        sendRewardMail(
+            '🎁 回归福利',
+            '欢迎回来！你已经超过 15 天没有登录，送上 1000 金币、1 张排位加星卡和 1 张排位保护卡。请前往邮件手动领取。',
+            { coins:1000, rankStarCard:1, rankProtectCard:1 }
+        );
+    }
+    localStorage.setItem('lastLoginAt', String(now));
+}
+
 function initAccount() {
+    const hadAccount = !!gameState.account.name;
+    normalizeInventory();
     if (!gameState.account.name) {
         const banned = /傻[逼比]|妈的|操|fuck|shit|外挂|作弊/i;
         let name = window.prompt('欢迎来到吞噬大冒险！请给自己取一个名字：', '冒险家') || '冒险家';
@@ -2373,6 +2407,7 @@ function initAccount() {
         sendRewardMail('欢迎加入！', '欢迎礼包：一张改名卡。请前往邮件手动领取。', { renameCard: 1 });
     }
     repairPolarRewardTrack();
+    checkReturnGift(hadAccount);
     saveAccount();
 }
 function saveAccount() {
@@ -2436,7 +2471,7 @@ function openAccountPanel(kind) {
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchHeroRoad('rank')">🏆 段位奖励</button><button class="btn" type="button" onclick="switchHeroRoad('level')">📊 等级奖励</button></div><div id="heroRoadRank"><h3>🏆 段位奖励</h3>${rankRoad}</div><div id="heroRoadLevel" style="display:none"><h3>📊 等级奖励</h3>${levelRoad}</div>`;
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
-        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div>`);
+        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div><div class="animal-card"><div class="animal-emoji">⭐</div><div class="animal-name">排位加星卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankStarCard || 0}<br>排位胜利时自动使用，额外 +1 星。</div></div><div class="animal-card"><div class="animal-emoji">🛡️</div><div class="animal-name">排位保护卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankProtectCard || 0}<br>排位失败扣星时自动使用。</div></div>`);
         const coinCard = content.querySelector('.animal-card');
         if (coinCard) { coinCard.style.cursor = 'pointer'; coinCard.title = '点击查看金币用途'; coinCard.onclick = showCoinHelp; }
     } else if (kind === 'shop') {
@@ -2448,7 +2483,8 @@ function openAccountPanel(kind) {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
         })).join('') || '<div class="tip">皮肤正在制作中。</div>');
-        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div>`;
+        const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
+        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -2489,11 +2525,28 @@ function switchHeroRoad(tab) {
 function switchShopTab(tab) {
     const game = document.getElementById('shopGame');
     const skin = document.getElementById('shopSkin');
-    if (!game || !skin) return;
+    const item = document.getElementById('shopItem');
+    if (!game || !skin || !item) return;
     game.style.display = tab === 'game' ? '' : 'none';
     skin.style.display = tab === 'skin' ? '' : 'none';
+    item.style.display = tab === 'item' ? '' : 'none';
 }
 window.switchShopTab = switchShopTab;
+
+function confirmItemPurchase(key) {
+    const item = SHOP_ITEMS[key];
+    if (!item) return;
+    if (!window.confirm(`确定要购买 ${item.name} 吗？\n售价：${item.price} 金币`)) return;
+    if (gameState.stats.coins < item.price) return window.alert('您的金币不足！');
+    gameState.stats.coins -= item.price;
+    gameState.account.inventory[key] = (gameState.account.inventory[key] || 0) + 1;
+    localStorage.setItem('coins', gameState.stats.coins);
+    saveAccount();
+    window.alert(`购买成功！获得 1 张${item.name}。`);
+    openAccountPanel('shop');
+    switchShopTab('item');
+}
+window.confirmItemPurchase = confirmItemPurchase;
 
 function claimDailySignIn() {
     const today = new Date().toDateString();
@@ -2847,6 +2900,7 @@ function finishRankedMatch(won, rankRewardOverride = null) {
         : (won ? 45 + gameState.world.level * 14 : 12 + gameState.world.level * 4);
     accountExp(accountReward);
     let rankReward = 0;
+    gameState.rankItemNotice = '';
     if (gameState.mode === 'ranked') {
         const floor = gameState.world.level;
         // 排位爬塔：第 6/10/30 层分别 +1/+2/+3，50 层通关 +4；第 6 层前失败才扣星。
@@ -2855,6 +2909,18 @@ function finishRankedMatch(won, rankRewardOverride = null) {
         else if (floor >= 10) rankReward = 2;
         else if (floor >= 6) rankReward = 1;
         else rankReward = -1;
+        const inventory = gameState.account.inventory;
+        if (won && inventory.rankStarCard > 0) {
+            inventory.rankStarCard--;
+            rankReward += 1;
+            gameState.rankItemNotice = '⭐ 已自动使用排位加星卡：额外 +1 星。';
+            saveAccount();
+        } else if (!won && rankReward < 0 && inventory.rankProtectCard > 0) {
+            inventory.rankProtectCard--;
+            rankReward = 0;
+            gameState.rankItemNotice = '🛡️ 已自动使用排位保护卡：本局不扣星。';
+            saveAccount();
+        }
         const times = Math.abs(rankReward);
         for (let i = 0; i < times; i++) changeRankStars(rankReward > 0 ? 1 : -1);
     }
@@ -2865,7 +2931,7 @@ function finishRankedMatch(won, rankRewardOverride = null) {
         : '团队模式不影响段位星数';
     document.getElementById('rankInfo').innerHTML = gameState.mode === 'team'
         ? '本局为娱乐团队战，段位保持不变。'
-        : `当前段位：<strong>${rankLabel()}</strong>`;
+        : `当前段位：<strong>${rankLabel()}</strong>${gameState.rankItemNotice ? `<br>${gameState.rankItemNotice}` : ''}`;
     document.getElementById('restartButton').textContent = '🏠 返回大厅';
     document.getElementById('gameOverModal').classList.remove('hidden');
 }
