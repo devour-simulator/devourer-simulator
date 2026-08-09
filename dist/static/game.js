@@ -176,7 +176,6 @@ Object.assign(ANIMALS, {
     shark: { name: '鲨鱼', emoji: '🦈', baseAttack: 12, baseDefense: 4, baseSpeed: 7, baseHp: 50, color: '#63869b', unlocked: false },
     bat: { name: '蝙蝠', emoji: '🦇', baseAttack: 7, baseDefense: 2, baseSpeed: 10, baseHp: 32, color: '#493e62', unlocked: false },
     parrot: { name: '鹦鹉', emoji: '🦜', baseAttack: 6, baseDefense: 3, baseSpeed: 9, baseHp: 34, color: '#35a965', unlocked: false },
-    chameleon: { name: '变色龙', emoji: '🦎', baseAttack: 6, baseDefense: 5, baseSpeed: 6, baseHp: 45, color: '#70a447', unlocked: false },
     llama: { name: '羊驼', emoji: '🦙', baseAttack: 6, baseDefense: 5, baseSpeed: 6, baseHp: 50, color: '#d7b78a', unlocked: false },
     goat: { name: '山羊', emoji: '🐐', baseAttack: 8, baseDefense: 4, baseSpeed: 7, baseHp: 45, color: '#d5d1c1', unlocked: false },
     squirrel: { name: '松鼠', emoji: '🐿️', baseAttack: 5, baseDefense: 2, baseSpeed: 10, baseHp: 34, color: '#bf733e', unlocked: false },
@@ -200,7 +199,6 @@ Object.assign(ABILITIES, {
     shark: { passive:{name:'猎食本能',desc:'攻击 +2',bonus:{attack:2}}, active:{name:'深海撕咬',desc:'下一次攻击额外 +18 伤害',effect:'empower',bonus:18,hits:1,cooldown:12}},
     bat: { passive:{name:'回声定位',desc:'速度 +2',bonus:{speed:2}}, active:{name:'夜袭',desc:'接下来 2 次攻击额外 +8 伤害',effect:'empower',bonus:8,hits:2,cooldown:10}},
     parrot: { passive:{name:'振翅',desc:'速度 +1',bonus:{speed:1}}, active:{name:'彩羽护体',desc:'恢复 25% 最大生命并获得 1 次减伤',effect:'healShield',amount:.25,hits:1,reduction:.5,cooldown:13}},
-    chameleon: { passive:{name:'伪装',desc:'防御 +2',bonus:{defense:2}}, active:{name:'变色伏击',desc:'下一次攻击额外 +16 伤害',effect:'empower',bonus:16,hits:1,cooldown:11}},
     llama: { passive:{name:'高原耐力',desc:'最大生命 +6',bonus:{hp:6}}, active:{name:'唾沫护盾',desc:'接下来 2 次受击减伤 50%',effect:'shield',hits:2,reduction:.5,cooldown:11}},
     goat: { passive:{name:'攀岩',desc:'速度 +1',bonus:{speed:1}}, active:{name:'羊角顶撞',desc:'接下来 2 次攻击额外 +8 伤害',effect:'empower',bonus:8,hits:2,cooldown:10}},
     squirrel: { passive:{name:'囤积',desc:'速度 +2',bonus:{speed:2}}, active:{name:'松果疗愈',desc:'恢复 30% 最大生命',effect:'heal',amount:.3,cooldown:11}}
@@ -267,7 +265,7 @@ const REALISTIC_SKILLS = {
     zebra:['斑马冲锋','疾驰冲过敌群','dash',{distance:180}], hippo:['河马水盾','水花护体减伤','shield',{hits:3,reduction:.55}], rhino:['犀角冲撞','沿指示线发动犀角冲锋','dash',{distance:180}],
     crocodile:['死亡翻滚','甩出旋转水刃','empower',{bonus:11,hits:2}], turtle:['缩壳','生成坚硬龟壳护盾','shield',{hits:4,reduction:.55}], penguin:['雪球投掷','投出一颗雪球','empower',{bonus:10,hits:1}],
     dolphin:['破浪突袭','高速破浪冲撞','dash',{distance:190}], shark:['深海撕咬','射出鲨齿冲击波','empower',{bonus:18,hits:1}], bat:['超声波','超声光环让附近敌人减速','ink',{}],
-    parrot:['彩羽飞针','射出一根彩色羽针','empower',{bonus:11,hits:1}], chameleon:['长舌伏击','射出长舌冲击','empower',{bonus:16,hits:1}], llama:['口水弹','吐出穿透口水弹','empower',{bonus:10,hits:1}],
+    parrot:['彩羽飞针','射出一根彩色羽针','empower',{bonus:11,hits:1}], llama:['口水弹','吐出穿透口水弹','empower',{bonus:10,hits:1}],
     goat:['羊角顶撞','低头冲锋撞击','dash',{distance:170}], squirrel:['松果投掷','投出一颗松果','empower',{bonus:9,hits:2}], seal:['浪花拍击','发射浪花冲击','empower',{bonus:10,hits:1}],
     whale:['鲸歌震波','鲸歌光环让附近敌人减速','ink',{}], orca:['破浪突袭','高速破浪冲撞','dash',{distance:195}], falcon:['猎隼俯冲','极速俯冲撞击','dash',{distance:195}],
     albatross:['海风护翼','海风护翼减伤','shield',{hits:2,reduction:.45}], hummingbird:['花蜜针刺','射出高速花蜜针','empower',{bonus:9,hits:2}], swan:['羽翼守护','白羽护环减伤','shield',{hits:3,reduction:.45}],
@@ -704,6 +702,19 @@ function checkUnlocks() {
     const saved = JSON.parse(localStorage.getItem('unlockedHeroes') || '[]');
     saved.forEach(key => { if (ANIMALS[key]) ANIMALS[key].unlocked = true; });
 }
+function applyChameleonRemovalCompensation() {
+    const compensation = 620;
+    if (localStorage.getItem('chameleonRemovalCompensationV1')) return;
+    // 删除旧英雄的残留记录，避免旧存档或图鉴缓存再出现变色龙。
+    const unlocked = JSON.parse(localStorage.getItem('unlockedHeroes') || '[]').filter(key => key !== 'chameleon');
+    localStorage.setItem('unlockedHeroes', JSON.stringify(unlocked));
+    localStorage.removeItem('heroSkin:chameleon');
+    [RANKED_RUN_SAVE_KEY, TOWER_RUN_SAVE_KEY, EVOLUTION_RUN_SAVE_KEY].forEach(key => {
+        try { if (JSON.parse(localStorage.getItem(key) || 'null')?.player?.type === 'chameleon') localStorage.removeItem(key); } catch (_) { localStorage.removeItem(key); }
+    });
+    sendRewardMail('变色龙下架补偿', `变色龙已从英雄库移除。附件为它原商城售价的 ${compensation} 金币补偿，请手动领取。`, { coins: compensation });
+    localStorage.setItem('chameleonRemovalCompensationV1', '1');
+}
 function saveUnlockedHeroes() {
     localStorage.setItem('unlockedHeroes', JSON.stringify(Object.keys(ANIMALS).filter(key => ANIMALS[key].unlocked)));
 }
@@ -714,6 +725,7 @@ const ctx = canvas.getContext('2d');
 canvas.width = GAME_WIDTH;
 canvas.height = GAME_HEIGHT;
 let nextParticleId = 1;
+let nextCharacterId = 1;
 
 // ============ 3D 渲染层 ============
 // 3D 库异步加载；失败时保留原 Canvas 画面，保证游戏仍可游玩。
@@ -1281,22 +1293,6 @@ function build3DMesh(entity, kind) {
         const tail = add(new Three.ConeGeometry(.17 * size, 1.28 * size, 7), material, 0, .34 * size, .76 * size); tail.rotation.x = Math.PI / 2;
         ear(-.2, .5, .1); ear(.2, .5, .1);
     }
-    if (type === 'chameleon') {
-        legs.forEach(leg => group.remove(leg)); legs.length = 0;
-        const accent = new Three.MeshStandardMaterial({ color:0xc5df58, emissive:0x263c12, emissiveIntensity:.25, roughness:.62, flatShading:true });
-        [-1, 1].forEach(side => {
-            const frontLeg = add(new Three.CylinderGeometry(.045 * size, .065 * size, .42 * size, 6), material, side * .34 * size, .33 * size, -.13 * size); frontLeg.rotation.z = side * 1.05;
-            const rearLeg = add(new Three.CylinderGeometry(.05 * size, .075 * size, .46 * size, 6), material, side * .34 * size, .28 * size, .28 * size); rearLeg.rotation.z = side * 1.15;
-            legs.push(frontLeg, rearLeg);
-        });
-        const curl = add(new Three.TorusGeometry(.34 * size, .065 * size, 7, 14, Math.PI * 1.65), material, 0, .45 * size, .62 * size); curl.rotation.x = Math.PI / 2; curl.rotation.z = .48;
-        [-.2, .2].forEach(x => {
-            add(new Three.CylinderGeometry(.028 * size, .038 * size, .22 * size, 6), material, x * size, .98 * size, -.14 * size);
-            add(new Three.SphereGeometry(.12 * size, 8, 7), accent, x * size, 1.1 * size, -.18 * size);
-            add(new Three.SphereGeometry(.045 * size, 7, 6), dark, x * size, 1.1 * size, -.28 * size);
-        });
-        for (let i = -2; i <= 2; i++) { const crest = add(new Three.ConeGeometry(.055 * size, .18 * size, 5), accent, i * .11 * size, .86 * size, .12 * size); crest.rotation.x = -.22; }
-    }
     if (type === 'squirrel') add(new Three.SphereGeometry(.3*size,9,7),material,0,.65*size,.58*size,.82,1.2,1.35);
     if (['deer','giraffe','zebra','llama','goat','elephant','africanElephant','hippo'].includes(type)) {
         const tail=add(new Three.CylinderGeometry(.028*size,.045*size,.52*size,5),material,0,.48*size,.64*size); tail.rotation.x=Math.PI/2;
@@ -1387,7 +1383,7 @@ function render3D() {
     if (gameState.screen === 'playing' && gameState.player) {
         sync(gameState.player, 'player', 'player');
         gameState.allies.forEach((ally, index) => sync(ally, 'ally', `ally-${index}-${ally.type}`));
-        gameState.enemies.forEach((enemy, index) => sync(enemy, 'enemy', `enemy-${index}-${enemy.type}`));
+        gameState.enemies.forEach(enemy => sync(enemy, 'enemy', `enemy-${enemy.id}`));
         gameState.particles.forEach(particle => sync(particle, 'particle', `particle-${particle.id}`));
         gameState.skillEffects.forEach((effect, index) => sync(effect, 'skill', `skill-${index}`));
         gameState.chests.forEach((chest, index) => sync(chest, 'chest', `chest-${index}`));
@@ -1418,7 +1414,7 @@ function renderEnemyLabels() {
         const point = new Three.Vector3(pos.x, 1.7, pos.z).project(threeCamera);
         if (point.z >= -1 && point.z <= 1) {
             const marker = document.createElement('div');
-            marker.className = 'player-focus-marker'; marker.textContent = '\u25bc';
+            marker.className = 'player-focus-marker'; marker.dataset.owner = 'player'; marker.textContent = '\u25bc';
             marker.style.left = `${(point.x * .5 + .5) * 100}%`;
             marker.style.top = `${(-point.y * .5 + .5) * 100}%`;
             threeLabels.appendChild(marker);
@@ -1476,6 +1472,7 @@ function renderEnemyLabels() {
 class Character {
     constructor(type, x = GAME_WIDTH / 2, y = GAME_HEIGHT / 2, useSkin = true) {
         const animalData = ANIMALS[type];
+        this.id = nextCharacterId++;
         this.type = type;
         this.name = animalData.name;
         this.emoji = animalData.emoji;
@@ -2202,6 +2199,7 @@ function battle(player, enemy) {
 // ============ 初始化 ============
 function init() {
     initAccount();
+    applyChameleonRemovalCompensation();
     checkUnlocks();
     rebalancePendingPolarRewards();
     grantEligiblePolarRewards();
@@ -2566,6 +2564,13 @@ function showHall() {
     document.getElementById('signProgress').textContent = signComplete ? '新手七日签到已完成' : `今天是新手签到第 ${todayDay} 天（进度 ${signDay}/7）`;
     document.getElementById('signButton').disabled = signedToday || signComplete;
     document.getElementById('signButton').textContent = signComplete ? '新手签到已完成' : (signedToday ? '今日已签到' : `签到第 ${todayDay} 天`);
+    const hundredCard = document.getElementById('hundredSignCard');
+    const hundredDay = Math.min(100, parseInt(localStorage.getItem('hundredSignDay')) || 0);
+    const hundredSignedToday = localStorage.getItem('hundredSignDate') === new Date().toDateString();
+    hundredCard.hidden = !signComplete || hundredDay >= 100;
+    document.getElementById('hundredSignProgress').textContent = hundredDay >= 100 ? '百天签到已完成' : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）`;
+    document.getElementById('hundredSignButton').disabled = hundredSignedToday || hundredDay >= 100;
+    document.getElementById('hundredSignButton').textContent = hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
@@ -2690,6 +2695,25 @@ function claimDailySignIn() {
     if (day === 2) sendRewardMail('新手七日签到 · 第 2 天', '小狐狸已送达，请在邮件中领取。', { hero: 'fox' });
     else if (day === 7) sendRewardMail('新手七日签到 · 第 7 天', '火凤凰已送达，请在邮件中领取。', { hero: 'phoenix' });
     else sendRewardMail(`新手七日签到 · 第 ${day} 天`, `签到奖励：${day * 30} 金币，请在邮件中领取。`, { coins: day * 30 });
+    showHall();
+}
+function claimHundredSignIn() {
+    const today = new Date().toDateString();
+    if ((parseInt(localStorage.getItem('signDay')) || 0) < 7) return window.alert('请先完成新手七日签到。');
+    const currentDay = Math.min(100, parseInt(localStorage.getItem('hundredSignDay')) || 0);
+    if (currentDay >= 100 || localStorage.getItem('hundredSignDate') === today) return;
+    const day = currentDay + 1;
+    const specialRewards = {
+        2:{ coins:500 }, 7:{ coins:1200, rankStarCard:1 }, 10:{ coins:1500, rankProtectCard:1 },
+        18:{ coins:2000, rankStarCard:1 }, 25:{ coins:3000, rankProtectCard:1 },
+        50:{ coins:5000, rankStarCard:1, rankProtectCard:1 }, 75:{ coins:8000, rankStarCard:1, rankProtectCard:1 },
+        100:{ coins:15000, rankStarCard:2, rankProtectCard:2, renameCard:1 }
+    };
+    const rewards = specialRewards[day] || { coins:150 };
+    localStorage.setItem('hundredSignDate', today);
+    localStorage.setItem('hundredSignDay', String(day));
+    const special = !!specialRewards[day];
+    sendRewardMail(`百天签到 · 第 ${day} 天`, special ? `第 ${day} 天特别奖励已送达，请在邮件中手动领取。` : '签到奖励：150 金币，请在邮件中手动领取。', rewards);
     showHall();
 }
 
@@ -3368,6 +3392,7 @@ document.getElementById('fullscreenButton').addEventListener('click', toggleFull
 document.getElementById('hallFullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('selectBackButton').addEventListener('click', cancelAnimalSelection);
 document.getElementById('signButton').addEventListener('click', claimDailySignIn);
+document.getElementById('hundredSignButton').addEventListener('click', claimHundredSignIn);
 document.getElementById('desktopModeButton').addEventListener('click', () => setControlMode('desktop'));
 document.getElementById('mobileModeButton').addEventListener('click', () => setControlMode('mobile'));
 document.getElementById('subPageBack').addEventListener('click', () => {
