@@ -523,6 +523,11 @@ function spawnDamageNumber(target, amount, critical = false, source = '', combo 
     });
 }
 
+function spawnHealingNumber(target, amount) {
+    const healed = Math.max(0, Math.round(amount || 0));
+    if (healed > 0) spawnDamageNumber(target, healed, false, 'heal');
+}
+
 function runSaveKey(mode = gameState.mode) { return mode === 'ranked' ? RANKED_RUN_SAVE_KEY : TOWER_RUN_SAVE_KEY; }
 function serializeEnemy(enemy) {
     return {
@@ -1360,11 +1365,11 @@ function renderEnemyLabels() {
         const point = new Three.Vector3(pos.x, 1.35, pos.z).project(threeCamera);
         if (point.z < -1 || point.z > 1) return;
         const label = document.createElement('div');
-        label.className = `damage-number${number.critical ? ' critical' : ''}${number.combo ? ' combo-hit' : ''}${number.source === 'enemy' ? ' enemy-hit' : ''}${number.source === 'reflect' ? ' reflect-hit' : ''}`;
+        label.className = `damage-number${number.critical ? ' critical' : ''}${number.combo ? ' combo-hit' : ''}${number.source === 'enemy' ? ' enemy-hit' : ''}${number.source === 'reflect' ? ' reflect-hit' : ''}${number.source === 'heal' ? ' heal-hit' : ''}`;
         label.style.left = `${(point.x * .5 + .5) * 100}%`;
         label.style.top = `${(-point.y * .5 + .5) * 100}%`;
         label.style.opacity = Math.max(0, number.life / number.maxLife);
-        label.textContent = `-${number.amount}`;
+        label.textContent = `${number.source === 'heal' ? '+' : '-'}${number.amount}`;
         threeLabels.appendChild(label);
     });
 }
@@ -1973,7 +1978,11 @@ function attackOnce(attacker, defender) {
         const comboActual = defender.takeDamage(comboDamage, attacker);
         spawnDamageNumber(defender, comboActual, attacker.lastCritical, source, true);
     }
-    if (attacker.lifesteal > 0) attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.ceil(damage * attacker.lifesteal));
+    if (attacker.lifesteal > 0) {
+        const hpBeforeLifesteal = attacker.hp;
+        attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.ceil(damage * attacker.lifesteal));
+        spawnHealingNumber(attacker, attacker.hp - hpBeforeLifesteal);
+    }
     attacker.cooldown = Math.max(18, 42 - attacker.speed * 2);
     attacker.attackFlash = canUseBossSkill ? 18 : 10;
     if (attacker === gameState.player || defender === gameState.player) gameState.player.lastCombatTime = gameState.world.time;
@@ -3356,10 +3365,10 @@ function render() {
             ctx.globalAlpha = Math.max(0, number.life / number.maxLife);
             ctx.font = `900 ${number.critical ? 28 : 20}px Arial`;
             ctx.textAlign = 'center';
-            ctx.fillStyle = number.combo ? '#9c4dff' : number.critical ? '#e53935' : number.source === 'enemy' ? '#ffcc39' : number.source === 'reflect' ? '#123b8d' : '#111';
+            ctx.fillStyle = number.source === 'heal' ? '#126b3a' : number.combo ? '#9c4dff' : number.critical ? '#e53935' : number.source === 'enemy' ? '#ffcc39' : number.source === 'reflect' ? '#123b8d' : '#111';
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 3;
-            const text = `-${number.amount}`;
+            const text = `${number.source === 'heal' ? '+' : '-'}${number.amount}`;
             ctx.strokeText(text, number.x, number.y);
             ctx.fillText(text, number.x, number.y);
             ctx.restore();
@@ -3447,7 +3456,9 @@ function gameLoop(timestamp = performance.now()) {
                 const outOfCombatSeconds = gameState.world.time - player.lastCombatTime - 5;
                 const acceleration = Math.min(11, Math.floor(Math.max(0, outOfCombatSeconds) / 3));
                 const healPerSecond = 1 + acceleration + Math.max(0, Math.floor(player.regenBonus || 0));
+                const hpBeforeRegen = player.hp;
                 player.hp = Math.min(player.maxHp, player.hp + secondsToHeal * healPerSecond);
+                spawnHealingNumber(player, player.hp - hpBeforeRegen);
                 player.regenProgress -= secondsToHeal;
             }
         } else {
