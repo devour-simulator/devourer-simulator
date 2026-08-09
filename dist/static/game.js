@@ -2852,9 +2852,15 @@ function showAnimalSelection() {
             }
         }
         
-        grid.appendChild(card);
-    });
-
+            grid.appendChild(card);
+        });
+    };
+    if (gameState.mode === 'evolution') {
+        renderEntries(sortByQuality(heroEntries), '✨ 可进化英雄');
+    } else {
+        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => animal.unlocked)), '✅ 已拥有英雄');
+        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => !animal.unlocked)), '🔒 未拥有英雄');
+    }
     document.getElementById('selectModal').classList.remove('hidden');
 }
 
@@ -3364,15 +3370,8 @@ function showLevelUpSkills() {
                 enterGameFullscreen();
             }
         };
-            grid.appendChild(card);
-        });
-    };
-    if (gameState.mode === 'evolution') {
-        renderEntries(sortByQuality(heroEntries), '✨ 可进化英雄');
-    } else {
-        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => animal.unlocked)), '✅ 已拥有英雄');
-        renderEntries(sortByQuality(heroEntries.filter(([, animal]) => !animal.unlocked)), '🔒 未拥有英雄');
-    }
+        grid.appendChild(card);
+    });
     if (['tower','ranked','evolution'].includes(gameState.mode)) {
         const rerolls = gameState.skillRerolls || 0;
         const cost = rerolls === 0 ? 0 : rerolls * 10;
