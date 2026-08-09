@@ -358,8 +358,8 @@ function heroRarityMarkup(hero) {
 function heroesByPower(entries = Object.entries(ANIMALS)) {
     return [...entries].sort(([, a], [, b]) => calculateHeroPower(a) - calculateHeroPower(b) || a.name.localeCompare(b.name));
 }
-function heroIconMarkup(key, hero) {
-    if (key === 'hedgehog' && getSelectedHeroSkin(key)?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
+function heroIconMarkup(key, hero, skin = null) {
+    if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'orca') return '<span class="orca-icon" role="img" aria-label="虎鲸"><i></i><b class="orca-eye-patch"></b><b class="orca-belly-patch"></b></span>';
     if (key === 'bear') return '<span class="black-bear-icon" role="img" aria-label="黑熊"><i></i><b></b><b></b></span>';
     if (key === 'pigeon') return '<span class="pigeon-icon" role="img" aria-label="信鸽"><i>✉</i></span>';
@@ -395,6 +395,18 @@ function getSelectedHeroSkin(type) {
 }
 // 所有皮肤可单独定义技能色；将来只填 effectColor（不填则自动沿用皮肤配色）即可生效。
 function skillEffectColor(owner) { return owner?.skin?.effectColor || owner?.skin?.color || owner?.color || '#62cfff'; }
+const SKIN_RARITY_INFO = {
+    normal:{ label:'普通', color:'#8b97a5' }, rare:{ label:'稀有', color:'#3989e8' }, epic:{ label:'史诗', color:'#8f55d4' }, legendary:{ label:'传说', color:'#e59a20' }
+};
+function skinRarity(skin) {
+    if (!skin.price) return 'normal';
+    if (skin.price >= 10000) return 'legendary';
+    return skin.price >= 4000 ? 'epic' : 'rare';
+}
+function skinRarityMarkup(skin) {
+    const rarity = skinRarity(skin), info = SKIN_RARITY_INFO[rarity];
+    return `<span class="hero-rarity" style="background:${info.color}">${info.label}皮肤</span>`;
+}
 function selectHeroSkin(type, skinId, returnPanel = 'hero') {
     if (!ANIMALS[type]?.unlocked) return window.alert('请先解锁该英雄。');
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
@@ -531,6 +543,7 @@ let controlMode = localStorage.getItem('controlMode') || 'desktop';
 const mobileInput = { x: 0, y: 0, active: false };
 const RANKED_RUN_SAVE_KEY = 'rankedTowerRun';
 const TOWER_RUN_SAVE_KEY = 'towerRun';
+const EVOLUTION_RUN_SAVE_KEY = 'evolutionTrialRun';
 let lastRankedSaveAt = 0;
 let pendingSaveMode = null;
 
@@ -561,7 +574,7 @@ function spawnHealingNumber(target, amount) {
     if (healed > 0) spawnDamageNumber(target, healed, false, 'heal');
 }
 
-function runSaveKey(mode = gameState.mode) { return mode === 'ranked' ? RANKED_RUN_SAVE_KEY : TOWER_RUN_SAVE_KEY; }
+function runSaveKey(mode = gameState.mode) { return mode === 'ranked' ? RANKED_RUN_SAVE_KEY : mode === 'evolution' ? EVOLUTION_RUN_SAVE_KEY : TOWER_RUN_SAVE_KEY; }
 function serializeEnemy(enemy) {
     return {
         type: enemy.type, x: enemy.x, y: enemy.y, hp: enemy.hp, maxHp: enemy.maxHp,
@@ -600,8 +613,8 @@ function restoreSavedParticles(savedParticles) {
 }
 function saveRankedRun() {
     const player = gameState.player;
-    if (!['ranked','tower'].includes(gameState.mode) || !['playing','levelup'].includes(gameState.screen) || !player) return;
-    const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+    if (!['ranked','tower','evolution'].includes(gameState.mode) || !['playing','levelup'].includes(gameState.screen) || !player) return;
+    const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved'];
     const playerState = { type: player.type };
     fields.forEach(field => { playerState[field] = player[field]; });
     localStorage.setItem(runSaveKey(), JSON.stringify({
@@ -642,6 +655,18 @@ function resumeRankedRun(mode = 'ranked') {
     document.getElementById('saveChoiceModal').classList.add('hidden');
     startGame(saved.player.type, saved);
     return true;
+}
+function settleAbandonedRun(mode) {
+    const saved = getSavedRankedRun(mode);
+    if (!saved) return chooseMode(mode);
+    clearRankedRun(mode);
+    if (!['ranked', 'evolution'].includes(mode)) return chooseMode(mode);
+    gameState.mode = mode;
+    gameState.player = new Character(saved.player.type);
+    gameState.world.level = Math.max(1, saved.level || 1);
+    gameState.stats.killCount = Math.max(0, saved.killCount || 0);
+    gameState.screen = 'playing';
+    finishRankedMatch(false);
 }
 
 function updateControlLayout() {
@@ -1226,15 +1251,20 @@ function build3DMesh(entity, kind) {
     if (type === 'boar') { [-.16,.16].forEach(x => { const tusk=add(new Three.ConeGeometry(.06*size,.34*size,5),light,x*size,.44*size,-.42*size); tusk.rotation.x=-1.3; }); }
     if (type === 'hedgehog') {
         const isDurian = entity.skin?.id === 'durian';
-        const quillMat = new Three.MeshStandardMaterial({ color:isDurian ? 0x5f8b28 : 0x4a2c22, roughness:.82, flatShading:true });
-        const faceMat = new Three.MeshStandardMaterial({ color:isDurian ? 0xd2af50 : 0xc58d69, roughness:.78, flatShading:true });
+        const isEvolved = !!entity.evolved;
+        const quillMat = new Three.MeshStandardMaterial({ color:isEvolved ? 0xb77538 : isDurian ? 0x5f8b28 : 0x4a2c22, emissive:isEvolved ? 0x4a1707 : 0x000000, emissiveIntensity:isEvolved ? .65 : 0, roughness:.82, flatShading:true });
+        const faceMat = new Three.MeshStandardMaterial({ color:isEvolved ? 0xe6b470 : isDurian ? 0xd2af50 : 0xc58d69, roughness:.78, flatShading:true });
         // 圆滚刺背、浅色小脸和分层刺毛，榴莲皮肤会变成黄绿外壳。
         add(new Three.SphereGeometry(.48, 11, 8), quillMat, 0,.55*size,.24*size,1.15*size,.9*size,1.18*size);
         add(new Three.SphereGeometry(.26, 9, 7), faceMat, 0,.56*size,-.36*size,1.05*size,.8*size,1.18*size);
         add(new Three.SphereGeometry(.07,7,6),dark,0,.5*size,-.62*size,1,.72,1.35);
-        for (let row=0; row<3; row++) for (let i=-3; i<=3; i++) {
-            const spike=add(new Three.ConeGeometry((isDurian ? .075 : .06)*size,(isDurian ? .38 : .34)*size,5),quillMat,i*.105*size,(.76+row*.13)*size,(.06+row*.13)*size);
+        for (let row=0; row<(isEvolved ? 4 : 3); row++) for (let i=-3; i<=3; i++) {
+            const spike=add(new Three.ConeGeometry((isEvolved ? .085 : isDurian ? .075 : .06)*size,(isEvolved ? .52 : isDurian ? .38 : .34)*size,5),quillMat,i*.105*size,(.76+row*.13)*size,(.06+row*.13)*size);
             spike.rotation.z=i*.12; spike.rotation.x=-.35+row*.2;
+        }
+        if (isEvolved) {
+            const crownMat = new Three.MeshStandardMaterial({ color:0xffd45a, emissive:0x9a4b08, emissiveIntensity:.7, flatShading:true });
+            [-.15, 0, .15].forEach(x => add(new Three.ConeGeometry(.07 * size, .28 * size, 5), crownMat, x * size, 1.46 * size, -.03 * size));
         }
     }
     if (type === 'monkey') { add(new Three.SphereGeometry(.13,8,6),material,-.3*size,.78*size,0); add(new Three.SphereGeometry(.13,8,6),material,.3*size,.78*size,0); const tail=add(new Three.TorusGeometry(.28*size,.045*size,6,10,Math.PI),material,0,.42*size,.55*size); tail.rotation.x=Math.PI/2; }
@@ -1625,6 +1655,7 @@ class Character {
         this.y = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y));
         if (gameState.environment === 'land') {
             // 树和石头使用圆形碰撞：推回圆边并移除朝内的速度，角色会沿边缘滑动。
+            let obstacleHits = 0, escapeX = 0, escapeY = 0;
             for (const obstacle of gameState.obstacles || []) {
                 const minimumDistance = this.radius + obstacle.radius;
                 let dx = this.x - obstacle.x, dy = this.y - obstacle.y;
@@ -1634,6 +1665,8 @@ class Character {
                 const normalX = dx / distance, normalY = dy / distance;
                 this.x = obstacle.x + normalX * minimumDistance;
                 this.y = obstacle.y + normalY * minimumDistance;
+                obstacleHits++;
+                escapeX += normalX; escapeY += normalY;
                 const inwardSpeed = this.vx * normalX + this.vy * normalY;
                 if (inwardSpeed < 0) {
                     this.vx -= inwardSpeed * normalX;
@@ -1649,6 +1682,18 @@ class Character {
                     this.targetY = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y + tangentY * direction * 150));
                     this.avoidTicks = 28;
                 }
+            }
+            // 两棵树或石头夹住时，单独沿一棵障碍物滑动会来回震荡；改为寻找横向出口并短暂强制绕开。
+            if (this.isEnemyAI && obstacleHits >= 2) {
+                let escapeLength = Math.hypot(escapeX, escapeY);
+                if (escapeLength < .12) { escapeX = -this.vy || 1; escapeY = this.vx || 0; escapeLength = Math.hypot(escapeX, escapeY) || 1; }
+                escapeX /= escapeLength; escapeY /= escapeLength;
+                const tangentX = -escapeY, tangentY = escapeX;
+                const towardTargetX = (this.targetX || this.x) - this.x, towardTargetY = (this.targetY || this.y) - this.y;
+                const side = tangentX * towardTargetX + tangentY * towardTargetY >= 0 ? 1 : -1;
+                this.targetX = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x + (escapeX * .7 + tangentX * side) * 190));
+                this.targetY = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y + (escapeY * .7 + tangentY * side) * 190));
+                this.avoidTicks = 52;
             }
         }
 
@@ -2542,6 +2587,16 @@ function openAccountPanel(kind) {
             const wardrobe = HERO_SKINS[key]?.length > 1 ? `<button class="hero-wardrobe" type="button" onclick="openHeroSkinGallery('${key}')">👕 查看皮肤</button>` : '';
             return `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.rewardOnly ? `❄️ ${polarUnlockCondition(key)}` : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div>${wardrobe}</div>`;
         }).join(''));
+    } else if (kind === 'skinCodex') {
+        title.textContent = '🎨 皮肤图鉴';
+        const allSkins = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.map(skin => ({ heroKey, skin })));
+        const ownedCount = allSkins.filter(({ heroKey, skin }) => ownsSkin(heroKey, skin)).length;
+        const cardsMarkup = allSkins.map(({ heroKey, skin }) => {
+            const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
+            const preview = heroIconMarkup(heroKey, hero, skin);
+            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${skin.id === 'default' ? '英雄自带' : `商城售价：🪙 ${skin.price}`}</div></div>`;
+        }).join('');
+        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'road') {
         title.textContent = '🧭 英雄之路';
         const rankRoad = RANK_TIERS.slice(1).map((tier, index) => `<div class="skill-card"><div class="skill-name">${gameState.rank.tier >= index + 1 ? '✅' : '🔒'} 晋升 ${tier}</div><div class="skill-desc">奖励：${heroIconMarkup(POLAR_RANK_REWARDS[index], ANIMALS[POLAR_RANK_REWARDS[index]])} ${ANIMALS[POLAR_RANK_REWARDS[index]].name}</div></div>`).join('');
@@ -2660,7 +2715,7 @@ function confirmPurchase(key) {
 }
 
 function chooseMode(mode) {
-    if (['ranked','tower'].includes(mode) && getSavedRankedRun(mode)) {
+    if (['ranked','tower','evolution'].includes(mode) && getSavedRankedRun(mode)) {
         pendingSaveMode = mode;
         document.getElementById('saveChoiceModal').classList.remove('hidden');
         return;
@@ -2781,10 +2836,16 @@ function startGame(animalType, savedRun = null) {
     gameState.environment = environmentFor(animalType);
     applySceneEnvironment();
     if (gameState.mode === 'tutorial' && gameState.environment === 'land') placeTutorialPlayerSafely(gameState.player);
-    if (savedRun && ['ranked','tower'].includes(gameState.mode)) {
+    if (savedRun && ['ranked','tower','evolution'].includes(gameState.mode)) {
         const savedPlayer = savedRun.player;
-        const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction'];
+        const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved'];
         fields.forEach(field => { if (savedPlayer[field] !== undefined) gameState.player[field] = savedPlayer[field]; });
+        if (savedPlayer.evolved && EVOLUTION_ROUTES[gameState.player.type]) {
+            const route = EVOLUTION_ROUTES[gameState.player.type];
+            gameState.player.evolved = true; gameState.player.evolution = route;
+            gameState.player.name = route.name; gameState.player.emoji = route.emoji; gameState.player.color = route.color;
+            gameState.player.activeAbility = route.active;
+        }
         gameState.player.critChance = Math.min(1, Math.max(0, gameState.player.critChance || 0));
         gameState.player.comboChance = Math.min(MAX_COMBO_CHANCE, Math.max(0, gameState.player.comboChance || 0));
         gameState.world.level = Math.max(1, savedRun.level || 1);
@@ -2793,7 +2854,7 @@ function startGame(animalType, savedRun = null) {
         gameState.skillRerolls = Math.max(0, savedRun.skillRerolls || 0);
         gameState.provokeActive = !!savedRun.provokeActive;
         gameState.pendingLevelUpSkills = Array.isArray(savedRun.pendingLevelUpSkills) ? savedRun.pendingLevelUpSkills.map(name => SKILLS.find(skill => skill.name === name)).filter(Boolean) : [];
-    } else if (['ranked','tower'].includes(gameState.mode)) {
+    } else if (['ranked','tower','evolution'].includes(gameState.mode)) {
         clearRankedRun();
     }
     lastFrameTime = null;
@@ -2801,7 +2862,7 @@ function startGame(animalType, savedRun = null) {
 
     if (gameState.mode === 'tutorial') spawnTutorialBattle();
     else if (gameState.mode === 'team') spawnTeamBattle();
-    else if (savedRun && ['ranked','tower'].includes(gameState.mode) && Array.isArray(savedRun.enemies)) {
+    else if (savedRun && ['ranked','tower','evolution'].includes(gameState.mode) && Array.isArray(savedRun.enemies)) {
         gameState.enemies = restoreSavedEnemies(savedRun.enemies);
         gameState.particles = restoreSavedParticles(savedRun.particles);
         gameState.chests = Array.isArray(savedRun.chests) ? savedRun.chests.map(chest => ({ ...chest })) : [];
@@ -2982,7 +3043,7 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     gameState.screen = 'gameover';
     exitGameFullscreen();
     const rankProgress = isRankProgressMode();
-    if (gameState.mode === 'ranked') clearRankedRun();
+    if (rankProgress) clearRankedRun();
     if (rankProgress && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
     // 团队模式是轻量娱乐局；排位经验随抵达层数显著提高。
     const accountReward = gameState.mode === 'team'
@@ -3298,12 +3359,13 @@ document.getElementById('resumeSaveButton').addEventListener('click', () => {
 document.getElementById('deleteSaveButton').addEventListener('click', () => {
     const mode = pendingSaveMode; pendingSaveMode = null;
     document.getElementById('saveChoiceModal').classList.add('hidden');
-    clearRankedRun(mode); chooseMode(mode);
+    settleAbandonedRun(mode);
 });
 document.getElementById('saveChoiceBackButton').addEventListener('click', () => {
     pendingSaveMode = null; document.getElementById('saveChoiceModal').classList.add('hidden'); showHall();
 });
 document.getElementById('fullscreenButton').addEventListener('click', toggleFullscreen);
+document.getElementById('hallFullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('selectBackButton').addEventListener('click', cancelAnimalSelection);
 document.getElementById('signButton').addEventListener('click', claimDailySignIn);
 document.getElementById('desktopModeButton').addEventListener('click', () => setControlMode('desktop'));
@@ -3501,7 +3563,7 @@ function updateUI() {
 
     // 玩家信息
     // 局内面板也使用当前皮肤图标，榴莲刺猬不会再显示成普通刺猬。
-    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type]);
+    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type], player.skin);
     document.getElementById('playerName').textContent = player.name;
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
@@ -3616,7 +3678,7 @@ function gameLoop(timestamp = performance.now()) {
         checkCollisions();
         checkRankedAIBattles();
         checkTeamBattles();
-        if (gameState.mode === 'ranked' && gameState.world.time - lastRankedSaveAt >= 1) {
+        if (['ranked', 'tower', 'evolution'].includes(gameState.mode) && gameState.world.time - lastRankedSaveAt >= 1) {
             saveRankedRun();
             lastRankedSaveAt = gameState.world.time;
         }
