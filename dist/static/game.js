@@ -3080,9 +3080,15 @@ function showLevelUpSkills() {
     skillsToShow.forEach((skill, index) => {
         const card = document.createElement('div');
         card.className = `skill-card rarity-${skill.rarity}`;
+        const givesCrit = skill.type === 'crit' || !!skill.value?.crit;
+        const givesCombo = skill.type === 'combo' || !!skill.value?.combo;
+        const capWarnings = [];
+        if (givesCrit && (gameState.player.critChance || 0) >= 1) capWarnings.push('不建议选择：暴击率已满');
+        if (givesCombo && (gameState.player.comboChance || 0) >= MAX_COMBO_CHANCE) capWarnings.push('不建议选择：连击率已满');
+        const warningMarkup = capWarnings.length ? ` <span class="skill-cap-warning">（${capWarnings.join('；')}）</span>` : '';
         card.innerHTML = `
             <div class="skill-name"><span class="rarity-tag">${RARITY_INFO[skill.rarity].label}</span>${skill.name}</div>
-            <div class="skill-desc">${skill.desc}${skill.type === 'hp' ? `（当前上限 ${gameState.player.maxHp} → ${gameState.player.maxHp + skill.value}）` : ''}</div>
+            <div class="skill-desc">${skill.desc}${skill.type === 'hp' ? `（当前上限 ${gameState.player.maxHp} → ${gameState.player.maxHp + skill.value}）` : ''}${warningMarkup}</div>
         `;
         card.onclick = () => {
             gameState.pendingLevelUpSkills = [];
