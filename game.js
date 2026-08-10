@@ -1309,6 +1309,20 @@ function build3DMesh(entity, kind) {
         const neck = add(new Three.CylinderGeometry(.07 * size, .1 * size, .62 * size, 7), material, 0, 1.02 * size, .04 * size);
         neck.rotation.z = -.22;
     }
+    if (type === 'shark' && entity.evolution?.name === '巨齿鲨') {
+        // 巨齿鲨不只是放大：加厚深蓝身躯、巨型背鳍与张开的满口尖牙。
+        const megaMat = new Three.MeshStandardMaterial({ color:0x183d58, emissive:0x071d30, emissiveIntensity:.5, roughness:.48, flatShading:true });
+        const mouthMat = new Three.MeshStandardMaterial({ color:0x1b0d16, roughness:.7, flatShading:true });
+        const toothMat = new Three.MeshStandardMaterial({ color:0xf8f1d9, emissive:0x665a38, emissiveIntensity:.3, roughness:.4, flatShading:true });
+        add(new Three.SphereGeometry(.5 * size, 11, 8), megaMat, 0, .4 * size, .16 * size, 1.32, .86, 1.62);
+        add(new Three.BoxGeometry(.5 * size, .15 * size, .08 * size), mouthMat, 0, .43 * size, -.52 * size, 1.3, 1, 1);
+        for (let i = -3; i <= 3; i++) {
+            const toothTop = add(new Three.ConeGeometry(.042 * size, .17 * size, 5), toothMat, i * .065 * size, .49 * size, -.58 * size); toothTop.rotation.x = Math.PI;
+            add(new Three.ConeGeometry(.042 * size, .17 * size, 5), toothMat, i * .065 * size, .36 * size, -.58 * size);
+        }
+        const giantFin = add(new Three.ConeGeometry(.24 * size, .78 * size, 5), megaMat, 0, 1.02 * size, .25 * size); giantFin.rotation.x = -.18;
+        [-1, 1].forEach(side => { const fin = add(new Three.ConeGeometry(.18 * size, .62 * size, 5), megaMat, side * .57 * size, .43 * size, .08 * size); fin.rotation.z = side * 1.25; });
+    }
     if (type === 'owl') { add(new Three.SphereGeometry(.16,8,6),light,-.15*size,.72*size,-.34*size); add(new Three.SphereGeometry(.16,8,6),light,.15*size,.72*size,-.34*size); }
     if (type === 'crane') { const neck=add(new Three.CylinderGeometry(.08*size,.12*size,.7*size,7),light,0,1.05*size,.08*size); neck.rotation.z=.18; }
     if (type === 'phoenix') { for(let i=-2;i<=2;i++){ const flame=add(new Three.ConeGeometry(.1*size,.55*size,5),new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0xaa2200,emissiveIntensity:.6}),i*.12*size,1.1*size,.2*size); flame.rotation.z=i*.18; } }
