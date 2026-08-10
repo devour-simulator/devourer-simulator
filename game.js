@@ -812,8 +812,15 @@ async function init3DRenderer() {
         const nature = new THREE.Group();
         gameState.obstacles = [];
         for (let i = 0; i < 38; i++) {
-            // 给边界留出明显通道，石头、树与出生点都不会再挤在地图边上。
-            const x = (Math.random() - .5) * 20, z = (Math.random() - .5) * 14;
+            // 树与石头必须有足够空隙；找不到合适位置就少放一个，宁可稀疏也不堵路。
+            let x = 0, z = 0, placed = false;
+            for (let attempt = 0; attempt < 18; attempt++) {
+                x = (Math.random() - .5) * 20; z = (Math.random() - .5) * 14;
+                const worldX = x * 42 + GAME_WIDTH / 2, worldY = z * 42 + GAME_HEIGHT / 2;
+                const radius = i % 3 === 0 ? 20 : 14;
+                if (i % 3 === 2 || !(gameState.obstacles || []).some(obstacle => Math.hypot(worldX - obstacle.x, worldY - obstacle.y) < obstacle.radius + radius + 118)) { placed = true; break; }
+            }
+            if (!placed) continue;
             // 模型看起来比实际碰撞范围大一些，避免角色经过树木、石头时被卡住。
             if (i % 3 !== 2) gameState.obstacles.push({ x:x * 42 + GAME_WIDTH / 2, y:z * 42 + GAME_HEIGHT / 2, radius:i % 3 === 0 ? 20 : 14 });
             if (i % 3 === 0) {
