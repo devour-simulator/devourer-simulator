@@ -366,6 +366,12 @@ function heroRarityMarkup(hero) {
 function heroesByPower(entries = Object.entries(ANIMALS)) {
     return [...entries].sort(([, a], [, b]) => calculateHeroPower(a) - calculateHeroPower(b) || a.name.localeCompare(b.name));
 }
+function heroesByRarity(entries = Object.entries(ANIMALS)) {
+    return [...entries].sort(([, a], [, b]) => {
+        const rarityOrder = HERO_QUALITY_ORDER[heroRarity(a)] - HERO_QUALITY_ORDER[heroRarity(b)];
+        return rarityOrder || calculateHeroPower(a) - calculateHeroPower(b) || a.name.localeCompare(b.name);
+    });
+}
 function heroIconMarkup(key, hero, skin = null) {
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'orca') return '<span class="orca-icon" role="img" aria-label="虎鲸"><i></i><b class="orca-eye-patch"></b><b class="orca-belly-patch"></b></span>';
@@ -428,6 +434,9 @@ function selectHeroSkin(type, skinId, returnPanel = 'hero') {
         localStorage.setItem('ownedSkins', JSON.stringify([...owned]));
         localStorage.setItem('coins', gameState.stats.coins);
         window.alert(`购买成功！已获得「${skin.name}」。`);
+        // 购买只加入皮肤库，不会悄悄替换玩家正在使用的外观；要穿戴需再次点击“使用皮肤”。
+        openAccountPanel(returnPanel);
+        return;
     }
     localStorage.setItem(`heroSkin:${type}`, skin.id);
     openAccountPanel(returnPanel);
@@ -1277,14 +1286,23 @@ function build3DMesh(entity, kind) {
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
     if (entity.evolution?.name === '九尾狐') {
-        // 九条尾巴从背部中心向两侧舒展，外侧更长、更开，形成粉色扇形尾群。
-        const tailMat = new Three.MeshStandardMaterial({ color:0xff8fc5, emissive:0xb81c67, emissiveIntensity:.8, roughness:.42, flatShading:true });
+        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；每条尾尖有粉紫色渐变。
+        const furMat = new Three.MeshStandardMaterial({ color:0xfff4fa, emissive:0x742349, emissiveIntensity:.18, roughness:.5 });
+        const tipMat = new Three.MeshStandardMaterial({ color:0xd62976, emissive:0x8a1649, emissiveIntensity:.7, roughness:.38 });
         for (let i = 0; i < 9; i++) {
-            const offset = i - 4;
-            const outer = Math.abs(offset) / 4;
-            const tail = add(new Three.ConeGeometry((.12 + outer * .025) * size, (.62 + outer * .32) * size, 8), tailMat, offset * .105 * size, (.50 + outer * .10) * size, (.34 + outer * .20) * size);
-            tail.rotation.x = -1.26 + outer * .14;
-            tail.rotation.z = -offset * .14;
+            const spread = (i - 4) / 4;
+            const outer = Math.abs(spread);
+            const root = new Three.Vector3(0, .55 * size, .47 * size);
+            const mid = new Three.Vector3(spread * .48 * size, (.78 + (1 - outer) * .45) * size, (1.02 + outer * .18) * size);
+            const end = new Three.Vector3(spread * 1.32 * size, (.62 + (1 - outer) * .98) * size, (1.56 + outer * .35) * size);
+            const curve = new Three.CatmullRomCurve3([root, mid, end]);
+            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 14, (.115 + (1 - outer) * .025) * size, 7, false), furMat);
+            group.add(tail);
+            // 只给尾巴最后一小段上色，保留参考图里白色长毛和深粉尾尖的层次。
+            const tipStart = curve.getPoint(.76);
+            const tipCurve = new Three.CatmullRomCurve3([tipStart, curve.getPoint(.9), end]);
+            const tip = new Three.Mesh(new Three.TubeGeometry(tipCurve, 7, (.075 + (1 - outer) * .012) * size, 7, false), tipMat);
+            group.add(tip);
         }
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
@@ -2722,13 +2740,15 @@ function openAccountPanel(kind) {
         if (coinCard) { coinCard.style.cursor = 'pointer'; coinCard.title = '点击查看金币用途'; coinCard.onclick = showCoinHelp; }
     } else if (kind === 'shop') {
         title.textContent = '🛒 商城';
-        const gameShop = cards(heroesByPower()
+        const gameShop = cards(heroesByRarity()
             .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
-        const skinShop = cards(Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price).map(skin => {
+        const skinShopEntries = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price).map(skin => ({ heroKey, skin })))
+            .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','legendary'].indexOf(skinRarity(b.skin)));
+        const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
-            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
-        })).join('') || '<div class="tip">皮肤正在制作中。</div>');
+            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
+        }).join('') || '<div class="tip">皮肤正在制作中。</div>');
         const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
