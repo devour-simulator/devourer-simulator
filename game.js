@@ -2567,10 +2567,11 @@ function showHall() {
     const hundredCard = document.getElementById('hundredSignCard');
     const hundredDay = Math.min(100, parseInt(localStorage.getItem('hundredSignDay')) || 0);
     const hundredSignedToday = localStorage.getItem('hundredSignDate') === new Date().toDateString();
-    hundredCard.hidden = !signComplete || hundredDay >= 100;
-    document.getElementById('hundredSignProgress').textContent = hundredDay >= 100 ? '百天签到已完成' : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）`;
-    document.getElementById('hundredSignButton').disabled = hundredSignedToday || hundredDay >= 100;
-    document.getElementById('hundredSignButton').textContent = hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
+    const hundredSignEnded = Date.now() >= HUNDRED_SIGN_DEADLINE;
+    hundredCard.hidden = !signComplete;
+    document.getElementById('hundredSignProgress').textContent = hundredSignEnded ? '活动已于 2026 年 12 月 1 日 00:00 截止' : hundredDay >= 100 ? '百天签到已完成' : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）`;
+    document.getElementById('hundredSignButton').disabled = hundredSignEnded || hundredSignedToday || hundredDay >= 100;
+    document.getElementById('hundredSignButton').textContent = hundredSignEnded ? '活动已截止' : hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
@@ -2697,9 +2698,11 @@ function claimDailySignIn() {
     else sendRewardMail(`新手七日签到 · 第 ${day} 天`, `签到奖励：${day * 30} 金币，请在邮件中领取。`, { coins: day * 30 });
     showHall();
 }
+const HUNDRED_SIGN_DEADLINE = new Date('2026-12-01T00:00:00+08:00').getTime();
 function claimHundredSignIn() {
     const today = new Date().toDateString();
     if ((parseInt(localStorage.getItem('signDay')) || 0) < 7) return window.alert('请先完成新手七日签到。');
+    if (Date.now() >= HUNDRED_SIGN_DEADLINE) return window.alert('百天签到已于 2026 年 12 月 1 日 00:00 截止。');
     const currentDay = Math.min(100, parseInt(localStorage.getItem('hundredSignDay')) || 0);
     if (currentDay >= 100 || localStorage.getItem('hundredSignDate') === today) return;
     const day = currentDay + 1;
