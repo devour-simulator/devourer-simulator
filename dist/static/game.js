@@ -292,7 +292,7 @@ const EVOLUTION_ROUTES = {
     fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:25, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
     pigeon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:25, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
     wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:25, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
-    shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:25, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'深渊巨口',desc:'释放强化鲨齿冲击',effect:'empower',bonus:28,hits:3,cooldown:9} },
+    shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:25, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'巨力虹吸',desc:'将 280 范围内的敌人吸到身边，造成攻击力 280% 的伤害',effect:'pull',radius:280,damagePercent:280,cooldown:11} },
     hedgehog: { name:'荆棘兽王', emoji:'🦔', color:'#7a4f31', level:25, bonus:{attack:7,defense:10,speed:3,hp:70}, active:{name:'万刺反击',desc:'受到攻击时反弹 70% 伤害',effect:'reflect',hits:6,ratio:.7,cooldown:10} }
 };
 const EVOLUTION_MODE_TYPES = Object.keys(EVOLUTION_ROUTES);
@@ -812,7 +812,8 @@ async function init3DRenderer() {
         const nature = new THREE.Group();
         gameState.obstacles = [];
         for (let i = 0; i < 38; i++) {
-            const x = (Math.random() - .5) * 24, z = (Math.random() - .5) * 17;
+            // 给边界留出明显通道，石头、树与出生点都不会再挤在地图边上。
+            const x = (Math.random() - .5) * 20, z = (Math.random() - .5) * 14;
             // 模型看起来比实际碰撞范围大一些，避免角色经过树木、石头时被卡住。
             if (i % 3 !== 2) gameState.obstacles.push({ x:x * 42 + GAME_WIDTH / 2, y:z * 42 + GAME_HEIGHT / 2, radius:i % 3 === 0 ? 20 : 14 });
             if (i % 3 === 0) {
@@ -1066,6 +1067,12 @@ function build3DMesh(entity, kind) {
                 const spike=add(new Three.ConeGeometry(.07,.52,4), burstMat, Math.cos(angle)*.58, .34, Math.sin(angle)*.58);
                 spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
             }
+        } else if (entity.effect === 'pull') {
+            const vortexMat = new Three.MeshStandardMaterial({ color:0x3ac7ee, emissive:0x127caa, emissiveIntensity:1.6, transparent:true, opacity:.8, roughness:.2 });
+            [1, .64, .32].forEach((scale, index) => {
+                const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42 * scale, .045, 7, 24), vortexMat);
+                ring.rotation.x = -Math.PI / 2; ring.position.y = .12 + index * .07; group.add(ring);
+            });
         } else if (entity.kind === 'aura') {
             const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42, .055, 7, 16), skillMat);
             ring.rotation.x = -Math.PI / 2; ring.position.y = .09; group.add(ring);
@@ -1208,18 +1215,20 @@ function build3DMesh(entity, kind) {
             add(new Three.SphereGeometry(.22, 10, 7), belly, -.43, .56, -.18, .35, .72, 1.1);
             add(new Three.SphereGeometry(.22, 10, 7), belly, .43, .56, -.18, .35, .72, 1.1);
         }
+        const fins = [];
         const fin = (x, y, z, scaleX, rotationZ = 0) => {
             const part = add(new Three.ConeGeometry(.18, .62, 4), material, x, y, z, scaleX, 1, 1);
-            part.rotation.z = rotationZ; return part;
+            part.rotation.z = rotationZ; fins.push(part); return part;
         };
         fin(0, .95, .12, 1, 0); // 背鳍
         fin(-.48, .47, -.02, 1, -.95); fin(.48, .47, -.02, 1, .95); // 胸鳍
         const tail = new Three.Mesh(new Three.ConeGeometry(.34, .7, 4), material);
-        tail.position.set(0, .54, .96); tail.rotation.x = Math.PI / 2; group.add(tail);
+        tail.position.set(0, .54, .96); tail.rotation.x = Math.PI / 2; group.add(tail); fins.push(tail);
         group.userData.flying = false;
         group.userData.swimming = true;
         group.userData.wings = [];
         group.userData.legs = [];
+        group.userData.swimParts = fins;
         group.userData.body = sharkBody;
         threeScene.add(group);
         return group;
@@ -1286,7 +1295,7 @@ function build3DMesh(entity, kind) {
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
     if (entity.evolution?.name === '九尾狐') {
-        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；每条尾尖有粉紫色渐变。
+        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；用柔软毛团而不是硬直管状模型。
         const furMat = new Three.MeshStandardMaterial({ color:0xfff4fa, emissive:0x742349, emissiveIntensity:.18, roughness:.5 });
         const tipMat = new Three.MeshStandardMaterial({ color:0xd62976, emissive:0x8a1649, emissiveIntensity:.7, roughness:.38 });
         for (let i = 0; i < 9; i++) {
@@ -1296,13 +1305,15 @@ function build3DMesh(entity, kind) {
             const mid = new Three.Vector3(spread * .48 * size, (.78 + (1 - outer) * .45) * size, (1.02 + outer * .18) * size);
             const end = new Three.Vector3(spread * 1.32 * size, (.62 + (1 - outer) * .98) * size, (1.56 + outer * .35) * size);
             const curve = new Three.CatmullRomCurve3([root, mid, end]);
-            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 14, (.115 + (1 - outer) * .025) * size, 7, false), furMat);
-            group.add(tail);
-            // 只给尾巴最后一小段上色，保留参考图里白色长毛和深粉尾尖的层次。
-            const tipStart = curve.getPoint(.76);
-            const tipCurve = new Three.CatmullRomCurve3([tipStart, curve.getPoint(.9), end]);
-            const tip = new Three.Mesh(new Three.TubeGeometry(tipCurve, 7, (.075 + (1 - outer) * .012) * size, 7, false), tipMat);
-            group.add(tip);
+            for (let puffIndex = 0; puffIndex < 5; puffIndex++) {
+                const progress = puffIndex / 5;
+                const puff = new Three.Mesh(new Three.SphereGeometry((.21 - progress * .075) * size, 9, 7), puffIndex === 4 ? tipMat : furMat);
+                puff.position.copy(curve.getPoint(progress * .9));
+                puff.scale.set(1.05, .86, 1.38);
+                group.add(puff);
+            }
+            const tip = new Three.Mesh(new Three.SphereGeometry(.115 * size, 8, 6), tipMat);
+            tip.position.copy(end); tip.scale.set(1.15, .8, 1.45); group.add(tip);
         }
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
@@ -1445,7 +1456,26 @@ function render3D() {
     if (!flying && mesh.userData.legs) mesh.userData.legs.forEach((leg, index) => {
             leg.rotation.x = moving ? Math.sin(phase * 3 + (index % 2 ? Math.PI : 0)) * .65 : 0;
         });
-        if (mesh.userData.swimming) mesh.rotation.z = moving ? Math.sin(phase * 2.2) * .08 : 0;
+        if (mesh.userData.swimming) {
+            mesh.rotation.z = moving ? Math.sin(phase * 2.2) * .08 : 0;
+            // 鱼尾和鱼鳍左右摆动，游动时会在身后持续吐出小气泡。
+            (mesh.userData.swimParts || []).forEach((part, index) => {
+                if (part.userData.baseSwimRotationZ === undefined) part.userData.baseSwimRotationZ = part.rotation.z;
+                part.rotation.z = part.userData.baseSwimRotationZ + Math.sin(phase * 3.2 + index * 1.6) * .26;
+            });
+            if (!mesh.userData.swimBubbles) {
+                const bubbleMat = new Three.MeshBasicMaterial({ color:0xcaf6ff, transparent:true, opacity:.72 });
+                mesh.userData.swimBubbles = [-.12, .08, .2].map((offset, index) => {
+                    const bubble = new Three.Mesh(new Three.SphereGeometry(.035 + index * .012, 7, 6), bubbleMat);
+                    bubble.userData.offset = offset; mesh.add(bubble); return bubble;
+                });
+            }
+            mesh.userData.swimBubbles.forEach((bubble, index) => {
+                const rise = (phase * .18 + index * .42) % 1;
+                bubble.position.set((index - 1) * .08, .28 + rise * .7, .62 + rise * .38);
+                bubble.visible = moving || rise < .28;
+            });
+        }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
         if (entity.attackFlash > 0) {
             const hit = Math.min(1, entity.attackFlash / 10);
@@ -1706,6 +1736,23 @@ class Character {
         if (active.effect === 'poison') {
             gameState.enemies.forEach(enemy => { if (Math.hypot(enemy.x - this.x, enemy.y - this.y) < 230) { enemy.poisonTicks = 240; enemy.poisonSource = this; } });
         }
+        if (active.effect === 'pull') {
+            const radius = active.radius || 280;
+            const damage = Math.ceil(this.attack * (active.damagePercent || 240) / 100 * (1 + this.skillPower));
+            for (const enemy of [...gameState.enemies]) {
+                const dx = enemy.x - this.x, dy = enemy.y - this.y;
+                const distance = Math.hypot(dx, dy);
+                if (distance > radius) continue;
+                // 把猎物拉到巨齿鲨嘴前，再用一次百分比伤害结算，避免吸到地图外。
+                const safeDistance = Math.max(this.radius + enemy.radius + 4, 44);
+                enemy.x = this.x + dx / Math.max(distance, 1) * safeDistance;
+                enemy.y = this.y + dy / Math.max(distance, 1) * safeDistance;
+                const actualDamage = enemy.takeDamage(damage, this);
+                spawnDamageNumber(enemy, actualDamage, false, 'player');
+                enemy.attackFlash = 16;
+                if (enemy.hp <= 0) defeatEnemyBySkill(enemy);
+            }
+        }
 
         spawnSkillEffect(this, active);
         this.activeCooldown = active.cooldown * (1 - this.activeCooldownReduction) * TARGET_FPS;
@@ -1765,14 +1812,16 @@ class Character {
                     this.vy -= inwardSpeed * normalY;
                 }
                 if (this.isEnemyAI) {
-                    // AI 碰到树石时先沿圆边绕行一小段，不会一直顶着障碍物。
+                    // AI 碰到树石时进入一段固定绕路期；找死模式也不会立刻把目标重置为玩家导致原地转圈。
                     const tangentX = -normalY, tangentY = normalX;
                     const toTargetX = (this.targetX || this.x) - this.x;
                     const toTargetY = (this.targetY || this.y) - this.y;
-                    const direction = (tangentX * toTargetX + tangentY * toTargetY) >= 0 ? 1 : -1;
-                    this.targetX = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x + tangentX * direction * 150));
-                    this.targetY = Math.max(this.radius, Math.min(GAME_HEIGHT - this.radius, this.y + tangentY * direction * 150));
-                    this.avoidTicks = 28;
+                    this.pathAttempts = (this.pathAttempts || 0) + 1;
+                    const direction = ((tangentX * toTargetX + tangentY * toTargetY) >= 0 ? 1 : -1) * (this.pathAttempts % 2 ? 1 : -1);
+                    this.targetX = Math.max(this.radius + 36, Math.min(GAME_WIDTH - this.radius - 36, this.x + tangentX * direction * 235 + normalX * 80));
+                    this.targetY = Math.max(this.radius + 36, Math.min(GAME_HEIGHT - this.radius - 36, this.y + tangentY * direction * 235 + normalY * 80));
+                    this.avoidTicks = 30;
+                    this.pathDetourTicks = 105;
                 }
             }
             // 两棵树或石头夹住时，单独沿一棵障碍物滑动会来回震荡；改为寻找横向出口并短暂强制绕开。
@@ -1833,11 +1882,15 @@ class Enemy extends Character {
         this.changeDirectionTimer = Math.random() * 100 + 50;
         this.isEnemyAI = true;
         this.avoidTicks = 0;
+        this.pathDetourTicks = 0;
+        this.pathAttempts = 0;
     }
 
     update(frameScale = 1) {
         // Boss 会持续锁定玩家；普通敌人才保留随机巡逻行为。
-        if (this.avoidTicks > 0) {
+        if (this.pathDetourTicks > 0) {
+            this.pathDetourTicks = Math.max(0, this.pathDetourTicks - frameScale);
+        } else if (this.avoidTicks > 0) {
             this.avoidTicks = Math.max(0, this.avoidTicks - frameScale);
         } else if (gameState.mode === 'team') {
             // 团队模式的目标由 updateTeamTargets 分配，不能再被随机巡逻覆盖。
@@ -1990,6 +2043,9 @@ class SkillEffect {
             this.kind = 'charge'; this.radius = 42; this.life = Math.ceil(active.distance / 14) + 2;
             this.vx = owner.facing.x * 14; this.vy = owner.facing.y * 14;
             this.damage = Math.ceil(owner.attack * 1.35 * (1 + owner.skillPower));
+        } else if (active.effect === 'pull') {
+            this.kind = 'pull'; this.radius = active.radius || 280; this.life = 34; this.damage = 0;
+            this.color = '#3ac7ee';
         } else if (active.effect === 'reflect') {
             this.kind = 'aura'; this.radius = 56; this.life = 420; this.damage = 0;
             this.color = owner.skin?.id === 'durian' ? '#c7d84a' : '#4d82ff';
@@ -2013,7 +2069,7 @@ class SkillEffect {
             this.x = Math.max(this.owner.radius, Math.min(GAME_WIDTH - this.owner.radius, this.x));
             this.y = Math.max(this.owner.radius, Math.min(GAME_HEIGHT - this.owner.radius, this.y));
             this.owner.x = this.x; this.owner.y = this.y;
-        } else if (this.kind === 'aura' || this.kind === 'reflectBurst') {
+        } else if (this.kind === 'aura' || this.kind === 'reflectBurst' || this.kind === 'pull') {
             this.x = this.owner.x; this.y = this.owner.y;
         }
         if (this.effect === 'reflect' && this.owner.reflectHits <= 0) this.life = 0;
@@ -2053,6 +2109,12 @@ class SkillEffect {
                 const y = this.y + Math.sin(angle) * this.radius;
                 ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + Math.cos(angle-.35)*12,y + Math.sin(angle-.35)*12); ctx.lineTo(x + Math.cos(angle+.35)*12,y + Math.sin(angle+.35)*12); ctx.closePath(); ctx.fill();
             }
+        } else if (this.kind === 'pull') {
+            const pulse = 1 - this.life / 34;
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#49dbff';
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * (1 - pulse * .38), 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * .48 * (1 - pulse * .45), 0, Math.PI * 2); ctx.stroke();
         } else if (this.kind === 'aura') {
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
         } else {
@@ -2753,7 +2815,7 @@ function openAccountPanel(kind) {
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
-        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.10 · 百天签到更新</div><div>更新时间：2026 年 8 月 10 日</div></div><div class="skill-card"><div class="skill-name">✨ 新增内容</div><div class="skill-desc">• 新增完成新手七日签到后开启的百天签到。<br>• 大厅新增皮肤图鉴：只展示额外皮肤，并显示品质与收藏进度。<br>• 英雄选择页分为“已拥有英雄”和“未拥有英雄”，可按品质从低到高或从高到低排序。<br>• 大厅新增全屏按钮与更新公告入口。<br>• 实体投射物与光波类技能改为攻击力百分比伤害，技能介绍会显示具体数值。</div></div><div class="skill-card"><div class="skill-name">⚖️ 玩法调整</div><div class="skill-desc">• 排位与进化试炼存档可继续挑战；放弃存档会按当前到达层数结算星数。<br>• 变色龙已从英雄库下架，首次进入新版会收到 620 金币补偿邮件。<br>• 百天签到活动截止：2026 年 12 月 1 日 00:00（北京时间）。</div></div><div class="skill-card"><div class="skill-name">🔧 优化修复</div><div class="skill-desc">• 优化树木和石头间的 AI 脱困。<br>• 优化玩家头顶箭头与进化后的皮肤外观显示。<br>• 修复皮肤图鉴错误显示英雄默认外观的问题。</div></div>`;
+        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.11 · 海洋与寻路优化</div><div>更新时间：2026 年 8 月 10 日</div></div><div class="skill-card"><div class="skill-name">✨ 新增内容</div><div class="skill-desc">• 巨齿鲨觉醒后获得「巨力虹吸」：把范围内敌人拉至身边，并按攻击力百分比造成高额伤害。<br>• 实体投射物与光波类技能改为攻击力百分比伤害，技能介绍会显示具体数值。</div></div><div class="skill-card"><div class="skill-name">🌊 海洋表现</div><div class="skill-desc">• 海洋动物游动时会挥动鱼鳍、鱼尾，并吐出随游动上升的气泡。</div></div><div class="skill-card"><div class="skill-name">🔧 优化修复</div><div class="skill-desc">• AI 被树木或石头挡住时会进入绕路状态，不会持续原地转圈。<br>• 树木、石头和敌人出生点远离地图边缘，减少边界卡住的情况。<br>• 技能详情按钮已避开“找死”按钮，非全屏下也不会重叠。</div></div>`;
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -3082,13 +3144,15 @@ function spawnEnemies() {
             : LAND_TYPES;
         let animalType = enemyPool[Math.floor(Math.random() * enemyPool.length)];
 
-        let x = Math.random() * GAME_WIDTH;
-        let y = Math.random() * GAME_HEIGHT;
+        const edgePadding = 86;
+        let x = edgePadding + Math.random() * (GAME_WIDTH - edgePadding * 2);
+        let y = edgePadding + Math.random() * (GAME_HEIGHT - edgePadding * 2);
 
-        // 确保不与玩家重叠
-        while (Math.hypot(x - gameState.player.x, y - gameState.player.y) < 100 || (gameState.environment === 'land' && (gameState.obstacles || []).some(obstacle => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 55))) {
-            x = Math.random() * GAME_WIDTH;
-            y = Math.random() * GAME_HEIGHT;
+        // 确保不与玩家、树石或边界挤在一起，避免出生后直接被卡住。
+        let spawnAttempts = 0;
+        while (spawnAttempts++ < 80 && (Math.hypot(x - gameState.player.x, y - gameState.player.y) < 120 || (gameState.environment === 'land' && (gameState.obstacles || []).some(obstacle => Math.hypot(x - obstacle.x, y - obstacle.y) < obstacle.radius + 72)))) {
+            x = edgePadding + Math.random() * (GAME_WIDTH - edgePadding * 2);
+            y = edgePadding + Math.random() * (GAME_HEIGHT - edgePadding * 2);
         }
 
         const enemy = new Enemy(animalType, x, y);
@@ -3770,7 +3834,7 @@ function updateUI() {
     document.getElementById('passiveSkill').textContent = `被动·${player.passiveAbility.name}：${player.passiveAbility.desc}`;
     const activeButton = document.getElementById('activeSkillButton');
     const cooldownSeconds = Math.ceil(player.activeCooldown / TARGET_FPS);
-    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '🎯' : player.activeAbility.effect === 'ink' ? '🌊' : player.activeAbility.effect === 'poison' ? '☠️' : player.activeAbility.effect === 'reflect' ? '🦔' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
+    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '🎯' : player.activeAbility.effect === 'pull' ? '🌀' : player.activeAbility.effect === 'ink' ? '🌊' : player.activeAbility.effect === 'poison' ? '☠️' : player.activeAbility.effect === 'reflect' ? '🦔' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
     activeButton.textContent = cooldownSeconds > 0
         ? `${skillIcon} ${player.activeAbility.name} · 冷却 ${cooldownSeconds}s`
         : `${skillIcon} ${player.activeAbility.name}（${controlMode === 'mobile' ? '点击' : '空格'}）`;
