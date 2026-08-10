@@ -1323,6 +1323,13 @@ function build3DMesh(entity, kind) {
         const giantFin = add(new Three.ConeGeometry(.24 * size, .78 * size, 5), megaMat, 0, 1.02 * size, .25 * size); giantFin.rotation.x = -.18;
         [-1, 1].forEach(side => { const fin = add(new Three.ConeGeometry(.18 * size, .62 * size, 5), megaMat, side * .57 * size, .43 * size, .08 * size); fin.rotation.z = side * 1.25; });
     }
+    if (type === 'shark' && entity.skin?.id === 'abyss') {
+        // 深渊蓝鲨的皮肤增加发光蓝纹和荧光眼，避免只比默认鲨鱼深一点点。
+        const abyssGlow = new Three.MeshStandardMaterial({ color:0x37bfff, emissive:0x126de0, emissiveIntensity:1.5, roughness:.22, flatShading:true });
+        [-.18, .03, .24].forEach(z => add(new Three.BoxGeometry(.48 * size, .035 * size, .055 * size), abyssGlow, 0, .62 * size, z * size));
+        [-.14, .14].forEach(x => add(new Three.SphereGeometry(.072 * size, 7, 6), abyssGlow, x * size, .7 * size, -.4 * size));
+        const dorsalGlow = add(new Three.ConeGeometry(.09 * size, .5 * size, 5), abyssGlow, 0, .96 * size, .34 * size); dorsalGlow.rotation.x = -.18;
+    }
     if (type === 'owl') { add(new Three.SphereGeometry(.16,8,6),light,-.15*size,.72*size,-.34*size); add(new Three.SphereGeometry(.16,8,6),light,.15*size,.72*size,-.34*size); }
     if (type === 'crane') { const neck=add(new Three.CylinderGeometry(.08*size,.12*size,.7*size,7),light,0,1.05*size,.08*size); neck.rotation.z=.18; }
     if (type === 'phoenix') { for(let i=-2;i<=2;i++){ const flame=add(new Three.ConeGeometry(.1*size,.55*size,5),new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0xaa2200,emissiveIntensity:.6}),i*.12*size,1.1*size,.2*size); flame.rotation.z=i*.18; } }
