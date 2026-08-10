@@ -2569,7 +2569,8 @@ function showHall() {
     const hundredSignedToday = localStorage.getItem('hundredSignDate') === new Date().toDateString();
     const hundredSignEnded = Date.now() >= HUNDRED_SIGN_DEADLINE;
     hundredCard.hidden = !signComplete;
-    document.getElementById('hundredSignProgress').textContent = hundredSignEnded ? '活动已于 2026 年 12 月 1 日 00:00 截止' : hundredDay >= 100 ? '百天签到已完成' : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）`;
+    const deadlineText = '活动截止：2026 年 12 月 1 日 00:00（北京时间）';
+    document.getElementById('hundredSignProgress').textContent = hundredSignEnded ? '活动已于 2026 年 12 月 1 日 00:00 截止' : hundredDay >= 100 ? `百天签到已完成 · ${deadlineText}` : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）· ${deadlineText}`;
     document.getElementById('hundredSignButton').disabled = hundredSignEnded || hundredSignedToday || hundredDay >= 100;
     document.getElementById('hundredSignButton').textContent = hundredSignEnded ? '活动已截止' : hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
