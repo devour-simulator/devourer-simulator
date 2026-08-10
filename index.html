@@ -73,7 +73,7 @@
         #playerStats .ability-info { display:block; margin:3px 0 0; padding:0; border:0; }
         #playerStats .ability-info > div { display:none; }
         #playerStats .active-skill-btn { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:50%; transform:translateY(-50%); width:auto; min-width:128px; margin:0; padding:11px 13px; font-size:12px; box-shadow:0 4px 16px rgba(0,0,0,.28); }
-        .skill-info-hold { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:calc(50% + 42px); padding:5px 9px; border:1px solid #8b77d8; border-radius:999px; background:rgba(255,255,255,.9); color:#503c98; font-size:11px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); }
+        .skill-info-hold { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:calc(50% + 82px); padding:7px 10px; border:1px solid #8b77d8; border-radius:999px; background:rgba(255,255,255,.94); color:#503c98; font-size:11px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); }
         #playerStats #upgradeNotice { display:none; }
         #fullscreenButton { position:absolute; z-index:260; right:12px; bottom:12px; }
         #gameContainer:fullscreen, #gameContainer:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
@@ -136,7 +136,7 @@
         .device-choice .selected { outline:3px solid #ffd84d; background:#3fa66d; }
         .mail-button { position:relative; }
         .mail-badge { position:absolute; top:-9px; right:-10px; min-width:19px; height:19px; padding:0 5px; border-radius:12px; background:#e73b3b; color:#fff; font-size:11px; line-height:19px; font-weight:bold; box-shadow:0 1px 4px rgba(0,0,0,.35); }
-        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100vh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:128px; left:10px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } .skill-info-hold { right:14px; top:calc(50% + 38px); font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
+        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100vh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:128px; left:10px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } .skill-info-hold { right:14px; top:calc(50% + 74px); font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
 
         .ability-info {
             margin-top: 10px;
@@ -538,7 +538,7 @@
         <div class="ability-info">
             <div id="passiveSkill">被动技能</div>
             <button id="activeSkillButton" class="active-skill-btn" type="button" title="主动技能">主动技能（空格）</button>
-            <button id="skillInfoButton" class="skill-info-hold" type="button" title="长按查看技能介绍">ⓘ 长按查看技能介绍</button>
+            <button id="skillInfoButton" class="skill-info-hold" type="button" title="点击或按 I 查看技能介绍">ⓘ 技能详情（I）</button>
             <button id="provokeButton" class="provoke-btn" type="button" title="让所有敌人主动来找你战斗">💢 找死·全员来战</button>
         </div>
         <div id="upgradeNotice" style="margin-top:7px; font-size:11px; color:#c05b16;"></div>
@@ -564,6 +564,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3.5.17"></script>
+    <script src="game.js?v=3.5.18"></script>
 </body>
 </html>

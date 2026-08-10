@@ -385,7 +385,8 @@ const HERO_SKINS = {
     northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee',effectColor:'#83d9ff',price:4000}],
     shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',effectColor:'#215fc9',price:4000}],
     flamingo:[{id:'default',name:'粉羽火烈鸟',color:'#ef7fa8'},{id:'coral',name:'珊瑚火烈鸟',color:'#ff6a68',effectColor:'#ff3e73',price:4000}],
-    hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',effectColor:'#c7d84a',price:10000}]
+    hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',effectColor:'#c7d84a',price:10000}],
+    fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000}]
 };
 function ownedSkinKeys() {
     try { return new Set(JSON.parse(localStorage.getItem('ownedSkins') || '[]')); } catch { return new Set(); }
@@ -461,11 +462,11 @@ const SKILLS = [
     { name:'战神降临', desc:'攻击 +18，暴击率 +20%', type:'compound', value:{attack:18,crit:.20}, rarity:'legendary' }, { name:'不灭之躯', desc:'最大生命 +100，脱战回血 +8/秒', type:'compound', value:{hp:100,regen:8}, rarity:'legendary' }, { name:'时空掌控', desc:'速度 +8，主动技能冷却 -35%，实体技能伤害 +35%', type:'compound', value:{speed:8,cooldown:.35,skillPower:.35}, rarity:'legendary' }, { name:'全能王冠', desc:'攻击 +10，防御 +10，速度 +4，最大生命 +50', type:'compound', value:{attack:10,defense:10,speed:4,hp:50}, rarity:'legendary' }
 ];
 SKILLS.push(
-    { name:'连击节奏', desc:'连击率 +6%', type:'combo', value:.06, rarity:'normal' },
-    { name:'双重追击', desc:'攻击 +3，连击率 +10%', type:'compound', value:{attack:3,combo:.10}, rarity:'rare' },
-    { name:'疾影连斩', desc:'速度 +3，连击率 +15%', type:'compound', value:{speed:3,combo:.15}, rarity:'epic' },
-    { name:'无尽连击', desc:'攻击 +8，连击率 +20%', type:'compound', value:{attack:8,combo:.20}, rarity:'mythic' },
-    { name:'风暴连环', desc:'攻击 +14，连击率 +25%，暴击率 +10%', type:'compound', value:{attack:14,combo:.25,crit:.10}, rarity:'legendary' }
+    { name:'连击节奏', desc:'连击率 +3%', type:'combo', value:.03, rarity:'normal' },
+    { name:'双重追击', desc:'攻击 +3，连击率 +5%', type:'compound', value:{attack:3,combo:.05}, rarity:'rare' },
+    { name:'疾影连斩', desc:'速度 +3，连击率 +7%', type:'compound', value:{speed:3,combo:.07}, rarity:'epic' },
+    { name:'无尽连击', desc:'攻击 +8，连击率 +10%', type:'compound', value:{attack:8,combo:.10}, rarity:'mythic' },
+    { name:'风暴连环', desc:'攻击 +14，连击率 +12%，暴击率 +10%', type:'compound', value:{attack:14,combo:.12,crit:.10}, rarity:'legendary' }
 );
 const MAX_COMBO_CHANCE = 1;
 
@@ -1004,8 +1005,11 @@ function build3DMesh(entity, kind) {
             const shieldColor = skinColor || (entity.effect === 'healShield' ? 0xffb84d : 0x62cfff);
             const shellMat = new Three.MeshStandardMaterial({ color:shieldColor, emissive:shieldColor, emissiveIntensity:1.15, transparent:true, opacity:.24, roughness:.18, side:Three.DoubleSide });
             const edgeMat = new Three.MeshBasicMaterial({ color:shieldColor, transparent:true, opacity:.75, wireframe:true });
-            const shell = new Three.Mesh(new Three.SphereGeometry(.82, 18, 12), shellMat); shell.position.y=.62; group.add(shell);
-            const edges = new Three.Mesh(new Three.IcosahedronGeometry(.86, 2), edgeMat); edges.position.y=.62; group.add(edges);
+            const flyingOwner = ['eagle','owl','snowOwl','crane','phoenix','bat','parrot','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'].includes(entity.owner?.type);
+            const shieldY = flyingOwner ? .9 : .62;
+            const shieldSize = flyingOwner ? .98 : .82;
+            const shell = new Three.Mesh(new Three.SphereGeometry(shieldSize, 18, 12), shellMat); shell.position.y=shieldY; group.add(shell);
+            const edges = new Three.Mesh(new Three.IcosahedronGeometry(shieldSize + .04, 2), edgeMat); edges.position.y=shieldY; group.add(edges);
         } else if (entity.effect === 'reflect') {
             // 刺猬反伤是贴身转动的荆棘甲：榴莲皮肤换成黄绿外壳和金色尖刺。
             const durian = entity.owner?.skin?.id === 'durian';
@@ -1587,11 +1591,27 @@ class Character {
             if (typeof bonus.speed === 'number') this.speed += bonus.speed;
             if (typeof bonus.hp === 'number') { this.maxHp += bonus.hp; this.hp = this.maxHp; gameState.lastUpgradeNotice = `生命上限 +${bonus.hp}，当前 ${this.maxHp} HP`; }
             if (typeof bonus.regen === 'number') this.regenBonus += bonus.regen;
-            if (typeof bonus.crit === 'number') this.critChance = Math.min(1, this.critChance + bonus.crit);
+            if (typeof bonus.crit === 'number') {
+                const critRoom = Math.max(0, 1 - this.critChance);
+                const appliedCrit = Math.min(critRoom, bonus.crit);
+                this.critChance += appliedCrit;
+                const overflowCrit = bonus.crit - appliedCrit;
+                if (overflowCrit > 0) {
+                    const attackGain = Math.max(1, Math.round(overflowCrit * 40));
+                    this.attack += attackGain;
+                    gameState.lastUpgradeNotice = `暴击率已满，溢出的 ${Math.round(overflowCrit * 100)}% 暴击率转为攻击 +${attackGain}`;
+                }
+            }
             if (typeof bonus.combo === 'number') {
-                const before = this.comboChance;
-                this.comboChance = Math.min(MAX_COMBO_CHANCE, Math.max(0, this.comboChance + bonus.combo));
-                gameState.lastUpgradeNotice = `连击率 +${Math.round((this.comboChance - before) * 100)}%，当前 ${Math.round(this.comboChance * 100)}%`;
+                const comboRoom = Math.max(0, MAX_COMBO_CHANCE - this.comboChance);
+                const appliedCombo = Math.min(comboRoom, bonus.combo);
+                this.comboChance += appliedCombo;
+                const overflowCombo = bonus.combo - appliedCombo;
+                if (overflowCombo > 0) {
+                    const hpGain = Math.max(1, Math.round(overflowCombo * 250));
+                    this.maxHp += hpGain; this.hp = this.maxHp;
+                    gameState.lastUpgradeNotice = `连击率已满，溢出的 ${Math.round(overflowCombo * 100)}% 连击率转为生命上限 +${hpGain}`;
+                } else gameState.lastUpgradeNotice = `连击率 +${Math.round(appliedCombo * 100)}%，当前 ${Math.round(this.comboChance * 100)}%`;
             }
             if (typeof bonus.lifesteal === 'number') this.lifesteal += bonus.lifesteal;
             if (typeof bonus.skillPower === 'number') this.skillPower += bonus.skillPower;
@@ -2658,7 +2678,7 @@ function openAccountPanel(kind) {
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
-        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.10 · 百天签到更新</div><div>更新时间：2026 年 8 月 10 日</div></div><div class="skill-card"><div class="skill-name">✨ 新增内容</div><div class="skill-desc">• 新增完成新手七日签到后开启的百天签到。<br>• 大厅新增皮肤图鉴：只展示额外皮肤，并显示品质与收藏进度。<br>• 英雄选择页分为“已拥有英雄”和“未拥有英雄”，可按品质从低到高或从高到低排序。<br>• 大厅新增全屏按钮与更新公告入口。</div></div><div class="skill-card"><div class="skill-name">⚖️ 玩法调整</div><div class="skill-desc">• 排位与进化试炼存档可继续挑战；放弃存档会按当前到达层数结算星数。<br>• 变色龙已从英雄库下架，首次进入新版会收到 620 金币补偿邮件。<br>• 百天签到活动截止：2026 年 12 月 1 日 00:00（北京时间）。</div></div><div class="skill-card"><div class="skill-name">🔧 优化修复</div><div class="skill-desc">• 优化树木和石头间的 AI 脱困。<br>• 优化玩家头顶箭头与进化后的皮肤外观显示。<br>• 修复皮肤图鉴错误显示英雄默认外观的问题。</div></div>`;
+        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.10 · 百天签到更新</div><div>更新时间：2026 年 8 月 10 日</div></div><div class="skill-card"><div class="skill-name">✨ 新增内容</div><div class="skill-desc">• 新增完成新手七日签到后开启的百天签到。<br>• 大厅新增皮肤图鉴：只展示额外皮肤，并显示品质与收藏进度。<br>• 英雄选择页分为“已拥有英雄”和“未拥有英雄”，可按品质从低到高或从高到低排序。<br>• 大厅新增全屏按钮与更新公告入口。<br>• 实体投射物与光波类技能改为攻击力百分比伤害，技能介绍会显示具体数值。</div></div><div class="skill-card"><div class="skill-name">⚖️ 玩法调整</div><div class="skill-desc">• 排位与进化试炼存档可继续挑战；放弃存档会按当前到达层数结算星数。<br>• 变色龙已从英雄库下架，首次进入新版会收到 620 金币补偿邮件。<br>• 百天签到活动截止：2026 年 12 月 1 日 00:00（北京时间）。</div></div><div class="skill-card"><div class="skill-name">🔧 优化修复</div><div class="skill-desc">• 优化树木和石头间的 AI 脱困。<br>• 优化玩家头顶箭头与进化后的皮肤外观显示。<br>• 修复皮肤图鉴错误显示英雄默认外观的问题。</div></div>`;
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -3363,7 +3383,7 @@ function showLevelUpSkills() {
     const addSkillChoices = () => {
         // 连击技能会定期出现，但不会每级强制塞入，避免太快叠到上限。
         const comboPool = SKILLS.filter(skill => (skill.type === 'combo' || skill.value?.combo) && !skillsToShow.includes(skill));
-        if ((gameState.player.comboChance || 0) < MAX_COMBO_CHANCE && comboPool.length && Math.random() < .45) {
+        if ((gameState.player.comboChance || 0) < MAX_COMBO_CHANCE && comboPool.length && Math.random() < .24) {
             skillsToShow.push(comboPool[Math.floor(Math.random() * comboPool.length)]);
         }
         while (skillsToShow.length < 3) skillsToShow.push(pickSkill());
@@ -3387,8 +3407,8 @@ function showLevelUpSkills() {
         const givesCrit = skill.type === 'crit' || !!skill.value?.crit;
         const givesCombo = skill.type === 'combo' || !!skill.value?.combo;
         const capWarnings = [];
-        if (givesCrit && (gameState.player.critChance || 0) >= 1) capWarnings.push('不建议选择：暴击率已满');
-        if (givesCombo && (gameState.player.comboChance || 0) >= MAX_COMBO_CHANCE) capWarnings.push('不建议选择：连击率已满');
+        if (givesCrit && (gameState.player.critChance || 0) >= 1) capWarnings.push('暴击率已满：暴击部分转为攻击');
+        if (givesCombo && (gameState.player.comboChance || 0) >= MAX_COMBO_CHANCE) capWarnings.push('连击率已满：连击部分转为生命上限');
         const warningMarkup = capWarnings.length ? ` <span class="skill-cap-warning">（${capWarnings.join('；')}）</span>` : '';
         card.innerHTML = `
             <div class="skill-name"><span class="rarity-tag">${RARITY_INFO[skill.rarity].label}</span>${skill.name}</div>
@@ -3511,6 +3531,7 @@ skillInfoButton.addEventListener('pointerdown', event => {
     skillInfoHoldTimer = null;
 }));
 skillInfoButton.addEventListener('contextmenu', event => event.preventDefault());
+skillInfoButton.addEventListener('click', openSkillInfo);
 document.getElementById('skillInfoClose').addEventListener('click', closeSkillInfo);
 document.getElementById('provokeButton').addEventListener('click', () => {
     if (!['ranked', 'tower', 'evolution'].includes(gameState.mode) || !gameState.player) return;
@@ -3554,6 +3575,11 @@ joystick.addEventListener('pointerup', resetJoystick);
 joystick.addEventListener('pointercancel', resetJoystick);
 
 window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        if (!e.repeat) openSkillInfo();
+        return;
+    }
     if (e.code === 'Space') {
         e.preventDefault();
         if (!e.repeat && gameState.player) gameState.player.useActiveSkill();
