@@ -298,6 +298,16 @@ const EVOLUTION_ROUTES = {
 const EVOLUTION_MODE_TYPES = Object.keys(EVOLUTION_ROUTES);
 function isRankProgressMode(mode = gameState.mode) { return mode === 'ranked' || mode === 'evolution'; }
 
+// 所有发射光波、冲击波和实体投射物的技能，统一按攻击力百分比结算并把数值写进介绍。
+function applyProjectileDamagePercent(active, hero) {
+    if (!active || active.effect !== 'empower') return;
+    const baseAttack = Math.max(1, hero?.baseAttack || 10);
+    active.damagePercent = active.damagePercent || Math.round((1 + (active.bonus || 0) / baseAttack) * 100);
+    if (!active.desc.includes('攻击力')) active.desc += `（造成攻击力 ${active.damagePercent}% 伤害）`;
+}
+Object.entries(ABILITIES).forEach(([type, ability]) => applyProjectileDamagePercent(ability.active, ANIMALS[type]));
+Object.entries(EVOLUTION_ROUTES).forEach(([type, route]) => applyProjectileDamagePercent(route.active, ANIMALS[type]));
+
 function tryEvolvePlayer(player) {
     if (gameState.mode !== 'evolution' || player.evolved) return false;
     const route = EVOLUTION_ROUTES[player.type];
@@ -1905,7 +1915,7 @@ class SkillEffect {
         if (active.effect === 'empower') {
             this.kind = 'projectile'; this.radius = 20; this.life = 150;
             this.vx = owner.facing.x * 12; this.vy = owner.facing.y * 12;
-            this.damage = Math.ceil((owner.attack + active.bonus) * (1 + owner.skillPower));
+            this.damage = Math.ceil(owner.attack * (active.damagePercent || 100) / 100 * (1 + owner.skillPower));
         } else if (active.effect === 'dash') {
             this.kind = 'charge'; this.radius = 42; this.life = Math.ceil(active.distance / 14) + 2;
             this.vx = owner.facing.x * 14; this.vy = owner.facing.y * 14;
