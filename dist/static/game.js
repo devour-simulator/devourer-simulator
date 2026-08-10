@@ -475,34 +475,59 @@ const SHOP_ITEMS = {
     rankStarCard: { name:'排位加星卡', emoji:'⭐', price:3500, desc:'排位获胜时自动使用，在原有奖励基础上额外 +1 星。' },
     rankProtectCard: { name:'排位保护卡', emoji:'🛡️', price:3500, desc:'排位失败需要扣星时自动使用，本局不扣星。' }
 };
+// 宝箱会掉落以下战斗道具；拾取后立即生效，不占背包格子。
+const CHEST_ITEMS = {
+    magnet: { name:'星尘吸铁石', emoji:'🧲', desc:'持续 12 秒，吸取 280 码内的经验点。', color:'#57b7ff' },
+    expScroll: { name:'成长卷轴', emoji:'📜', desc:'立刻获得 100 点经验。', color:'#c785ff' },
+    battleTonic: { name:'锋芒药剂', emoji:'🧪', desc:'持续 15 秒，攻击力 +8。', color:'#ff7a4f' }
+};
 
 const RARITY_INFO = { normal:{label:'普通',weight:55}, rare:{label:'稀有',weight:26}, epic:{label:'史诗',weight:12}, mythic:{label:'神话',weight:5}, legendary:{label:'传奇',weight:2} };
 
 const RANK_TIERS = ['青铜', '白银', '黄金', '铂金', '钻石', '星耀', '王者'];
 function loadRank() {
+    const tier = Math.max(0, Math.min(RANK_TIERS.length - 1, parseInt(localStorage.getItem('rankTier')) || 0));
+    const isKing = tier === RANK_TIERS.length - 1;
     return {
-        tier: Math.max(0, Math.min(RANK_TIERS.length - 1, parseInt(localStorage.getItem('rankTier')) || 0)),
-        division: Math.max(1, Math.min(3, parseInt(localStorage.getItem('rankDivision')) || 3)),
-        stars: Math.max(0, Math.min(2, parseInt(localStorage.getItem('rankStars')) || 0))
+        tier,
+        // 王者没有“几段”，旧存档进入王者后也会自动整理为星数制。
+        division: isKing ? 0 : Math.max(1, Math.min(3, parseInt(localStorage.getItem('rankDivision')) || 3)),
+        stars: isKing ? Math.max(1, parseInt(localStorage.getItem('rankStars')) || 1) : Math.max(0, Math.min(2, parseInt(localStorage.getItem('rankStars')) || 0))
     };
 }
 function rankLabel() {
     const rank = gameState.rank;
-    return `${RANK_TIERS[rank.tier]} ${rank.division} · ${rank.stars} 星`;
+    return rank.tier === RANK_TIERS.length - 1 ? `王者 · ${rank.stars} 星` : `${RANK_TIERS[rank.tier]} ${rank.division} · ${rank.stars} 星`;
 }
 function changeRankStars(delta) {
     const rank = gameState.rank;
     const tierBefore = rank.tier;
-    if (delta > 0) {
-        rank.stars++;
-        if (rank.stars >= 3) {
-            rank.stars = 0;
-            if (rank.division > 1) rank.division--;
-            else if (rank.tier < RANK_TIERS.length - 1) { rank.tier++; rank.division = 3; }
+    const direction = delta >= 0 ? 1 : -1;
+    for (let step = 0; step < Math.abs(delta); step++) {
+        if (rank.tier === RANK_TIERS.length - 1) {
+            rank.division = 0;
+            if (direction > 0) { rank.stars++; continue; }
+            if (rank.stars > 1) { rank.stars--; continue; }
+            rank.tier--; rank.division = 1; rank.stars = 2;
+            continue;
         }
-    } else if (rank.stars > 0) rank.stars--;
-    else if (rank.division < 3) { rank.division++; rank.stars = 2; }
-    else if (rank.tier > 0) { rank.tier--; rank.division = 1; rank.stars = 2; }
+        if (direction > 0) {
+            rank.stars++;
+            if (rank.stars >= 3) {
+                rank.stars = 0;
+                if (rank.division > 1) rank.division--;
+                else if (rank.tier < RANK_TIERS.length - 2) { rank.tier++; rank.division = 3; }
+                else {
+                    // 登上王者先固定获得 1 星；若本局结算本身还有额外星数（例如登顶 +4），
+                    // 则在这颗基础星上继续叠加，成为王者 5 星。
+                    rank.tier++; rank.division = 0; rank.stars = 1;
+                    if (Math.abs(delta) > 1) { rank.stars += Math.abs(delta); break; }
+                }
+            }
+        } else if (rank.stars > 0) rank.stars--;
+        else if (rank.division < 3) { rank.division++; rank.stars = 2; }
+        else if (rank.tier > 0) { rank.tier--; rank.division = 1; rank.stars = 2; }
+    }
     localStorage.setItem('rankTier', rank.tier);
     localStorage.setItem('rankDivision', rank.division);
     localStorage.setItem('rankStars', rank.stars);
@@ -605,7 +630,7 @@ function restoreSavedEnemies(savedEnemies) {
     }).filter(Boolean);
 }
 function serializeParticle(particle) {
-    return ['x','y','type','value','vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].reduce((data, field) => {
+    return ['x','y','type','value','itemKey','vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].reduce((data, field) => {
         data[field] = particle[field]; return data;
     }, {});
 }
@@ -614,7 +639,7 @@ function restoreSavedParticles(savedParticles) {
     return savedParticles.map(saved => {
         if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return null;
         const particle = new Particle(saved.x, saved.y, saved.type, saved.value);
-        ['vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].forEach(field => {
+        ['itemKey','vx','vy','life','maxLife','pickupDelay','isAmbient','chestReward','autoCollect'].forEach(field => {
             if (saved[field] !== undefined) particle[field] = saved[field];
         });
         return particle;
@@ -1486,7 +1511,8 @@ function renderEnemyLabels() {
         const label = document.createElement('div');
         label.className = 'enemy-label chest-reward';
         label.style.left = `${(point.x*.5+.5)*100}%`; label.style.top = `${(-point.y*.5+.5)*100}%`;
-        label.innerHTML = `<span>${particle.type === 'heal' ? `HP+${particle.value}` : `EXP+${particle.value}`}</span>`;
+        const chestItem = particle.type === 'item' ? CHEST_ITEMS[particle.itemKey] : null;
+        label.innerHTML = `<span>${chestItem ? `${chestItem.emoji} ${chestItem.name}` : `EXP+${particle.value}`}</span>`;
         threeLabels.appendChild(label);
     });
     gameState.damageNumbers.forEach(number => {
@@ -1840,7 +1866,7 @@ class Particle {
         this.id = nextParticleId++;
         this.x = x;
         this.y = y;
-        this.type = type; // 'exp' 或 'heal'
+        this.type = type; // 'exp'、'heal' 或 'item'
         this.value = value || (type === 'exp' ? 5 : 8);
         
         // 根据价值设置粒子大小（越大价值越高）
@@ -1854,6 +1880,10 @@ class Particle {
             this.radius = 8 + Math.min(8, this.value / 3);
             this.emoji = '❤️';
             this.color = '#FF1493';  // 深粉色
+        } else if (type === 'item') {
+            this.radius = 17;
+            this.emoji = '🎁';
+            this.color = '#6d6cff';
         }
         
         this.vx = (Math.random() - 0.5) * 4;
@@ -1912,7 +1942,9 @@ class Particle {
 
         ctx.font = 'bold 12px Arial';
         ctx.fillStyle = this.chestReward ? '#ffffff' : this.color;
-        ctx.fillText(this.type === 'exp' ? `${this.chestReward ? '奖励 ' : ''}XP+${this.value}` : `${this.chestReward ? '奖励 ' : ''}HP+${this.value}`, this.x, this.y + this.radius + 10);
+        const item = this.type === 'item' ? CHEST_ITEMS[this.itemKey] : null;
+        const text = item ? `${this.chestReward ? '奖励 ' : ''}${item.name}` : this.type === 'exp' ? `${this.chestReward ? '奖励 ' : ''}XP+${this.value}` : `${this.chestReward ? '奖励 ' : ''}HP+${this.value}`;
+        ctx.fillText(text, this.x, this.y + this.radius + 10);
 
         ctx.restore();
     }
@@ -2171,11 +2203,19 @@ function spawnChest() {
 }
 
 function spawnChestRewards(x, y) {
-    // 宝箱奖励以掉落物出现，玩家需要看到并收集它们。
+    // 宝箱主要掉经验，并额外给 1 个会立即生效的战斗道具；不再掉 HP 球。
     for (let i = 0; i < 14; i++) {
-        const type = i < 10 ? 'exp' : 'heal';
-        const value = type === 'exp' ? 12 + Math.floor(Math.random() * 4) * 6 : 10 + Math.floor(Math.random() * 3) * 5;
+        const type = i < 13 ? 'exp' : 'item';
+        const value = type === 'exp' ? 12 + Math.floor(Math.random() * 4) * 6 : null;
         const particle = new Particle(x, y, type, value);
+        if (type === 'item') {
+            const keys = Object.keys(CHEST_ITEMS);
+            particle.itemKey = keys[Math.floor(Math.random() * keys.length)];
+            const item = CHEST_ITEMS[particle.itemKey];
+            particle.emoji = item.emoji;
+            particle.color = item.color;
+            particle.radius = 17;
+        }
         const angle = (Math.PI * 2 * i) / 14 + (Math.random() - .5) * .35;
         const distance = 46 + (i % 2) * 7;
         particle.x += Math.cos(angle) * distance;
@@ -2191,6 +2231,21 @@ function spawnChestRewards(x, y) {
         particle.maxLife = 900;
         gameState.particles.push(particle);
     }
+}
+
+function activateChestItem(itemKey) {
+    const player = gameState.player;
+    const item = CHEST_ITEMS[itemKey];
+    if (!player || !item) return;
+    if (itemKey === 'magnet') {
+        player.magnetTicks = Math.max(player.magnetTicks || 0, 12 * TARGET_FPS);
+    } else if (itemKey === 'expScroll') {
+        player.addExp(100);
+    } else if (itemKey === 'battleTonic') {
+        if (!player.battleTonicTicks || player.battleTonicTicks <= 0) player.attack += 8;
+        player.battleTonicTicks = Math.max(player.battleTonicTicks || 0, 15 * TARGET_FPS);
+    }
+    window.setTimeout(() => { if (gameState.screen === 'playing') window.alert(`获得道具：${item.emoji} ${item.name}\n${item.desc}`); }, 0);
 }
 
 function battle(player, enemy) {
@@ -3136,6 +3191,8 @@ function checkCollisions() {
             } else if (particle.type === 'heal') {
                 // 吃到治疗粒子，回血（根据粒子大小回不同血量）
                 player.hp = Math.min(player.maxHp, player.hp + particle.value);
+            } else if (particle.type === 'item') {
+                activateChestItem(particle.itemKey);
             }
             gameState.particles.splice(i, 1);
             if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 1) setTutorialStep(2);
@@ -3757,6 +3814,17 @@ function gameLoop(timestamp = performance.now()) {
             gameState.player.regenProgress = 0;
         }
         gameState.player.update(frameScale);
+        // 宝箱道具：吸铁石只拉取附近经验点；锋芒药剂结束后会准确还原临时攻击。
+        if (gameState.player.magnetTicks > 0) {
+            gameState.player.magnetTicks = Math.max(0, gameState.player.magnetTicks - frameScale);
+            gameState.particles.forEach(particle => {
+                if (particle.type === 'exp' && Math.hypot(particle.x - gameState.player.x, particle.y - gameState.player.y) <= 280) particle.autoCollect = true;
+            });
+        }
+        if (gameState.player.battleTonicTicks > 0) {
+            gameState.player.battleTonicTicks = Math.max(0, gameState.player.battleTonicTicks - frameScale);
+            if (gameState.player.battleTonicTicks === 0) gameState.player.attack = Math.max(1, gameState.player.attack - 8);
+        }
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 0 && Math.hypot(gameState.player.vx, gameState.player.vy) > .05) {
             setTutorialStep(1);
         }
