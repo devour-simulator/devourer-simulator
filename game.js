@@ -2769,6 +2769,8 @@ function showHall() {
     document.getElementById('hundredSignProgress').textContent = hundredSignEnded ? '活动已于 2026 年 12 月 1 日 00:00 截止' : hundredDay >= 100 ? `百天签到已完成 · ${deadlineText}` : `今天是百天签到第 ${hundredSignedToday ? hundredDay : hundredDay + 1} 天（进度 ${hundredDay}/100）· ${deadlineText}`;
     document.getElementById('hundredSignButton').disabled = hundredSignEnded || hundredSignedToday || hundredDay >= 100;
     document.getElementById('hundredSignButton').textContent = hundredSignEnded ? '活动已截止' : hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
+    const outsideChest = outsideChestState();
+    document.getElementById('outsideChestProgress').textContent = outsideChest.claimed ? '今日奖励已领取，明天可再挑战一次。' : `今日可挑战 · 已敲击 ${outsideChest.taps}/4 次，品质：${OUTSIDE_CHEST_TIERS[outsideChest.tier].name}`;
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
@@ -2901,6 +2903,71 @@ function claimDailySignIn() {
     showHall();
 }
 const HUNDRED_SIGN_DEADLINE = new Date('2026-12-01T00:00:00+08:00').getTime();
+const OUTSIDE_CHEST_TIERS = [
+    { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
+    { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
+    { name:'史诗宝箱', icon:'🟪', color:'#8753cf', chance:.38, rewards:{ coins:720, rankStarCard:1 } },
+    { name:'神话宝箱', icon:'🔴', color:'#d64b51', chance:.22, rewards:{ coins:1400, rankStarCard:1, rankProtectCard:1 } },
+    { name:'传说宝箱', icon:'🌈', color:'#d88722', chance:0, rewards:{ coins:2800, rankStarCard:1, rankProtectCard:1 } }
+];
+function outsideChestDate() { return new Date().toDateString(); }
+function outsideChestState() {
+    const today = outsideChestDate();
+    return {
+        taps: localStorage.getItem('outsideChestDate') === today ? Math.min(4, parseInt(localStorage.getItem('outsideChestTaps')) || 0) : 0,
+        tier: localStorage.getItem('outsideChestDate') === today ? Math.max(0, Math.min(4, parseInt(localStorage.getItem('outsideChestTier')) || 0)) : 0,
+        claimed: localStorage.getItem('outsideChestClaimDate') === today
+    };
+}
+function saveOutsideChestState(state) {
+    localStorage.setItem('outsideChestDate', outsideChestDate());
+    localStorage.setItem('outsideChestTaps', state.taps);
+    localStorage.setItem('outsideChestTier', state.tier);
+}
+function renderOutsideChest() {
+    const state = outsideChestState(), tier = OUTSIDE_CHEST_TIERS[state.tier];
+    const icon = document.getElementById('outsideChestIcon'), tierLabel = document.getElementById('outsideChestTier');
+    const text = document.getElementById('outsideChestText'), tap = document.getElementById('outsideChestTap');
+    if (!icon || !tierLabel || !text || !tap) return;
+    icon.textContent = state.claimed ? '✅' : tier.icon;
+    tierLabel.textContent = state.claimed ? '今日宝箱已领取' : tier.name;
+    tierLabel.style.background = tier.color;
+    text.textContent = state.claimed ? '明天再来开启新的局外奖励宝箱吧！' : `已敲击 ${state.taps}/4 次。每次都有机会升级；第 4 次后自动领取当前品质奖励。`;
+    tap.disabled = state.claimed;
+    tap.textContent = state.claimed ? '今日已领取' : `✨ 敲击宝箱（${state.taps + 1}/4）`;
+}
+function openOutsideChest() {
+    renderOutsideChest();
+    document.getElementById('outsideChestModal').classList.remove('hidden');
+}
+window.openOutsideChest = openOutsideChest;
+function grantOutsideChestReward(tier) {
+    const rewards = tier.rewards;
+    gameState.stats.coins += rewards.coins || 0;
+    if (rewards.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + rewards.rankStarCard;
+    if (rewards.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + rewards.rankProtectCard;
+    localStorage.setItem('coins', gameState.stats.coins);
+    saveAccount();
+    window.alert(`🎁 ${tier.name}开启成功！\n${rewardText(rewards)}`);
+}
+function tapOutsideChest() {
+    const state = outsideChestState();
+    if (state.claimed) return;
+    state.taps++;
+    const current = OUTSIDE_CHEST_TIERS[state.tier];
+    let upgraded = false;
+    if (state.tier < OUTSIDE_CHEST_TIERS.length - 1 && Math.random() < current.chance) { state.tier++; upgraded = true; }
+    saveOutsideChestState(state);
+    if (state.taps >= 4) {
+        localStorage.setItem('outsideChestClaimDate', outsideChestDate());
+        const finalTier = OUTSIDE_CHEST_TIERS[state.tier];
+        renderOutsideChest();
+        window.setTimeout(() => grantOutsideChestReward(finalTier), 120);
+    } else {
+        renderOutsideChest();
+        document.getElementById('outsideChestText').textContent = upgraded ? `✨ 升级成功！现在是${OUTSIDE_CHEST_TIERS[state.tier].name}，还可继续敲击。` : `品质暂时保持在${current.name}，还可继续敲击。`;
+    }
+}
 function claimHundredSignIn() {
     const today = new Date().toDateString();
     if ((parseInt(localStorage.getItem('signDay')) || 0) < 7) return window.alert('请先完成新手七日签到。');
@@ -3631,6 +3698,9 @@ document.getElementById('signButton').addEventListener('click', claimDailySignIn
 document.getElementById('hundredSignButton').addEventListener('click', claimHundredSignIn);
 document.getElementById('desktopModeButton').addEventListener('click', () => setControlMode('desktop'));
 document.getElementById('mobileModeButton').addEventListener('click', () => setControlMode('mobile'));
+document.getElementById('outsideChestTap').addEventListener('click', tapOutsideChest);
+document.getElementById('outsideChestIcon').addEventListener('click', tapOutsideChest);
+document.getElementById('outsideChestClose').addEventListener('click', () => document.getElementById('outsideChestModal').classList.add('hidden'));
 document.getElementById('subPageBack').addEventListener('click', () => {
     document.getElementById('subPageModal').classList.add('hidden');
     showHall();
@@ -3726,6 +3796,11 @@ joystick.addEventListener('pointerup', resetJoystick);
 joystick.addEventListener('pointercancel', resetJoystick);
 
 window.addEventListener('keydown', (e) => {
+    if (!document.getElementById('outsideChestModal').classList.contains('hidden') && e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) tapOutsideChest();
+        return;
+    }
     if (e.key.toLowerCase() === 'i') {
         e.preventDefault();
         if (!e.repeat) openSkillInfo();
@@ -3973,7 +4048,7 @@ function gameLoop(timestamp = performance.now()) {
 window.addEventListener('load', () => {
     const container = document.getElementById('gameContainer');
     // 全屏时把所有弹窗也放进全屏容器，升级/胜负确认不会再卡在容器外。
-    ['hallModal','subPageModal','skillInfoModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','playerStats','gameStats'].forEach(id => {
+    ['hallModal','subPageModal','skillInfoModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','outsideChestModal','playerStats','gameStats'].forEach(id => {
         const element = document.getElementById(id); if (element) container.append(element);
     });
     init();
