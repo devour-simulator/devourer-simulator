@@ -1095,7 +1095,7 @@ function ensureSkinMotionTrail(mesh, entity) {
         solar: [0x3155d9, 0x6934c8, 0xb83ebc, 0xee76c7, 0xf2d8ff]
     };
     // 星穹狮王采用流动星河：细光弧、十字星芒和闪点，而不是圆泡泡。
-    const dustCount = skinId === 'solar' ? 18 : 24;
+    const dustCount = skinId === 'solar' ? 44 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
         const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
@@ -1129,9 +1129,23 @@ function ensureSkinMotionTrail(mesh, entity) {
         mesh.add(sparkle);
         return sparkle;
     });
+    const galaxyClouds = skinId === 'solar' ? [
+        { color:0x3155d9, x:-.18, z:1.1, scale:[1.28,.56], opacity:.13 },
+        { color:0x6934c8, x:.10, z:1.48, scale:[1.55,.68], opacity:.14 },
+        { color:0xb83ebc, x:.03, z:1.85, scale:[1.06,.46], opacity:.11 }
+    ].map((spec, index) => {
+        const cloud = new Three.Mesh(new Three.CircleGeometry(.62, 24), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
+        cloud.rotation.x = -Math.PI / 2;
+        cloud.position.set(spec.x, .13 + index * .012, spec.z);
+        cloud.scale.set(spec.scale[0], spec.scale[1], 1);
+        cloud.userData.galaxyIndex = index;
+        cloud.userData.baseScale = spec.scale;
+        mesh.add(cloud);
+        return cloud;
+    }) : [];
     // 不使用线条：只留下深蓝、紫、粉与白色的星空闪点和星芒。
     const ribbons = [];
-    mesh.userData.skinMotionTrail = { id:skinId, dust, glitters, ribbons };
+    mesh.userData.skinMotionTrail = { id:skinId, dust, glitters, galaxyClouds, ribbons };
 }
 
 function build3DMesh(entity, kind) {
@@ -1758,7 +1772,14 @@ function render3D() {
                 part.visible = true;
                 const row = Math.floor(index / dustColumns), lane = index % dustColumns - (dustColumns - 1) / 2;
                 const drift = phase * 1.25 + index * 1.7;
-                part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * (trail.id === 'solar' ? .46 : .34) + (moving ? .16 : 0));
+                if (trail.id === 'solar') {
+                    const progress = index / Math.max(1, trail.dust.length - 1);
+                    const spiral = progress * 11 + phase * 1.35;
+                    const radius = .08 + progress * .56;
+                    part.position.set(Math.cos(spiral) * radius * .86, .36 + Math.sin(spiral * 1.7) * (.10 + progress * .18), .42 + progress * 2.25 + Math.sin(spiral) * radius * .22 + (moving ? .13 : 0));
+                } else {
+                    part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
+                }
                 const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
                 part.userData.trailMaterial.opacity = trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
@@ -1767,10 +1788,19 @@ function render3D() {
                     part.rotation.y = Math.sin(phase * 2.8 + index) * .35;
                 }
             });
+            trail.galaxyClouds?.forEach((cloud, index) => {
+                const breathe = 1 + Math.sin(phase * 1.5 + index) * .08;
+                cloud.rotation.z = phase * .12 * (index % 2 ? -1 : 1);
+                cloud.scale.set(cloud.userData.baseScale[0] * breathe, cloud.userData.baseScale[1] * breathe, 1);
+                cloud.material.opacity = .09 + (Math.sin(phase * 2 + index) + 1) * .035;
+            });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
                 const radius = .34 + (index % 3) * .1;
-                sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
+                if (trail.id === 'solar') {
+                    const progress = index / Math.max(1, trail.glitters.length - 1);
+                    sparkle.position.set(Math.sin(phase * 2.1 + index * 2.4) * (.22 + progress * .5), .35 + Math.cos(phase * 2.9 + index) * .16, .45 + progress * 2.15);
+                } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
                 const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
                 sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : .35 + twinkle * .5;
