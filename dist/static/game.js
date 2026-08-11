@@ -386,13 +386,13 @@ function heroIconMarkup(key, hero, skin = null) {
 
 // 皮肤不会改变面板数值，只改变进入对局后的配色；拥有英雄后即可在“英雄”页选择。
 const HERO_SKINS = {
-    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000}],
+    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000},{id:'solar',name:'烈阳狮王',color:'#f4b632',effectColor:'#ff6a1c',price:25000}],
     tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'}],
     northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee',effectColor:'#83d9ff',price:4000}],
-    shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',effectColor:'#215fc9',price:4000}],
+    shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',effectColor:'#215fc9',price:4000},{id:'nebula',name:'星海巨鲨',color:'#623ec8',effectColor:'#a45dff',price:15000}],
     flamingo:[{id:'default',name:'粉羽火烈鸟',color:'#ef7fa8'},{id:'coral',name:'珊瑚火烈鸟',color:'#ff6a68',effectColor:'#ff3e73',price:4000}],
     hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',effectColor:'#c7d84a',price:10000}],
-    fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000}]
+    fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000},{id:'moon',name:'月影灵狐',color:'#7767d7',effectColor:'#b79cff',price:10000}]
 };
 function ownedSkinKeys() {
     try { return new Set(JSON.parse(localStorage.getItem('ownedSkins') || '[]')); } catch { return new Set(); }
@@ -411,13 +411,31 @@ function getSelectedHeroSkin(type) {
 // 所有皮肤可单独定义技能色；将来只填 effectColor（不填则自动沿用皮肤配色）即可生效。
 function skillEffectColor(owner) { return owner?.skin?.effectColor || owner?.skin?.color || owner?.color || '#62cfff'; }
 const SKIN_RARITY_INFO = {
-    normal:{ label:'普通', color:'#8b97a5' }, rare:{ label:'稀有', color:'#3989e8' }, epic:{ label:'史诗', color:'#8f55d4' }, legendary:{ label:'传说', color:'#e59a20' }
+    normal:{ label:'普通', color:'#8b97a5' }, rare:{ label:'稀有', color:'#3989e8' }, epic:{ label:'史诗', color:'#8f55d4' }, mythic:{ label:'神话', color:'#d64b51' }, legendary:{ label:'传说', color:'#e59a20' }
 };
 function skinRarity(skin) {
     // 默认外观不计入皮肤图鉴；商城的换色皮肤为普通，榴莲刺猬是史诗。
-    if (skin.id === 'durian') return 'epic';
+    if (['durian','moon'].includes(skin.id)) return 'epic';
+    if (skin.id === 'nebula') return 'mythic';
+    if (skin.id === 'solar') return 'legendary';
     return 'normal';
 }
+const SKIN_FRAGMENT_COST = { normal:8, epic:20, mythic:35, legendary:50 };
+function addSkinFragments(rewards) {
+    const fragments = rewards?.skinFragments || {};
+    Object.entries(fragments).forEach(([rarity, amount]) => gameState.account.inventory[`fragment_${rarity}`] = (gameState.account.inventory[`fragment_${rarity}`] || 0) + amount);
+}
+function redeemSkinFragments(type, skinId) {
+    const skin = HERO_SKINS[type]?.find(item => item.id === skinId), rarity = skin && skinRarity(skin);
+    if (!skin || !SKIN_FRAGMENT_COST[rarity] || ownsSkin(type, skin)) return;
+    const key = `fragment_${rarity}`, cost = SKIN_FRAGMENT_COST[rarity];
+    if ((gameState.account.inventory[key] || 0) < cost) return window.alert(`${SKIN_RARITY_INFO[rarity].label}皮肤碎片不足！需要 ${cost} 个。`);
+    if (!window.confirm(`确定使用 ${cost} 个${SKIN_RARITY_INFO[rarity].label}皮肤碎片兑换「${skin.name}」吗？`)) return;
+    gameState.account.inventory[key] -= cost;
+    const owned = ownedSkinKeys(); owned.add(skinKey(type, skin.id)); localStorage.setItem('ownedSkins', JSON.stringify([...owned])); saveAccount();
+    window.alert(`兑换成功！获得「${skin.name}」。`); openAccountPanel('shop'); switchShopTab('fragment');
+}
+window.redeemSkinFragments = redeemSkinFragments;
 function skinRarityMarkup(skin) {
     const rarity = skinRarity(skin), info = SKIN_RARITY_INFO[rarity];
     return `<span class="hero-rarity" style="background:${info.color}">${info.label}皮肤</span>`;
@@ -2636,6 +2654,8 @@ function claimMail(index) {
     if (rewards.renameCard) gameState.account.inventory.renameCard = (gameState.account.inventory.renameCard || 0) + rewards.renameCard;
     if (rewards.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + rewards.rankStarCard;
     if (rewards.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + rewards.rankProtectCard;
+    if (rewards.outsideChestTicket) gameState.account.inventory.outsideChestTicket = (gameState.account.inventory.outsideChestTicket || 0) + rewards.outsideChestTicket;
+    addSkinFragments(rewards);
     if (rewards.hero && ANIMALS[rewards.hero]) {
         ANIMALS[rewards.hero].unlocked = true;
         saveUnlockedHeroes();
@@ -2652,12 +2672,14 @@ function rewardText(rewards) {
     if (rewards.renameCard) items.push(`🎫 改名卡 ×${rewards.renameCard}`);
     if (rewards.rankStarCard) items.push(`⭐ 排位加星卡 ×${rewards.rankStarCard}`);
     if (rewards.rankProtectCard) items.push(`🛡️ 排位保护卡 ×${rewards.rankProtectCard}`);
+    if (rewards.outsideChestTicket) items.push(`🎁 局外宝箱券 ×${rewards.outsideChestTicket}`);
+    Object.entries(rewards.skinFragments || {}).forEach(([rarity, amount]) => items.push(`🧩 ${SKIN_RARITY_INFO[rarity]?.label || rarity}皮肤碎片 ×${amount}`));
     if (rewards.hero && ANIMALS[rewards.hero]) items.push(`${ANIMALS[rewards.hero].emoji} ${ANIMALS[rewards.hero].name}`);
     return items.length ? items.join('\n') : '没有可领取的附件';
 }
 function showRewardToast(rewards) { window.alert(`领取成功！\n${rewardText(rewards)}`); }
 function claimAllMails() {
-    const mails=getMails(); const rewards={coins:0,renameCard:0,rankStarCard:0,rankProtectCard:0}; const heroes=[];
+    const mails=getMails(); const rewards={coins:0,renameCard:0,rankStarCard:0,rankProtectCard:0,skinFragments:{}}; const heroes=[];
     let count=0;
     mails.forEach(mail => {
         if (mail.claimed) return;
@@ -2666,6 +2688,8 @@ function claimAllMails() {
         if (r.renameCard) { gameState.account.inventory.renameCard=(gameState.account.inventory.renameCard||0)+r.renameCard; rewards.renameCard+=r.renameCard; }
         if (r.rankStarCard) { gameState.account.inventory.rankStarCard=(gameState.account.inventory.rankStarCard||0)+r.rankStarCard; rewards.rankStarCard+=r.rankStarCard; }
         if (r.rankProtectCard) { gameState.account.inventory.rankProtectCard=(gameState.account.inventory.rankProtectCard||0)+r.rankProtectCard; rewards.rankProtectCard+=r.rankProtectCard; }
+        if (r.outsideChestTicket) { gameState.account.inventory.outsideChestTicket=(gameState.account.inventory.outsideChestTicket||0)+r.outsideChestTicket; rewards.outsideChestTicket=(rewards.outsideChestTicket||0)+r.outsideChestTicket; }
+        if (r.skinFragments) { addSkinFragments(r); Object.entries(r.skinFragments).forEach(([rarity, amount]) => rewards.skinFragments[rarity] = (rewards.skinFragments[rarity] || 0) + amount); }
         if (r.hero && ANIMALS[r.hero]) { ANIMALS[r.hero].unlocked=true; heroes.push(`${ANIMALS[r.hero].emoji} ${ANIMALS[r.hero].name}`); }
         mail.claimed=true; mail.read=true;
     });
@@ -2697,6 +2721,8 @@ function normalizeInventory() {
     inventory.renameCard = Math.max(0, inventory.renameCard || 0);
     inventory.rankStarCard = Math.max(0, inventory.rankStarCard || 0);
     inventory.rankProtectCard = Math.max(0, inventory.rankProtectCard || 0);
+    inventory.outsideChestTicket = Math.max(0, inventory.outsideChestTicket || 0);
+    ['normal','epic','mythic','legendary'].forEach(rarity => inventory[`fragment_${rarity}`] = Math.max(0, inventory[`fragment_${rarity}`] || 0));
 }
 
 function checkReturnGift(hadAccount) {
@@ -2770,7 +2796,7 @@ function showHall() {
     document.getElementById('hundredSignButton').disabled = hundredSignEnded || hundredSignedToday || hundredDay >= 100;
     document.getElementById('hundredSignButton').textContent = hundredSignEnded ? '活动已截止' : hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
     const outsideChest = outsideChestState();
-    document.getElementById('outsideChestProgress').textContent = outsideChest.claimed ? '今日奖励已领取，明天可再挑战一次。' : `今日可挑战 · 已敲击 ${outsideChest.taps}/4 次，品质：${OUTSIDE_CHEST_TIERS[outsideChest.tier].name}`;
+    document.getElementById('outsideChestProgress').textContent = outsideChest.claimed ? ((gameState.account.inventory.outsideChestTicket || 0) > 0 ? `今日奖励已领取；背包还有 ${gameState.account.inventory.outsideChestTicket} 张宝箱券可额外开启。` : '今日奖励已领取，明天可再挑战一次。') : `${outsideChest.ticketRun ? '宝箱券挑战' : '今日可挑战'} · 已敲击 ${outsideChest.taps}/4 次，品质：${OUTSIDE_CHEST_TIERS[outsideChest.tier].name}`;
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
@@ -2809,7 +2835,8 @@ function openAccountPanel(kind) {
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchHeroRoad('rank')">🏆 段位奖励</button><button class="btn" type="button" onclick="switchHeroRoad('level')">📊 等级奖励</button></div><div id="heroRoadRank"><h3>🏆 段位奖励</h3>${rankRoad}</div><div id="heroRoadLevel" style="display:none"><h3>📊 等级奖励</h3>${levelRoad}</div>`;
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
-        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div><div class="animal-card"><div class="animal-emoji">⭐</div><div class="animal-name">排位加星卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankStarCard || 0}<br>排位胜利时自动使用，额外 +1 星。</div></div><div class="animal-card"><div class="animal-emoji">🛡️</div><div class="animal-name">排位保护卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankProtectCard || 0}<br>排位失败扣星时自动使用。</div></div>`);
+        const fragmentCards = ['normal','epic','mythic','legendary'].map(rarity => `<div class="animal-card"><div class="animal-emoji">🧩</div><div>${skinRarityMarkup({id:rarity === 'normal' ? 'fragment' : rarity === 'epic' ? 'durian' : rarity === 'mythic' ? 'nebula' : 'solar'})}</div><div class="animal-name">${SKIN_RARITY_INFO[rarity].label}皮肤碎片</div><div class="animal-stats">数量 ×${gameState.account.inventory[`fragment_${rarity}`] || 0}<br>可在商城 → 碎片兑换中使用。</div></div>`).join('');
+        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div><div class="animal-card"><div class="animal-emoji">⭐</div><div class="animal-name">排位加星卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankStarCard || 0}<br>排位胜利时自动使用，额外 +1 星。</div></div><div class="animal-card"><div class="animal-emoji">🛡️</div><div class="animal-name">排位保护卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankProtectCard || 0}<br>排位失败扣星时自动使用。</div></div><div class="animal-card"><div class="animal-emoji">🎁</div><div class="animal-name">局外宝箱券</div><div class="animal-stats">数量 ×${gameState.account.inventory.outsideChestTicket || 0}<br>每日宝箱已开后，可额外开启一局宝箱挑战。</div></div>${fragmentCards}`);
         const coinCard = content.querySelector('.animal-card');
         if (coinCard) { coinCard.style.cursor = 'pointer'; coinCard.title = '点击查看金币用途'; coinCard.onclick = showCoinHelp; }
     } else if (kind === 'shop') {
@@ -2818,13 +2845,18 @@ function openAccountPanel(kind) {
             .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
         const skinShopEntries = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price).map(skin => ({ heroKey, skin })))
-            .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','legendary'].indexOf(skinRarity(b.skin)));
+            .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(b.skin)));
         const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
         }).join('') || '<div class="tip">皮肤正在制作中。</div>');
         const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
-        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
+        const fragmentGroups = ['normal','epic','mythic','legendary'].map(rarity => {
+            const exchangeSkins = skinShopEntries.filter(({ skin }) => skinRarity(skin) === rarity);
+            const amount = gameState.account.inventory[`fragment_${rarity}`] || 0, cost = SKIN_FRAGMENT_COST[rarity];
+            return `<div class="skill-card"><div class="skill-name" style="color:${SKIN_RARITY_INFO[rarity].color}">${SKIN_RARITY_INFO[rarity].label}皮肤碎片 · ${amount}/${cost}</div><div class="animals-grid">${exchangeSkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey])}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} 专属皮肤<br>${ownsSkin(heroKey,skin) ? '✅ 已拥有' : `🧩 ${cost} 个${SKIN_RARITY_INFO[rarity].label}碎片`}</div><button class="btn btn-success" type="button" ${ownsSkin(heroKey,skin) ? 'disabled' : ''} onclick="redeemSkinFragments('${heroKey}','${skin.id}')">碎片兑换</button></div>`).join('') || '<div class="tip">该品质皮肤暂未开放兑换。</div>'}</div></div>`;
+        }).join('');
+        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('fragment')">🧩 碎片兑换</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopFragment" style="display:none">${fragmentGroups}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.11 · 海洋与寻路优化</div><div>更新时间：2026 年 8 月 10 日</div></div><div class="skill-card"><div class="skill-name">✨ 新增内容</div><div class="skill-desc">• 巨齿鲨觉醒后获得「巨力虹吸」：把范围内敌人拉至身边，并按攻击力百分比造成高额伤害。<br>• 实体投射物与光波类技能改为攻击力百分比伤害，技能介绍会显示具体数值。</div></div><div class="skill-card"><div class="skill-name">🌊 海洋表现</div><div class="skill-desc">• 海洋动物游动时会挥动鱼鳍、鱼尾，并吐出随游动上升的气泡。</div></div><div class="skill-card"><div class="skill-name">🔧 优化修复</div><div class="skill-desc">• AI 被树木或石头挡住时会进入绕路状态，不会持续原地转圈。<br>• 树木、石头和敌人出生点远离地图边缘，减少边界卡住的情况。<br>• 技能详情按钮已避开“找死”按钮，非全屏下也不会重叠。</div></div>`;
@@ -2868,10 +2900,12 @@ function switchHeroRoad(tab) {
 function switchShopTab(tab) {
     const game = document.getElementById('shopGame');
     const skin = document.getElementById('shopSkin');
+    const fragment = document.getElementById('shopFragment');
     const item = document.getElementById('shopItem');
-    if (!game || !skin || !item) return;
+    if (!game || !skin || !fragment || !item) return;
     game.style.display = tab === 'game' ? '' : 'none';
     skin.style.display = tab === 'skin' ? '' : 'none';
+    fragment.style.display = tab === 'fragment' ? '' : 'none';
     item.style.display = tab === 'item' ? '' : 'none';
 }
 window.switchShopTab = switchShopTab;
@@ -2913,12 +2947,28 @@ const OUTSIDE_CHEST_TIERS = [
 function outsideChestDate() { return new Date().toDateString(); }
 function outsideChestState() {
     const today = outsideChestDate();
+    const ticketRun = localStorage.getItem('outsideChestTicketRunDate') === today;
     return {
         taps: localStorage.getItem('outsideChestDate') === today ? Math.min(4, parseInt(localStorage.getItem('outsideChestTaps')) || 0) : 0,
         tier: localStorage.getItem('outsideChestDate') === today ? Math.max(0, Math.min(4, parseInt(localStorage.getItem('outsideChestTier')) || 0)) : 0,
         ready: localStorage.getItem('outsideChestReadyDate') === today,
-        claimed: localStorage.getItem('outsideChestClaimDate') === today
+        claimed: localStorage.getItem('outsideChestClaimDate') === today && !ticketRun,
+        ticketRun,
+        rewards: localStorage.getItem('outsideChestRewardDate') === today ? JSON.parse(localStorage.getItem('outsideChestRewards') || 'null') : null
     };
+}
+function rollOutsideChestRewards(tierIndex) {
+    const base = { ...OUTSIDE_CHEST_TIERS[tierIndex].rewards, skinFragments:{} };
+    const add = (rarity, amount) => base.skinFragments[rarity] = amount;
+    const roll = Math.random();
+    if (tierIndex <= 1) roll < .76 ? add('normal', tierIndex ? 7 + Math.floor(Math.random() * 3) : 4 + Math.floor(Math.random() * 3)) : add('epic', tierIndex ? 2 : 1);
+    else if (tierIndex === 2) roll < .78 ? add('epic', 7 + Math.floor(Math.random() * 4)) : add('mythic', 1 + Math.floor(Math.random() * 2));
+    else if (tierIndex === 3) roll < .78 ? add('mythic', 8 + Math.floor(Math.random() * 5)) : add('legendary', 1 + Math.floor(Math.random() * 2));
+    else if (roll < .54) add('legendary', 10 + Math.floor(Math.random() * 5));
+    else if (roll < .82) add('mythic', 18 + Math.floor(Math.random() * 8));
+    else if (roll < .95) add('epic', 28 + Math.floor(Math.random() * 10));
+    else add('normal', 46 + Math.floor(Math.random() * 16));
+    return base;
 }
 function saveOutsideChestState(state) {
     localStorage.setItem('outsideChestDate', outsideChestDate());
@@ -2946,12 +2996,24 @@ function renderOutsideChest() {
     claim.hidden = !state.ready || state.claimed;
 }
 function openOutsideChest() {
+    const state = outsideChestState();
+    // 每日免费宝箱已领完时，背包里的宝箱券可以额外开启一轮完整挑战。
+    if (state.claimed && (gameState.account.inventory.outsideChestTicket || 0) > 0) {
+        gameState.account.inventory.outsideChestTicket--;
+        saveAccount();
+        localStorage.setItem('outsideChestTicketRunDate', outsideChestDate());
+        localStorage.setItem('outsideChestDate', outsideChestDate());
+        localStorage.setItem('outsideChestTaps', '0');
+        localStorage.setItem('outsideChestTier', '0');
+        localStorage.removeItem('outsideChestReadyDate');
+        localStorage.removeItem('outsideChestRewardDate');
+        localStorage.removeItem('outsideChestRewards');
+    }
     renderOutsideChest();
     document.getElementById('outsideChestModal').classList.remove('hidden');
 }
 window.openOutsideChest = openOutsideChest;
-function grantOutsideChestReward(tier, viaMail = false) {
-    const rewards = tier.rewards;
+function grantOutsideChestReward(tier, viaMail = false, rewards = tier.rewards) {
     if (viaMail) {
         sendRewardMail('局外奖励宝箱结算', `你中途离开了宝箱挑战，系统按当前的「${tier.name}」为你结算了奖励，请手动领取。`, rewards);
         return;
@@ -2959,6 +3021,7 @@ function grantOutsideChestReward(tier, viaMail = false) {
     gameState.stats.coins += rewards.coins || 0;
     if (rewards.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + rewards.rankStarCard;
     if (rewards.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + rewards.rankProtectCard;
+    addSkinFragments(rewards);
     localStorage.setItem('coins', gameState.stats.coins);
     saveAccount();
     window.alert(`🎁 ${tier.name}开启成功！\n${rewardText(rewards)}`);
@@ -2967,7 +3030,8 @@ function claimOutsideChest() {
     const state = outsideChestState();
     if (!state.ready || state.claimed) return;
     localStorage.setItem('outsideChestClaimDate', outsideChestDate());
-    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier]);
+    if (state.ticketRun) localStorage.removeItem('outsideChestTicketRunDate');
+    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier], false, state.rewards || rollOutsideChestRewards(state.tier));
     document.getElementById('outsideChestModal').classList.add('hidden');
     showHall();
 }
@@ -2975,7 +3039,8 @@ function settleOutsideChestOnExit() {
     const state = outsideChestState();
     if (state.claimed || state.taps <= 0) return;
     localStorage.setItem('outsideChestClaimDate', outsideChestDate());
-    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier], true);
+    if (state.ticketRun) localStorage.removeItem('outsideChestTicketRunDate');
+    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier], true, state.rewards || rollOutsideChestRewards(state.tier));
 }
 function tapOutsideChest() {
     const state = outsideChestState();
@@ -2987,6 +3052,9 @@ function tapOutsideChest() {
     saveOutsideChestState(state);
     if (state.taps >= 4) {
         localStorage.setItem('outsideChestReadyDate', outsideChestDate());
+        const rewards = rollOutsideChestRewards(state.tier);
+        localStorage.setItem('outsideChestRewardDate', outsideChestDate());
+        localStorage.setItem('outsideChestRewards', JSON.stringify(rewards));
         renderOutsideChest();
     } else {
         renderOutsideChest();
@@ -3003,8 +3071,8 @@ function claimHundredSignIn() {
     const specialRewards = {
         2:{ coins:500 }, 7:{ coins:1200, rankStarCard:1 }, 10:{ coins:1500, rankProtectCard:1 },
         18:{ coins:2000, rankStarCard:1 }, 25:{ coins:3000, rankProtectCard:1 },
-        50:{ coins:5000, rankStarCard:1, rankProtectCard:1 }, 75:{ coins:8000, rankStarCard:1, rankProtectCard:1 },
-        100:{ coins:15000, rankStarCard:2, rankProtectCard:2, renameCard:1 }
+        50:{ outsideChestTicket:1 }, 75:{ outsideChestTicket:1 },
+        100:{ outsideChestTicket:1 }
     };
     const rewards = specialRewards[day] || { coins:150 };
     localStorage.setItem('hundredSignDate', today);
