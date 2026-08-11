@@ -1094,8 +1094,8 @@ function ensureSkinMotionTrail(mesh, entity) {
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
         solar: [0x2bcfff, 0x7558ff, 0xf16bda, 0x37f2e0, 0x9d62ff]
     };
-    // 不使用丝带，改成自然的星尘：细小星点漂浮在角色身后，像一小片移动星空。
-    const dustCount = skinId === 'solar' ? 38 : 24;
+    // 星穹狮王采用流动星河：细光弧、十字星芒和闪点，而不是圆泡泡。
+    const dustCount = skinId === 'solar' ? 18 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
         const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
@@ -1105,7 +1105,7 @@ function ensureSkinMotionTrail(mesh, entity) {
         if (skinId === 'solar') {
             part.add(new Three.Mesh(new Three.BoxGeometry(size * .34, size * 2.35, size * .12), trailMaterial));
             part.add(new Three.Mesh(new Three.BoxGeometry(size * 2.35, size * .34, size * .12), trailMaterial));
-            if (index % 4 === 0) {
+            if (index % 5 === 0) {
                 const ring = new Three.Mesh(new Three.TorusGeometry(size * 1.18, size * .12, 5, 18), trailMaterial);
                 ring.rotation.x = Math.PI / 2;
                 part.add(ring);
@@ -1122,7 +1122,24 @@ function ensureSkinMotionTrail(mesh, entity) {
         mesh.add(sparkle);
         return sparkle;
     });
-    mesh.userData.skinMotionTrail = { id:skinId, dust, glitters };
+    const ribbons = skinId === 'solar' ? [
+        { color:0xffd56b, offset:-.24, height:.18, phase:0 },
+        { color:0xc979ff, offset:.05, height:.36, phase:1.4 },
+        { color:0x62dcff, offset:.25, height:.12, phase:2.6 }
+    ].map((spec, index) => {
+        const curve = new Three.CatmullRomCurve3([
+            new Three.Vector3(spec.offset * .25, .40, .22),
+            new Three.Vector3(spec.offset + .12, .48 + spec.height, .72),
+            new Three.Vector3(spec.offset * .7 - .12, .42 - spec.height * .35, 1.45),
+            new Three.Vector3(spec.offset * 1.25, .38 + spec.height * .25, 2.35)
+        ]);
+        const material = new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:.78, blending:Three.AdditiveBlending, depthWrite:false });
+        const ribbon = new Three.Mesh(new Three.TubeGeometry(curve, 24, .022 + index * .004, 5, false), material);
+        ribbon.userData.ribbonPhase = spec.phase;
+        mesh.add(ribbon);
+        return ribbon;
+    }) : [];
+    mesh.userData.skinMotionTrail = { id:skinId, dust, glitters, ribbons };
 }
 
 function build3DMesh(entity, kind) {
@@ -1743,13 +1760,13 @@ function render3D() {
         ensureSkinMotionTrail(mesh, entity);
         if (mesh.userData.skinMotionTrail) {
             const trail = mesh.userData.skinMotionTrail;
-            const solarBoost = trail.id === 'solar' ? 1.36 : 1;
-            const dustColumns = trail.id === 'solar' ? 7 : 6;
+            const solarBoost = trail.id === 'solar' ? 1.2 : 1;
+            const dustColumns = trail.id === 'solar' ? 6 : 6;
             trail.dust.forEach((part, index) => {
                 part.visible = true;
                 const row = Math.floor(index / dustColumns), lane = index % dustColumns - (dustColumns - 1) / 2;
                 const drift = phase * 1.25 + index * 1.7;
-                part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .48 + row * .34 * solarBoost + (moving ? .16 : 0));
+                part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * (trail.id === 'solar' ? .46 : .34) + (moving ? .16 : 0));
                 const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
                 part.userData.trailMaterial.opacity = trail.id === 'solar' ? .76 + Math.min(.24, pulse * .25) : .48 + Math.min(.45, pulse * .35);
@@ -1757,6 +1774,13 @@ function render3D() {
                     part.rotation.z += .08 + (index % 3) * .025;
                     part.rotation.y = Math.sin(phase * 2.8 + index) * .35;
                 }
+            });
+            trail.ribbons?.forEach((ribbon, index) => {
+                const wave = Math.sin(phase * 2.2 + ribbon.userData.ribbonPhase) * .07;
+                ribbon.position.y = wave;
+                ribbon.rotation.y = Math.sin(phase * 1.7 + index) * .08;
+                ribbon.scale.set(1, 1 + Math.sin(phase * 3 + index) * .05, 1 + (moving ? .08 : 0));
+                ribbon.material.opacity = .56 + (Math.sin(phase * 4 + index) + 1) * .18;
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
