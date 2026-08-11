@@ -2805,7 +2805,7 @@ const TUTORIAL_STEPS = [
     '先移动一下。熟悉方向后，你就能自由探索场景并躲开障碍物。',
     '跟着箭头吃掉经验点：获得经验的同时会回复 1 点生命。',
     '靠近宝箱打开它：经验与战斗道具会先围在宝箱旁，再自动飞进你身上。',
-    '点击右侧的主动技能按钮。按钮会显示冷却；点一下 i 可以查看技能详细说明。',
+    '先阅读技能介绍：被动技能会自动生效；主动技能可造成伤害、治疗或防护。关闭介绍后，点击右侧技能按钮（电脑也可按空格）实际释放一次。技能进入冷却时暂时不能重复使用。',
     '最后击败训练小兔。接触敌人会自动攻击；你造成的伤害是黑色、暴击是红色，敌人造成的伤害是黄色。脱战 5 秒后会逐渐加速回血。排位、爬塔和进化试炼中，右侧“找死”可以让全部敌人主动来战。'
 ];
 
@@ -2850,6 +2850,11 @@ function setTutorialStep(step) {
             : '新手试炼 1/5：按 WASD 或方向键，让小猫先走起来。')
         : `新手试炼 ${step + 1}/5：${TUTORIAL_STEPS[step]}`;
     coach.style.display = 'block';
+    if (step === 3 && !tutorial.skillInfoShown) {
+        tutorial.skillInfoShown = true;
+        // 首次进入技能步骤自动弹出详情，确保新玩家看得到被动、主动与冷却说明。
+        openSkillInfo();
+    }
 }
 
 function refreshTutorialCoachPosition() {
@@ -4252,7 +4257,7 @@ function openSkillInfo() {
         <hr style="border:0;border-top:1px solid #c9d5e2;margin:14px 0">
         <div class="feedback-heading">主动 · ${active.name}</div>
         <div>${active.desc}</div>
-        <div class="tip" style="margin-top:10px">冷却：${active.cooldown} 秒。${controlMode === 'mobile' ? '点击技能按钮即可释放主动技能。' : '按空格或点击技能按钮即可释放主动技能。'}</div>`;
+        <div class="tip" style="margin-top:10px">冷却：${active.cooldown} 秒。${controlMode === 'mobile' ? '点击技能按钮即可释放主动技能。' : '按空格或点击技能按钮即可释放主动技能。'}</div>${gameState.mode === 'tutorial' ? '<div class="feedback-heading" style="margin-top:12px">新手提示</div><div>被动技能不用按，会一直自动生效；主动技能需要你手动释放。关闭本页后，跟着箭头释放一次主动技能继续试炼。</div>' : ''}`;
     gameState.screen = 'skillinfo';
     document.getElementById('skillInfoModal').classList.remove('hidden');
 }
