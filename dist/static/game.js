@@ -1080,6 +1080,13 @@ function build3DMesh(entity, kind) {
             spark.userData.killDistance = .2 + (index % 3) * .07;
             group.add(spark);
         });
+        // 星尘拖尾从爆点拉出，保证即使战斗节奏很快也能一眼看见。
+        [0x68e5ff,0xc28cff,0xff9ee9,0xffffff,0x76a7ff,0xa7f7ff].forEach((color, index) => {
+            const trail = new Three.Mesh(new Three.ConeGeometry(.075, .8 + (index % 2) * .18, 5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9 }));
+            trail.userData.killTrail = index / 6 * Math.PI * 2;
+            trail.userData.killTrailOffset = index * .15;
+            group.add(trail);
+        });
         group.userData.killBurst = true;
         threeScene.add(group); return group;
     }
@@ -1658,6 +1665,14 @@ function render3D() {
                     part.position.set(Math.cos(angle) * distance, .48 + progress * .6 + Math.sin(angle * 2) * .08, Math.sin(angle) * distance);
                     part.scale.setScalar(Math.max(.15, 1.25 - progress * .82));
                     part.rotation.z += .15;
+                }
+                if (part.userData.killTrail !== undefined) {
+                    const angle = part.userData.killTrail + progress * .35;
+                    const distance = .18 + progress * (.72 + part.userData.killTrailOffset);
+                    part.position.set(Math.cos(angle) * distance, .45 + progress * .32, Math.sin(angle) * distance);
+                    part.quaternion.setFromUnitVectors(new Three.Vector3(0, 1, 0), new Three.Vector3(Math.cos(angle), .22, Math.sin(angle)).normalize());
+                    const trailScale = Math.max(.12, 1.25 - progress * .85);
+                    part.scale.set(trailScale, trailScale * (1.2 + progress * .75), trailScale);
                 }
             });
             return;
@@ -2381,7 +2396,7 @@ function spawnSkillEffect(owner, active) {
 }
 
 function spawnKillEffect(x, y) {
-    gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 34, maxLife: 34, color: '#8eeaff' });
+    gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color: '#8eeaff' });
 }
 
 function updateKillEffects(frameScale = 1) {
@@ -4278,9 +4293,8 @@ function updateUI() {
     const player = gameState.player;
 
     // 玩家信息
-    // 局内面板也使用当前皮肤图标，榴莲刺猬不会再显示成普通刺猬。
-    const equippedSkin = player.skin || getSelectedHeroSkin(player.type);
-    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type], equippedSkin);
+    // 局内数据面板固定显示英雄原始图标；皮肤只在3D模型和技能特效上体现。
+    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type]);
     document.getElementById('playerName').textContent = player.name;
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
