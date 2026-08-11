@@ -160,7 +160,7 @@ const ABILITIES = {
 
 // 第二批英雄：全部沿用“被动 + 主动”的平衡模板。它们会自动出现在图鉴、选人页、商城和敌人池中。
 Object.assign(ANIMALS, {
-    lion: { name: '非洲狮', emoji: '🦁', baseAttack: 11, baseDefense: 4, baseSpeed: 5, baseHp: 48, color: '#d99132', unlocked: false },
+    lion: { name: '非洲狮', emoji: '🦁', baseAttack: 13, baseDefense: 5, baseSpeed: 6, baseHp: 56, color: '#d99132', unlocked: false },
     dog: { name: '牧羊犬', emoji: '🐕', baseAttack: 6, baseDefense: 3, baseSpeed: 8, baseHp: 38, color: '#b9825a', unlocked: false },
     raccoon: { name: '浣熊', emoji: '🦝', baseAttack: 6, baseDefense: 4, baseSpeed: 7, baseHp: 42, color: '#6c6e78', unlocked: false },
     koala: { name: '考拉', emoji: '🐨', baseAttack: 4, baseDefense: 6, baseSpeed: 4, baseHp: 55, color: '#9fa4a7', unlocked: false },
@@ -359,6 +359,7 @@ function heroRarity(hero) {
 }
 ANIMALS.hedgehog.rarityOverride = 'epic';
 ANIMALS.northeastTiger.rarityOverride = 'legendary';
+ANIMALS.lion.rarityOverride = 'mythic';
 function heroRarityMarkup(hero) {
     const rarity = heroRarity(hero);
     return `<span class="hero-rarity hero-rarity-${rarity}">${HERO_RARITY_INFO[rarity]}</span>`;
@@ -1091,24 +1092,11 @@ function ensureSkinMotionTrail(mesh, entity) {
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
         solar: [0x2bcfff, 0x7558ff, 0xf16bda, 0x37f2e0, 0x9d62ff]
     };
-    const parts = palettes[skinId].map((color, index) => {
-        // 宽头细尾的平面飘带，向角色身后延展，视觉上更像魔法丝带而不是粒子。
-        const segments = 9, vertices = [], indices = [];
-        for (let step = 0; step <= segments; step++) {
-            const t = step / segments;
-            const width = .20 * (1 - t * .72) + .022;
-            const x = Math.sin(step * .82 + index * 1.7) * (.10 + t * .10);
-            const y = Math.sin(step * .92 + index * 1.35) * (.05 + t * .11);
-            const z = step * .17;
-            vertices.push(x - width, y, z, x + width, y, z);
-            if (step < segments) indices.push(step * 2, step * 2 + 1, step * 2 + 2, step * 2 + 1, step * 2 + 3, step * 2 + 2);
-        }
-        const geometry = new Three.BufferGeometry();
-        geometry.setAttribute('position', new Three.Float32BufferAttribute(vertices, 3));
-        geometry.setIndex(indices); geometry.computeVertexNormals();
-        const material = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.82 - index * .08, depthWrite:false, side:Three.DoubleSide, blending:Three.AdditiveBlending });
-        const part = new Three.Mesh(geometry, material);
-        part.userData.trailIndex = index;
+    // 不使用丝带，改成自然的星尘：细小星点漂浮在角色身后，像一小片移动星空。
+    const dust = Array.from({ length: 15 }, (_, index) => {
+        const color = palettes[skinId][index % palettes[skinId].length];
+        const part = new Three.Mesh(new Three.IcosahedronGeometry(.024 + (index % 4) * .012, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.72, blending:Three.AdditiveBlending, depthWrite:false }));
+        part.userData.dustIndex = index;
         mesh.add(part);
         return part;
     });
@@ -1118,7 +1106,7 @@ function ensureSkinMotionTrail(mesh, entity) {
         mesh.add(sparkle);
         return sparkle;
     });
-    mesh.userData.skinMotionTrail = { id:skinId, parts, glitters };
+    mesh.userData.skinMotionTrail = { id:skinId, dust, glitters };
 }
 
 function build3DMesh(entity, kind) {
@@ -1735,18 +1723,18 @@ function render3D() {
                 part.rotation.y += .06;
             });
         }
-        // 高品质皮肤的真正“移动拖尾”：大型丝带始终跟在动物身后，移动和停下都保持飘动。
+        // 高品质皮肤的星尘尾迹：自然散落在动物身后，移动和停下都持续闪烁。
         ensureSkinMotionTrail(mesh, entity);
         if (mesh.userData.skinMotionTrail) {
             const trail = mesh.userData.skinMotionTrail;
-            trail.parts.forEach((part, index) => {
+            trail.dust.forEach((part, index) => {
                 part.visible = true;
-                part.position.set(0, .38 + index * .025, .38 + index * .055);
-                part.rotation.z = Math.sin(phase * 1.7 + index * 1.4) * (.10 + index * .018);
-                part.rotation.y = Math.sin(phase * 1.15 + index) * .08;
-                const pulse = 1 + Math.sin(phase * 2.8 + index) * .08;
-                part.scale.set(pulse, pulse, 1.15 + (moving ? .12 : 0));
-                part.material.opacity = Math.max(.34, .82 - index * .08);
+                const row = Math.floor(index / 5), lane = index % 5 - 2;
+                const drift = phase * 1.25 + index * 1.7;
+                part.position.set(lane * .11 + Math.sin(drift) * .055, .36 + Math.cos(drift * 1.4) * .13 + row * .045, .44 + row * .22 + (moving ? .12 : 0));
+                const pulse = .45 + (Math.sin(phase * 5 + index * 2.1) + 1) * .45;
+                part.scale.setScalar(pulse);
+                part.material.opacity = .25 + pulse * .55;
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
