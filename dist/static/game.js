@@ -1093,9 +1093,9 @@ function ensureSkinMotionTrail(mesh, entity) {
         solar: [0x2bcfff, 0x7558ff, 0xf16bda, 0x37f2e0, 0x9d62ff]
     };
     // 不使用丝带，改成自然的星尘：细小星点漂浮在角色身后，像一小片移动星空。
-    const dust = Array.from({ length: 15 }, (_, index) => {
+    const dust = Array.from({ length: 24 }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
-        const part = new Three.Mesh(new Three.IcosahedronGeometry(.024 + (index % 4) * .012, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.72, blending:Three.AdditiveBlending, depthWrite:false }));
+        const part = new Three.Mesh(new Three.IcosahedronGeometry(.052 + (index % 4) * .018, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.92, blending:Three.AdditiveBlending, depthWrite:false }));
         part.userData.dustIndex = index;
         mesh.add(part);
         return part;
@@ -1729,12 +1729,12 @@ function render3D() {
             const trail = mesh.userData.skinMotionTrail;
             trail.dust.forEach((part, index) => {
                 part.visible = true;
-                const row = Math.floor(index / 5), lane = index % 5 - 2;
+                const row = Math.floor(index / 6), lane = index % 6 - 2.5;
                 const drift = phase * 1.25 + index * 1.7;
-                part.position.set(lane * .11 + Math.sin(drift) * .055, .36 + Math.cos(drift * 1.4) * .13 + row * .045, .44 + row * .22 + (moving ? .12 : 0));
-                const pulse = .45 + (Math.sin(phase * 5 + index * 2.1) + 1) * .45;
+                part.position.set(lane * .14 + Math.sin(drift) * .09, .36 + Math.cos(drift * 1.4) * .18 + row * .06, .48 + row * .34 + (moving ? .16 : 0));
+                const pulse = .65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5;
                 part.scale.setScalar(pulse);
-                part.material.opacity = .25 + pulse * .55;
+                part.material.opacity = .48 + Math.min(.45, pulse * .35);
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
