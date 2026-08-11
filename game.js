@@ -290,7 +290,7 @@ Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) 
 // 进化试炼是独立的实验玩法：仅开放少数基础英雄，升到 Lv.25 后才会觉醒为传说形态。
 const EVOLUTION_ROUTES = {
     fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:25, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
-    pigeon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:25, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
+    falcon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:25, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
     wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:25, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
     shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:25, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'巨力虹吸',desc:'将 280 范围内的敌人吸到身边，造成攻击力 280% 的伤害',effect:'pull',radius:280,damagePercent:280,cooldown:11} },
     hedgehog: { name:'荆棘兽王', emoji:'🦔', color:'#7a4f31', level:25, bonus:{attack:7,defense:10,speed:3,hp:70}, active:{name:'万刺反击',desc:'受到攻击时反弹 70% 伤害',effect:'reflect',hits:6,ratio:.7,cooldown:10} }
@@ -376,7 +376,7 @@ function heroIconMarkup(key, hero, skin = null) {
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'fox' && skin?.id === 'moon') return '<span class="skin-hero-icon moon-fox-icon" role="img" aria-label="月影灵狐">🦊<i>☾</i></span>';
     if (key === 'shark' && skin?.id === 'nebula') return '<span class="skin-hero-icon nebula-shark-icon" role="img" aria-label="星海巨鲨">🦈<i>✦</i><b>✦</b></span>';
-    if (key === 'lion' && skin?.id === 'solar') return '<span class="skin-hero-icon solar-lion-icon" role="img" aria-label="虹光狮王">🦁<i>✦</i></span>';
+    if (key === 'lion' && skin?.id === 'solar') return '<span class="skin-hero-icon solar-lion-icon" role="img" aria-label="星穹狮王">🦁<i>✦</i></span>';
     if (key === 'orca') return '<span class="orca-icon" role="img" aria-label="虎鲸"><i></i><b class="orca-eye-patch"></b><b class="orca-belly-patch"></b></span>';
     if (key === 'bear') return '<span class="black-bear-icon" role="img" aria-label="黑熊"><i></i><b></b><b></b></span>';
     if (key === 'pigeon') return '<span class="pigeon-icon" role="img" aria-label="信鸽"><i>✉</i></span>';
@@ -389,7 +389,7 @@ function heroIconMarkup(key, hero, skin = null) {
 
 // 皮肤不会改变面板数值，只改变进入对局后的配色；拥有英雄后即可在“英雄”页选择。
 const HERO_SKINS = {
-    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000},{id:'solar',name:'虹光狮王',color:'#d8663e',effectColor:'#ff4fb3',price:25000}],
+    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000},{id:'solar',name:'星穹狮王',color:'#29305f',effectColor:'#72d9ff',price:25000}],
     tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'}],
     northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee',effectColor:'#83d9ff',price:4000}],
     shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',effectColor:'#215fc9',price:4000},{id:'nebula',name:'星海巨鲨',color:'#261857',effectColor:'#a45dff',price:15000}],
@@ -1110,22 +1110,22 @@ function build3DMesh(entity, kind) {
         }
         // 专属技能核心：固定在技能本体上，不再把彩球挂在角色周围。
         if (skinId === 'solar') {
-            // 传说虹光狮王：技能核心是一轮彩虹太阳，外圈是前冲的七色光芒。
-            const core = new Three.Mesh(new Three.SphereGeometry(.22, 14, 10), new Three.MeshStandardMaterial({ color:0xfff1a0, emissive:0xff5fae, emissiveIntensity:2.1, roughness:.18 }));
+            // 传说星穹狮王：深空核心、星云光环与前冲的银河光波。
+            const core = new Three.Mesh(new Three.SphereGeometry(.24, 14, 10), new Three.MeshStandardMaterial({ color:0xe9f8ff, emissive:0x5ccfff, emissiveIntensity:2.35, roughness:.15 }));
             core.position.y=.42; group.add(core);
-            const solarLight = new Three.PointLight(0xff68bf, 2.3, 4.2); solarLight.position.y=.42; group.add(solarLight);
-            [0xff4f88, 0xffd84b, 0xffe64b, 0x5bcfff, 0xb16bff].forEach((color, index) => {
+            const solarLight = new Three.PointLight(0x6edcff, 2.5, 4.5); solarLight.position.y=.42; group.add(solarLight);
+            [0x4c7dff, 0x55dfff, 0xa47bff, 0xf177e5, 0xffffff].forEach((color, index) => {
                 const arc = new Three.Mesh(new Three.TorusGeometry(.28 + index * .065, .032, 5, 24, Math.PI * 1.36), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.96 }));
                 arc.position.y = .42; arc.rotation.set(Math.PI / 2, index * .68, index * .35); arc.userData.skinTrail = index / 5 * Math.PI * 2; arc.userData.ring = true; group.add(arc);
             });
-            [0xff4f88,0xff943f,0xffe64b,0x6edd8a,0x5bcfff,0x7a80ff,0xc56bff].forEach((color,index) => {
+            [0x4c7dff,0x55dfff,0xa47bff,0xf177e5,0xffffff,0x7b9dff,0x9b78ff].forEach((color,index) => {
                 const angle = index / 7 * Math.PI * 2;
                 const ray = new Three.Mesh(new Three.ConeGeometry(.055, .48, 5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.84 }));
                 ray.position.set(Math.cos(angle) * .42, .42, Math.sin(angle) * .42);
                 ray.quaternion.setFromUnitVectors(new Three.Vector3(0,1,0), new Three.Vector3(Math.cos(angle),0,Math.sin(angle)));
                 ray.userData.solarRay = true; group.add(ray);
             });
-            [0xff4f88,0xffd84b,0xffe64b,0x5bcfff,0xb16bff,0xff6bda,0xffffff,0xff943f].forEach((color, index) => {
+            [0x4c7dff,0x55dfff,0xa47bff,0xf177e5,0xffffff,0x7b9dff,0x9b78ff,0xd9f7ff].forEach((color, index) => {
                 const spark = new Three.Mesh(new Three.IcosahedronGeometry(.055 + (index % 3) * .016, 1), new Three.MeshBasicMaterial({ color }));
                 spark.userData.skinTrail = index / 8 * Math.PI * 2; spark.userData.radius = .62 + (index % 2) * .17; group.add(spark);
             });
@@ -1370,6 +1370,7 @@ function build3DMesh(entity, kind) {
     const ear = (x, tall = 0.28, wide = 0.14) => add(new Three.ConeGeometry(wide * size, tall * size, 4), material, x * size, (0.98 + tall / 2) * size, 0);
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
+    const isPhoenixEvolution = type === 'phoenix' || entity.evolution?.name === '不死火凤凰';
     if (entity.evolution?.name === '九尾狐') {
         // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；尾身连续、带纹线，末端自然弯曲。
         const furMat = new Three.MeshStandardMaterial({ color:0xfff7fc, emissive:0x563152, emissiveIntensity:.12, roughness:.92, flatShading:false });
@@ -1461,7 +1462,7 @@ function build3DMesh(entity, kind) {
         const tail=add(new Three.CylinderGeometry(.028*size,.045*size,.52*size,5),material,0,.48*size,.64*size); tail.rotation.x=Math.PI/2;
         add(new Three.SphereGeometry(.07*size,7,5),dark,0,.43*size,.92*size);
     }
-    if (['eagle','owl','snowOwl','crane','phoenix','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'].includes(type)) { wing(-.48); wing(.48); add(new Three.ConeGeometry(.11*size,.35*size,4), type==='phoenix' ? new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0x551100}) : new Three.MeshStandardMaterial({color:0xffcc4a}), 0,.62*size,-.44*size).rotation.x=-Math.PI/2; }
+    if (['eagle','owl','snowOwl','crane','phoenix','falcon','albatross','hummingbird','swan','condor','pelican','flamingo','raven','pigeon','goose','cockatoo','kitebird'].includes(type)) { wing(-.48); wing(.48); add(new Three.ConeGeometry(.11*size,.35*size,4), isPhoenixEvolution ? new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0x551100}) : new Three.MeshStandardMaterial({color:0xffcc4a}), 0,.62*size,-.44*size).rotation.x=-Math.PI/2; }
     if (type === 'flamingo') {
         // 火烈鸟是涉水地面鸟：长腿行走，不会漂浮在天空场景。
         legs.forEach(leg => group.remove(leg)); legs.length = 0;
@@ -1516,7 +1517,7 @@ function build3DMesh(entity, kind) {
     }
     if (type === 'owl') { add(new Three.SphereGeometry(.16,8,6),light,-.15*size,.72*size,-.34*size); add(new Three.SphereGeometry(.16,8,6),light,.15*size,.72*size,-.34*size); }
     if (type === 'crane') { const neck=add(new Three.CylinderGeometry(.08*size,.12*size,.7*size,7),light,0,1.05*size,.08*size); neck.rotation.z=.18; }
-    if (type === 'phoenix') { for(let i=-2;i<=2;i++){ const flame=add(new Three.ConeGeometry(.1*size,.55*size,5),new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0xaa2200,emissiveIntensity:.6}),i*.12*size,1.1*size,.2*size); flame.rotation.z=i*.18; } }
+    if (isPhoenixEvolution) { for(let i=-2;i<=2;i++){ const flame=add(new Three.ConeGeometry(.1*size,.55*size,5),new Three.MeshStandardMaterial({color:0xff5b2e,emissive:0xaa2200,emissiveIntensity:.6}),i*.12*size,1.1*size,.2*size); flame.rotation.z=i*.18; } }
     if (['goat','rhino','llama'].includes(type)) [-.16,.16].forEach(x => { const horn=add(new Three.ConeGeometry(.075*size,.38*size,5),light,x*size,1.12*size,-.03*size); horn.rotation.z=x*.55; });
     if (type === 'turtle') add(new Three.SphereGeometry(.42,10,7),new Three.MeshStandardMaterial({color:0x315f35,roughness:.8,flatShading:true}),0,.48*size,.23*size,1.15*size,.65*size,1.3*size);
     if (['bat','parrot'].includes(type)) { wing(-.48); wing(.48); }
@@ -1773,6 +1774,10 @@ class Character {
         this.activeCooldownReduction = 0;
         this.passiveAbility = ABILITIES[type].passive;
         this.activeAbility = ABILITIES[type].active;
+        // 星穹狮王专属主动技：发射可见的星空光波，保留普通狮子原有技能不变。
+        if (type === 'lion' && this.skin?.id === 'solar') {
+            this.activeAbility = { name:'星穹光波', desc:'发射穿透战场的星空光波，造成攻击力 260% 伤害', effect:'empower', bonus:18, hits:1, damagePercent:260, cooldown:9 };
+        }
         this.applyPassive();
     }
 
@@ -3324,7 +3329,7 @@ function showAnimalSelection() {
         }
 
         card.innerHTML = `
-            <div class="animal-emoji">${heroIconMarkup(key, animal)}</div>
+            <div class="animal-emoji">${heroIconMarkup(key, animal, getSelectedHeroSkin(key))}</div>
             ${gameState.mode === 'evolution' ? '' : `<div>${heroRarityMarkup(animal)}</div>`}
             <div class="animal-name">${animal.name}</div>
             <div class="animal-stats">
@@ -4160,7 +4165,8 @@ function updateUI() {
 
     // 玩家信息
     // 局内面板也使用当前皮肤图标，榴莲刺猬不会再显示成普通刺猬。
-    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type], player.skin);
+    const equippedSkin = player.skin || getSelectedHeroSkin(player.type);
+    document.getElementById('playerAvatar').innerHTML = player.evolved ? player.emoji : heroIconMarkup(player.type, ANIMALS[player.type], equippedSkin);
     document.getElementById('playerName').textContent = player.name;
     const visibleAttack = player.attack + (player.empoweredHits > 0 ? player.empoweredDamage : 0);
     document.getElementById('playerAttack').textContent = visibleAttack;
