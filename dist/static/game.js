@@ -1139,11 +1139,11 @@ function ensureSkinMotionTrail(mesh, entity) {
         return sparkle;
     });
     const galaxyClouds = skinId === 'solar' ? [
-        { color:0x17118e, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.50 },
-        { color:0x4d148c, x:0, z:1.18, scale:[1.30,1.30], turn:0, opacity:.48 },
-        { color:0x6c178e, x:0, z:1.18, scale:[1.06,1.06], turn:0, opacity:.40 }
+        { color:0x17118e, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.26 },
+        { color:0x4d148c, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.24 },
+        { color:0x6c178e, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.21 }
     ].map((spec, index) => {
-        const cloud = new Three.Mesh(new Three.PlaneGeometry(1, 1), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
+        const cloud = new Three.Mesh(new Three.PlaneGeometry(1, 1), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.AdditiveBlending }));
         cloud.rotation.set(-Math.PI / 2, spec.turn, 0);
         cloud.position.set(spec.x, .13 + index * .012, spec.z);
         cloud.scale.set(spec.scale[0], spec.scale[1], 1);
@@ -1789,7 +1789,7 @@ function render3D() {
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
-                const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
+                const pulse = (.65 + (Math.sin(phase * (trail.id === 'solar' ? 2 : 5) + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
                 part.userData.trailMaterial.opacity = trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
                 if (trail.id === 'solar') {
@@ -1799,7 +1799,7 @@ function render3D() {
             trail.galaxyClouds?.forEach((cloud, index) => {
                 cloud.rotation.set(-Math.PI / 2, cloud.userData.baseTurn, 0);
                 cloud.scale.set(cloud.userData.baseScale[0], cloud.userData.baseScale[1], 1);
-                cloud.material.opacity = .40 + index * .04;
+                cloud.material.opacity = .21 + index * .025;
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
@@ -1809,7 +1809,7 @@ function render3D() {
                     const scatter = ((index * 53) % 100) / 100 - .5;
                     sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .55 + progress * 1.15);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
-                const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
+                const twinkle = .45 + (Math.sin(phase * (trail.id === 'solar' ? 2.2 : 6) + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
                 sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : .35 + twinkle * .5;
             });
