@@ -1785,7 +1785,7 @@ function render3D() {
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.dust.length - 1);
                     const scatter = ((index * 37) % 100) / 100 - .5;
-                    part.position.set(scatter * (1.04 - progress * .28), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .30 + progress * 2.15 + (moving ? .10 : 0));
+                    part.position.set(scatter * (1.04 - progress * .28), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .50 + progress * 1.25 + (moving ? .08 : 0));
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
@@ -1807,7 +1807,7 @@ function render3D() {
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
                     const scatter = ((index * 53) % 100) / 100 - .5;
-                    sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .38 + progress * 2.0);
+                    sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .55 + progress * 1.15);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
                 const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
