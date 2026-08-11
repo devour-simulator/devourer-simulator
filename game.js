@@ -1082,6 +1082,26 @@ function applySceneEnvironment() {
 }
 
 function toWorld(entity) { return { x: (entity.x - GAME_WIDTH / 2) / 42, z: (entity.y - GAME_HEIGHT / 2) / 42 }; }
+
+function ensureSkinMotionTrail(mesh, entity) {
+    const skinId = entity.skin?.id;
+    if (!Three || !['moon', 'nebula', 'solar'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
+    const palettes = {
+        moon: [0xe8d8ff, 0xaa8cff, 0x7f68df],
+        nebula: [0x55ddff, 0x8a70ff, 0xff9ee8, 0x5b7dff],
+        solar: [0x64e8ff, 0x8e7cff, 0xff94e7, 0xffffff, 0x7bb5ff]
+    };
+    const parts = palettes[skinId].map((color, index) => {
+        const material = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.78 - index * .09, depthWrite:false });
+        const part = new Three.Mesh(new Three.ConeGeometry(.12 - index * .009, .58 - index * .045, 5), material);
+        part.rotation.x = Math.PI / 2;
+        part.userData.trailIndex = index;
+        mesh.add(part);
+        return part;
+    });
+    mesh.userData.skinMotionTrail = { id:skinId, parts };
+}
+
 function build3DMesh(entity, kind) {
     const group = new Three.Group();
     const color = entity.color || (entity.type === 'exp' ? '#ffd84d' : '#ff4f92');
@@ -1689,6 +1709,18 @@ function render3D() {
                 part.position.z = Math.sin(angle) * part.userData.radius;
                 part.position.y = part.userData.height + Math.sin(angle * 2 + index) * .08;
                 part.rotation.y += .06;
+            });
+        }
+        // 高品质皮肤的真正“移动拖尾”：角色移动时从身后持续拉出光带，停下即柔和消散。
+        ensureSkinMotionTrail(mesh, entity);
+        if (mesh.userData.skinMotionTrail) {
+            const trail = mesh.userData.skinMotionTrail;
+            trail.parts.forEach((part, index) => {
+                const flowing = (phase * 1.8 + index * .9) % 1;
+                part.visible = moving;
+                part.position.set(Math.sin(phase * 2.4 + index) * .05, .36 + Math.sin(phase * 3 + index) * .05, .54 + index * .27 + flowing * .16);
+                part.scale.setScalar(1.05 - index * .1 + Math.sin(phase * 4 + index) * .08);
+                part.material.opacity = moving ? Math.max(.22, .82 - index * .1) : 0;
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
@@ -2455,9 +2487,11 @@ function spawnSkillEffect(owner, active) {
 }
 
 function spawnKillEffect(x, y, killer = gameState.player) {
-    // 星爆是星穹狮王的传说皮肤专属击杀效果，其他英雄不会错误获得。
-    if (killer?.type !== 'lion' || killer.skin?.id !== 'solar') return;
-    gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color: '#8eeaff' });
+    const skinId = killer?.skin?.id;
+    const supported = (killer?.type === 'lion' && skinId === 'solar') || (killer?.type === 'shark' && skinId === 'nebula') || (killer?.type === 'fox' && skinId === 'moon');
+    if (!supported) return;
+    const color = skinId === 'moon' ? '#d7b8ff' : skinId === 'nebula' ? '#8a75ff' : '#8eeaff';
+    gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color, skinId });
 }
 
 function updateKillEffects(frameScale = 1) {
