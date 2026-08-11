@@ -835,6 +835,13 @@ let nextCharacterId = 1;
 let render3DReady = false;
 let Three, threeRenderer, threeScene, threeCamera, threeMeshes, threeLabels, threeNature, threeGround, threeGrid, threeOceanDecor, threePolarDecor, threeSkyDecor, threeForestDecor, threePondDecor, threeSavannaDecor;
 
+function clearDynamic3DMeshes() {
+    if (!threeMeshes) return;
+    threeMeshes.forEach(mesh => threeScene?.remove(mesh));
+    threeMeshes.clear();
+    if (threeLabels) threeLabels.innerHTML = '';
+}
+
 async function init3DRenderer() {
     try {
         const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js');
@@ -2447,7 +2454,9 @@ function spawnSkillEffect(owner, active) {
     gameState.skillEffects.push(new SkillEffect(owner, active));
 }
 
-function spawnKillEffect(x, y) {
+function spawnKillEffect(x, y, killer = gameState.player) {
+    // 星爆是星穹狮王的传说皮肤专属击杀效果，其他英雄不会错误获得。
+    if (killer?.type !== 'lion' || killer.skin?.id !== 'solar') return;
     gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color: '#8eeaff' });
 }
 
@@ -3578,6 +3587,8 @@ function startGame(animalType, savedRun = null) {
     document.getElementById('selectModal').classList.add('hidden');
     enterGameFullscreen();
     gameState.screen = 'playing';
+    if (gameState.mode !== 'skinTrial') gameState.skinTrial = null;
+    clearDynamic3DMeshes();
     document.getElementById('skinTrialExitButton').hidden = gameState.mode !== 'skinTrial';
     gameState.levelUpShown = false;  // 重置升级标志
     gameState.player = new Character(animalType);
