@@ -1099,7 +1099,19 @@ function ensureSkinMotionTrail(mesh, entity) {
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
         const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
-        const part = new Three.Mesh(new Three.IcosahedronGeometry(size, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? 1 : .92, blending:Three.AdditiveBlending, depthWrite:false }));
+        const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? 1 : .92, blending:Three.AdditiveBlending, depthWrite:false });
+        // 星穹狮王不再使用圆润星点，而是和击败特效一致的十字星芒、星环与闪光。
+        const part = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
+        if (skinId === 'solar') {
+            part.add(new Three.Mesh(new Three.BoxGeometry(size * .34, size * 2.35, size * .12), trailMaterial));
+            part.add(new Three.Mesh(new Three.BoxGeometry(size * 2.35, size * .34, size * .12), trailMaterial));
+            if (index % 4 === 0) {
+                const ring = new Three.Mesh(new Three.TorusGeometry(size * 1.18, size * .12, 5, 18), trailMaterial);
+                ring.rotation.x = Math.PI / 2;
+                part.add(ring);
+            }
+        }
+        part.userData.trailMaterial = trailMaterial;
         part.userData.dustIndex = index;
         mesh.add(part);
         return part;
@@ -1740,7 +1752,11 @@ function render3D() {
                 part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .48 + row * .34 * solarBoost + (moving ? .16 : 0));
                 const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
-                part.material.opacity = trail.id === 'solar' ? .76 + Math.min(.24, pulse * .25) : .48 + Math.min(.45, pulse * .35);
+                part.userData.trailMaterial.opacity = trail.id === 'solar' ? .76 + Math.min(.24, pulse * .25) : .48 + Math.min(.45, pulse * .35);
+                if (trail.id === 'solar') {
+                    part.rotation.z += .08 + (index % 3) * .025;
+                    part.rotation.y = Math.sin(phase * 2.8 + index) * .35;
+                }
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
