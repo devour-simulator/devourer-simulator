@@ -466,7 +466,7 @@ window.selectHeroSkin = selectHeroSkin;
 function startSkinTrial(type, skinId) {
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
     if (!skin) return;
-    gameState.skinTrial = { type, skinId };
+    gameState.skinTrial = { type, skinId, respawnPending: false };
     gameState.mode = 'skinTrial';
     document.getElementById('subPageModal').classList.add('hidden');
     startGame(type);
@@ -476,6 +476,41 @@ function startSkinTrial(type, skinId) {
     gameState.enemies = [foe]; gameState.particles = []; gameState.chests = [];
 }
 window.startSkinTrial = startSkinTrial;
+
+function queueSkinTrialOpponent() {
+    const trial = gameState.skinTrial;
+    if (!trial || trial.respawnPending) return;
+    trial.respawnPending = true;
+    window.setTimeout(() => {
+        if (gameState.screen !== 'playing' || gameState.mode !== 'skinTrial' || !gameState.skinTrial || gameState.enemies.length) return;
+        gameState.skinTrial.respawnPending = false;
+        const environmentTypes = habitatRoster(gameState.environment).filter(type => type !== gameState.player.type);
+        const type = environmentTypes[Math.floor(Math.random() * environmentTypes.length)] || 'rabbit';
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 220 + Math.random() * 100;
+        const x = Math.max(70, Math.min(GAME_WIDTH - 70, gameState.player.x + Math.cos(angle) * distance));
+        const y = Math.max(70, Math.min(GAME_HEIGHT - 70, gameState.player.y + Math.sin(angle) * distance));
+        const foe = new Enemy(type, x, y);
+        foe.name = `试玩训练${foe.name}`;
+        foe.maxHp = 50; foe.hp = 50; foe.attack = 4; foe.defense = 1;
+        gameState.enemies.push(foe);
+    }, 1400);
+}
+
+function exitSkinTrialToHall() {
+    gameState.skinTrial = null;
+    gameState.player = null;
+    gameState.enemies = [];
+    gameState.particles = [];
+    gameState.skillEffects = [];
+    gameState.killEffects = [];
+    gameState.chests = [];
+    gameState.screen = 'hall';
+    exitGameFullscreen();
+    document.getElementById('skinTrialExitButton').hidden = true;
+    showHall();
+}
+window.exitSkinTrialToHall = exitSkinTrialToHall;
 function refreshHeroPrices() {
     Object.values(ANIMALS).forEach(hero => {
         if (!hero.signOnly) hero.price = calculateHeroPrice(hero);
@@ -2421,7 +2456,7 @@ function defeatEnemyBySkill(enemy) {
     gameState.enemies.splice(index, 1);
     if (gameState.enemies.length !== 0) return;
     if (gameState.mode === 'tutorial') return completeTutorialBattle();
-    if (gameState.mode === 'skinTrial') return finishSkinTrial(true);
+    if (gameState.mode === 'skinTrial') return queueSkinTrialOpponent();
     if (gameState.mode === 'team') return finishRankedMatch(true);
     if (isRankProgressMode()) {
         if (gameState.world.level >= 50) return finishRankedMatch(true, 4);
@@ -3526,6 +3561,7 @@ function startGame(animalType, savedRun = null) {
     document.getElementById('selectModal').classList.add('hidden');
     enterGameFullscreen();
     gameState.screen = 'playing';
+    document.getElementById('skinTrialExitButton').hidden = gameState.mode !== 'skinTrial';
     gameState.levelUpShown = false;  // 重置升级标志
     gameState.player = new Character(animalType);
     gameState.enemies = [];
@@ -3688,7 +3724,7 @@ function checkCollisions() {
                         return;
                     }
                     if (gameState.mode === 'skinTrial') {
-                        finishSkinTrial(true);
+                        queueSkinTrialOpponent();
                         return;
                     }
                     if (gameState.mode === 'team') {
@@ -3804,6 +3840,7 @@ function finishSkinTrial(won) {
     exitGameFullscreen();
     gameState.screen = 'gameover';
     gameState.skinTrial = null;
+    document.getElementById('skinTrialExitButton').hidden = true;
     document.getElementById('gameOverTitle').textContent = won ? '🎨 皮肤试玩完成！' : '🎨 皮肤试玩结束';
     document.getElementById('characterInfo').innerHTML = '本局仅用于体验皮肤，不会获得或扣除任何奖励。';
     document.getElementById('finalScore').textContent = won ? '试玩胜利' : '试玩结束';
@@ -4079,6 +4116,7 @@ document.getElementById('saveChoiceBackButton').addEventListener('click', () => 
 });
 document.getElementById('fullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('hallFullscreenButton').addEventListener('click', toggleFullscreen);
+document.getElementById('skinTrialExitButton').addEventListener('click', exitSkinTrialToHall);
 document.getElementById('selectBackButton').addEventListener('click', cancelAnimalSelection);
 document.getElementById('heroSortLowButton').addEventListener('click', () => setHeroSelectionSort('low'));
 document.getElementById('heroSortHighButton').addEventListener('click', () => setHeroSelectionSort('high'));
