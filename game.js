@@ -2916,6 +2916,7 @@ function outsideChestState() {
     return {
         taps: localStorage.getItem('outsideChestDate') === today ? Math.min(4, parseInt(localStorage.getItem('outsideChestTaps')) || 0) : 0,
         tier: localStorage.getItem('outsideChestDate') === today ? Math.max(0, Math.min(4, parseInt(localStorage.getItem('outsideChestTier')) || 0)) : 0,
+        ready: localStorage.getItem('outsideChestReadyDate') === today,
         claimed: localStorage.getItem('outsideChestClaimDate') === today
     };
 }
@@ -2927,28 +2928,54 @@ function saveOutsideChestState(state) {
 function renderOutsideChest() {
     const state = outsideChestState(), tier = OUTSIDE_CHEST_TIERS[state.tier];
     const icon = document.getElementById('outsideChestIcon'), tierLabel = document.getElementById('outsideChestTier');
-    const text = document.getElementById('outsideChestText'), tap = document.getElementById('outsideChestTap');
-    if (!icon || !tierLabel || !text || !tap) return;
-    icon.textContent = state.claimed ? '✅' : tier.icon;
+    const text = document.getElementById('outsideChestText'), tap = document.getElementById('outsideChestTap'), claim = document.getElementById('outsideChestClaim');
+    if (!icon || !tierLabel || !text || !tap || !claim) return;
+    if (state.claimed) { icon.classList.add('chest-done'); icon.textContent = '✅'; }
+    else {
+        icon.classList.remove('chest-done');
+        icon.innerHTML = `<div class="chest-lid"></div><div class="chest-body"></div><div class="chest-lock"></div><span class="chest-spark a">✦</span><span class="chest-spark b">✦</span><span class="chest-spark c">✦</span>`;
+        icon.style.setProperty('--chest-color', tier.color);
+        icon.style.setProperty('--chest-light', tier.color);
+    }
     tierLabel.textContent = state.claimed ? '今日宝箱已领取' : tier.name;
     tierLabel.style.background = tier.color;
-    text.textContent = state.claimed ? '明天再来开启新的局外奖励宝箱吧！' : `已敲击 ${state.taps}/4 次。每次都有机会升级；第 4 次后自动领取当前品质奖励。`;
-    tap.disabled = state.claimed;
+    text.textContent = state.claimed ? '明天再来开启新的局外奖励宝箱吧！' : state.ready ? `最终品质：${tier.name}！请领取你的奖励。` : `已敲击 ${state.taps}/4 次。每次都有机会升级；第 4 次后展示最终品质。`;
+    tap.hidden = state.ready;
+    tap.disabled = state.claimed || state.ready;
     tap.textContent = state.claimed ? '今日已领取' : `✨ 敲击宝箱（${state.taps + 1}/4）`;
+    claim.hidden = !state.ready || state.claimed;
 }
 function openOutsideChest() {
     renderOutsideChest();
     document.getElementById('outsideChestModal').classList.remove('hidden');
 }
 window.openOutsideChest = openOutsideChest;
-function grantOutsideChestReward(tier) {
+function grantOutsideChestReward(tier, viaMail = false) {
     const rewards = tier.rewards;
+    if (viaMail) {
+        sendRewardMail('局外奖励宝箱结算', `你中途离开了宝箱挑战，系统按当前的「${tier.name}」为你结算了奖励，请手动领取。`, rewards);
+        return;
+    }
     gameState.stats.coins += rewards.coins || 0;
     if (rewards.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + rewards.rankStarCard;
     if (rewards.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + rewards.rankProtectCard;
     localStorage.setItem('coins', gameState.stats.coins);
     saveAccount();
     window.alert(`🎁 ${tier.name}开启成功！\n${rewardText(rewards)}`);
+}
+function claimOutsideChest() {
+    const state = outsideChestState();
+    if (!state.ready || state.claimed) return;
+    localStorage.setItem('outsideChestClaimDate', outsideChestDate());
+    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier]);
+    document.getElementById('outsideChestModal').classList.add('hidden');
+    showHall();
+}
+function settleOutsideChestOnExit() {
+    const state = outsideChestState();
+    if (state.claimed || state.taps <= 0) return;
+    localStorage.setItem('outsideChestClaimDate', outsideChestDate());
+    grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier], true);
 }
 function tapOutsideChest() {
     const state = outsideChestState();
@@ -2959,10 +2986,8 @@ function tapOutsideChest() {
     if (state.tier < OUTSIDE_CHEST_TIERS.length - 1 && Math.random() < current.chance) { state.tier++; upgraded = true; }
     saveOutsideChestState(state);
     if (state.taps >= 4) {
-        localStorage.setItem('outsideChestClaimDate', outsideChestDate());
-        const finalTier = OUTSIDE_CHEST_TIERS[state.tier];
+        localStorage.setItem('outsideChestReadyDate', outsideChestDate());
         renderOutsideChest();
-        window.setTimeout(() => grantOutsideChestReward(finalTier), 120);
     } else {
         renderOutsideChest();
         document.getElementById('outsideChestText').textContent = upgraded ? `✨ 升级成功！现在是${OUTSIDE_CHEST_TIERS[state.tier].name}，还可继续敲击。` : `品质暂时保持在${current.name}，还可继续敲击。`;
@@ -3700,7 +3725,8 @@ document.getElementById('desktopModeButton').addEventListener('click', () => set
 document.getElementById('mobileModeButton').addEventListener('click', () => setControlMode('mobile'));
 document.getElementById('outsideChestTap').addEventListener('click', tapOutsideChest);
 document.getElementById('outsideChestIcon').addEventListener('click', tapOutsideChest);
-document.getElementById('outsideChestClose').addEventListener('click', () => document.getElementById('outsideChestModal').classList.add('hidden'));
+document.getElementById('outsideChestClaim').addEventListener('click', claimOutsideChest);
+window.addEventListener('pagehide', settleOutsideChestOnExit);
 document.getElementById('subPageBack').addEventListener('click', () => {
     document.getElementById('subPageModal').classList.add('hidden');
     showHall();
