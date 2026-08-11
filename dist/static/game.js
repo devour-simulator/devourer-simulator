@@ -1139,9 +1139,9 @@ function ensureSkinMotionTrail(mesh, entity) {
         return sparkle;
     });
     const galaxyClouds = skinId === 'solar' ? [
-        { color:0x17118e, x:-.25, z:1.35, scale:[1.04,2.05], turn:-.16, opacity:.50 },
-        { color:0x4d148c, x:.25, z:1.38, scale:[1.04,2.05], turn:.16, opacity:.48 },
-        { color:0x6c178e, x:0, z:1.30, scale:[.78,1.80], turn:0, opacity:.40 }
+        { color:0x17118e, x:0, z:1.35, scale:[1.16,2.05], turn:0, opacity:.50 },
+        { color:0x4d148c, x:0, z:1.35, scale:[1.04,1.92], turn:0, opacity:.48 },
+        { color:0x6c178e, x:0, z:1.35, scale:[.82,1.68], turn:0, opacity:.40 }
     ].map((spec, index) => {
         const cloud = new Three.Mesh(new Three.CircleGeometry(.62, 24), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
         cloud.rotation.set(-Math.PI / 2, spec.turn, 0);
@@ -1784,8 +1784,8 @@ function render3D() {
                 const drift = phase * 1.25 + index * 1.7;
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.dust.length - 1);
-                    const crossing = progress * Math.PI * 4 + (index % 2) * Math.PI;
-                    part.position.set(Math.sin(crossing) * (.18 + progress * .48), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .30 + progress * 2.15 + (moving ? .10 : 0));
+                    const scatter = ((index * 37) % 100) / 100 - .5;
+                    part.position.set(scatter * (1.04 - progress * .28), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .30 + progress * 2.15 + (moving ? .10 : 0));
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
@@ -1806,8 +1806,8 @@ function render3D() {
                 const radius = .34 + (index % 3) * .1;
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
-                    const crossing = progress * Math.PI * 3 + (index % 2) * Math.PI;
-                    sparkle.position.set(Math.sin(crossing) * (.22 + progress * .46), .40 + Math.cos(index * 2.1) * .16, .38 + progress * 2.0);
+                    const scatter = ((index * 53) % 100) / 100 - .5;
+                    sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .38 + progress * 2.0);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
                 const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
