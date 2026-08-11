@@ -75,6 +75,8 @@
         #playerStats .active-skill-btn { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:50%; transform:translateY(-50%); width:auto; min-width:128px; margin:0; padding:11px 13px; font-size:12px; box-shadow:0 4px 16px rgba(0,0,0,.28); }
         .skill-info-hold { position:fixed; z-index:240; right:max(24px, env(safe-area-inset-right)); top:calc(59% + 58px); padding:7px 10px; border:1px solid #8b77d8; border-radius:999px; background:rgba(255,255,255,.94); color:#503c98; font-size:11px; font-weight:800; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); }
         #playerStats #upgradeNotice { display:none; }
+        .status-effects { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; max-width:244px; }
+        .status-effect { display:inline-flex; align-items:center; gap:3px; padding:3px 6px; border:1px solid rgba(63,126,210,.48); border-radius:999px; color:#173d73; background:rgba(225,243,255,.92); font-size:11px; font-weight:800; box-shadow:0 1px 3px rgba(17,70,130,.16); }
         #fullscreenButton { position:absolute; z-index:260; right:12px; bottom:12px; }
         #skinTrialExitButton { position:absolute; z-index:270; top:12px; right:12px; box-shadow:0 3px 12px rgba(0,0,0,.25); }
         #gameContainer:fullscreen, #gameContainer:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
@@ -560,6 +562,7 @@
             <div>💥 暴击率: <span id="playerCritChance"></span></div>
             <div>⚡ 连击率: <span id="playerComboChance"></span></div>
             <div>📊 等级: <span id="playerLevel"></span></div>
+            <div id="statusEffects" class="status-effects" hidden></div>
         </div>
         <div class="ability-info">
             <div id="passiveSkill">被动技能</div>
@@ -602,6 +605,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.5.50"></script>
+    <script src="game.js?v=3.5.51"></script>
 </body>
 </html>

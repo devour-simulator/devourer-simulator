@@ -483,18 +483,20 @@ function queueSkinTrialOpponent() {
     if (!trial || trial.respawnPending) return;
     trial.respawnPending = true;
     window.setTimeout(() => {
-        if (gameState.screen !== 'playing' || gameState.mode !== 'skinTrial' || !gameState.skinTrial || gameState.enemies.length) return;
-        gameState.skinTrial.respawnPending = false;
-        const environmentTypes = habitatRoster(gameState.environment).filter(type => type !== gameState.player.type);
-        const type = environmentTypes[Math.floor(Math.random() * environmentTypes.length)] || 'rabbit';
+        const activeTrial = gameState.skinTrial;
+        if (!activeTrial || gameState.screen !== 'playing' || gameState.mode !== 'skinTrial' || !gameState.player) return;
+        // 即便敌人尚未从列表清掉，也要解除等待状态；下一帧会再次检查，避免试玩永远不刷新。
+        if (gameState.enemies.length) { activeTrial.respawnPending = false; return; }
+        activeTrial.respawnPending = false;
         const angle = Math.random() * Math.PI * 2;
         const distance = 220 + Math.random() * 100;
         const x = Math.max(70, Math.min(GAME_WIDTH - 70, gameState.player.x + Math.cos(angle) * distance));
         const y = Math.max(70, Math.min(GAME_HEIGHT - 70, gameState.player.y + Math.sin(angle) * distance));
-        const foe = new Enemy(type, x, y);
-        foe.name = `试玩训练${foe.name}`;
+        // 试玩固定刷新训练兔，目标明确，也不会因为场景动物配置缺失而卡住。
+        const foe = new Enemy('rabbit', x, y);
+        foe.name = '试玩训练兔';
         foe.maxHp = 50; foe.hp = 50; foe.attack = 4; foe.defense = 1;
-        gameState.enemies.push(foe);
+        gameState.enemies = [foe];
     }, 1400);
 }
 
@@ -1093,9 +1095,11 @@ function ensureSkinMotionTrail(mesh, entity) {
         solar: [0x2bcfff, 0x7558ff, 0xf16bda, 0x37f2e0, 0x9d62ff]
     };
     // 不使用丝带，改成自然的星尘：细小星点漂浮在角色身后，像一小片移动星空。
-    const dust = Array.from({ length: 24 }, (_, index) => {
+    const dustCount = skinId === 'solar' ? 38 : 24;
+    const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
-        const part = new Three.Mesh(new Three.IcosahedronGeometry(.052 + (index % 4) * .018, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.92, blending:Three.AdditiveBlending, depthWrite:false }));
+        const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
+        const part = new Three.Mesh(new Three.IcosahedronGeometry(size, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? 1 : .92, blending:Three.AdditiveBlending, depthWrite:false }));
         part.userData.dustIndex = index;
         mesh.add(part);
         return part;
@@ -1727,14 +1731,16 @@ function render3D() {
         ensureSkinMotionTrail(mesh, entity);
         if (mesh.userData.skinMotionTrail) {
             const trail = mesh.userData.skinMotionTrail;
+            const solarBoost = trail.id === 'solar' ? 1.36 : 1;
+            const dustColumns = trail.id === 'solar' ? 7 : 6;
             trail.dust.forEach((part, index) => {
                 part.visible = true;
-                const row = Math.floor(index / 6), lane = index % 6 - 2.5;
+                const row = Math.floor(index / dustColumns), lane = index % dustColumns - (dustColumns - 1) / 2;
                 const drift = phase * 1.25 + index * 1.7;
-                part.position.set(lane * .14 + Math.sin(drift) * .09, .36 + Math.cos(drift * 1.4) * .18 + row * .06, .48 + row * .34 + (moving ? .16 : 0));
-                const pulse = .65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5;
+                part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .48 + row * .34 * solarBoost + (moving ? .16 : 0));
+                const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
-                part.material.opacity = .48 + Math.min(.45, pulse * .35);
+                part.material.opacity = trail.id === 'solar' ? .76 + Math.min(.24, pulse * .25) : .48 + Math.min(.45, pulse * .35);
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
@@ -4430,6 +4436,14 @@ function updateUI() {
     document.getElementById('playerCritChance').textContent = `${Math.round(Math.min(1, player.critChance) * 100)}%`;
     document.getElementById('playerComboChance').textContent = `${Math.round(Math.min(MAX_COMBO_CHANCE, Math.max(0, player.comboChance || 0)) * 100)}%`;
     document.getElementById('playerLevel').textContent = player.level;
+    const statusEffects = document.getElementById('statusEffects');
+    const secondsLeft = ticks => Math.max(0, Math.ceil(ticks / TARGET_FPS));
+    const statuses = [];
+    if ((player.magnetTicks || 0) > 0) statuses.push({ icon:'🧲', text:`吸铁石 ${secondsLeft(player.magnetTicks)}秒` });
+    if ((player.battleTonicTicks || 0) > 0) statuses.push({ icon:'⚔️', text:`锋芒药剂 ${secondsLeft(player.battleTonicTicks)}秒` });
+    if ((player.shieldHits || 0) > 0) statuses.push({ icon:'🛡️', text:`护盾 ${player.shieldHits}次` });
+    statusEffects.innerHTML = statuses.map(status => `<span class="status-effect"><span>${status.icon}</span>${status.text}</span>`).join('');
+    statusEffects.hidden = !statuses.length;
 
     // 专属能力
     document.getElementById('passiveSkill').textContent = `被动·${player.passiveAbility.name}：${player.passiveAbility.desc}`;
@@ -4514,6 +4528,8 @@ function gameLoop(timestamp = performance.now()) {
             setTutorialStep(1);
         }
         if (gameState.mode === 'tutorial') refreshTutorialCoachPosition();
+        // 试玩的任何击杀路径都由这里兜底检查，训练兔不会因某一条逻辑漏调而停止刷新。
+        if (gameState.mode === 'skinTrial' && gameState.enemies.length === 0) queueSkinTrialOpponent();
         updateTeamTargets();
         gameState.allies.forEach(ally => ally.update(frameScale));
         gameState.enemies.forEach(enemy => enemy.update(frameScale));
