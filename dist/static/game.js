@@ -1139,11 +1139,11 @@ function ensureSkinMotionTrail(mesh, entity) {
         return sparkle;
     });
     const galaxyClouds = skinId === 'solar' ? [
-        { color:0x17118e, x:0, z:1.35, scale:[1.16,2.05], turn:0, opacity:.50 },
-        { color:0x4d148c, x:0, z:1.35, scale:[1.04,1.92], turn:0, opacity:.48 },
-        { color:0x6c178e, x:0, z:1.35, scale:[.82,1.68], turn:0, opacity:.40 }
+        { color:0x17118e, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.50 },
+        { color:0x4d148c, x:0, z:1.18, scale:[1.30,1.30], turn:0, opacity:.48 },
+        { color:0x6c178e, x:0, z:1.18, scale:[1.06,1.06], turn:0, opacity:.40 }
     ].map((spec, index) => {
-        const cloud = new Three.Mesh(new Three.CircleGeometry(.62, 24), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
+        const cloud = new Three.Mesh(new Three.PlaneGeometry(1, 1), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
         cloud.rotation.set(-Math.PI / 2, spec.turn, 0);
         cloud.position.set(spec.x, .13 + index * .012, spec.z);
         cloud.scale.set(spec.scale[0], spec.scale[1], 1);
