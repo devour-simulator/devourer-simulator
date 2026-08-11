@@ -2583,12 +2583,22 @@ function init() {
 }
 
 const TUTORIAL_STEPS = [
-    '这是新手实战：按 WASD 或方向键，让小猫先走起来。',
-    '跟着箭头吃掉这个经验点：会获得经验并回复 1 点生命。',
-    '靠近宝箱打开它。奖励会先围在宝箱旁，再自动飞进你身上。',
-    '点击屏幕中间偏右的主动技能按钮，试试小猫的成长呼噜。',
-    '最后靠近小兔子并击败它。碰到敌人会自动攻击；脱战 5 秒会自动回血。你造成的伤害是黑色，暴击是红色；敌人造成的伤害是黄色。进入排位或爬塔后，右侧“找死·全员来战”会让所有敌人主动找你；再按一次即可取消。'
+    '先移动一下。熟悉方向后，你就能自由探索场景并躲开障碍物。',
+    '跟着箭头吃掉经验点：获得经验的同时会回复 1 点生命。',
+    '靠近宝箱打开它：经验与战斗道具会先围在宝箱旁，再自动飞进你身上。',
+    '点击右侧的主动技能按钮。按钮会显示冷却；点一下 i 可以查看技能详细说明。',
+    '最后击败训练小兔。接触敌人会自动攻击；你造成的伤害是黑色、暴击是红色，敌人造成的伤害是黄色。脱战 5 秒后会逐渐加速回血。排位、爬塔和进化试炼中，右侧“找死”可以让全部敌人主动来战。'
 ];
+
+function tutorialTargetPercent(target, height = 1.1) {
+    if (!target) return null;
+    if (render3DReady && threeCamera) {
+        const pos = toWorld(target);
+        const point = new Three.Vector3(pos.x, height, pos.z).project(threeCamera);
+        if (point.z >= -1 && point.z <= 1) return { x:(point.x * .5 + .5) * 100, y:(-point.y * .5 + .5) * 100 };
+    }
+    return { x:target.x / GAME_WIDTH * 100, y:target.y / GAME_HEIGHT * 100 };
+}
 
 function setTutorialStep(step) {
     const tutorial = gameState.tutorial;
@@ -2598,9 +2608,13 @@ function setTutorialStep(step) {
     const hint = document.getElementById('tutorialHint');
     const arrow = document.getElementById('tutorialArrow');
     let x = 50, y = 49, direction = '⬇';
-    if (step === 1) { x = 64; y = 50; }
-    if (step === 2) { x = 74; y = 50; }
-    if (step === 4) { x = 82; y = 50; }
+    const target = step === 0 ? gameState.player
+        : step === 1 ? gameState.particles.find(particle => particle.isAmbient)
+        : step === 2 ? gameState.chests.find(chest => chest.tutorialChest)
+        : step === 4 ? gameState.enemies[0]
+        : null;
+    const targetPosition = tutorialTargetPercent(target, step === 2 ? .6 : 1.1);
+    if (targetPosition) { x = targetPosition.x; y = targetPosition.y; }
     coach.style.transform = 'translate(-50%, -100%)';
     if (step === 3) {
         // 技能按钮会随着全屏、窗口宽度和面板布局移动，直接读取它的位置。
@@ -2613,10 +2627,24 @@ function setTutorialStep(step) {
     arrow.textContent = direction;
     hint.textContent = step === 0
         ? (controlMode === 'mobile'
-            ? '这是新手实战：拖动左下角的摇杆，让小猫先走起来。'
-            : '这是新手实战：按 WASD 或方向键，让小猫先走起来。')
-        : TUTORIAL_STEPS[step];
+            ? '新手试炼 1/5：拖动左下角的摇杆，让小猫先走起来。'
+            : '新手试炼 1/5：按 WASD 或方向键，让小猫先走起来。')
+        : `新手试炼 ${step + 1}/5：${TUTORIAL_STEPS[step]}`;
     coach.style.display = 'block';
+}
+
+function refreshTutorialCoachPosition() {
+    const tutorial = gameState.tutorial;
+    if (!tutorial || tutorial.step === 3) return;
+    const target = tutorial.step === 0 ? gameState.player
+        : tutorial.step === 1 ? gameState.particles.find(particle => particle.isAmbient)
+        : tutorial.step === 2 ? gameState.chests.find(chest => chest.tutorialChest)
+        : tutorial.step === 4 ? gameState.enemies[0]
+        : null;
+    const position = tutorialTargetPercent(target, tutorial.step === 2 ? .6 : 1.1);
+    if (!position) return;
+    const coach = document.getElementById('tutorialCoach');
+    coach.style.left = `${position.x}%`; coach.style.top = `${position.y}%`;
 }
 
 function placeTutorialPlayerSafely(player) {
@@ -2660,6 +2688,8 @@ function spawnTutorialBattle() {
     gameState.particles = [];
     gameState.skillEffects = [];
     gameState.chests = [];
+    // 刻意留出少量生命缺口，让新玩家能立刻看见经验点的 +1 回复。
+    player.hp = Math.max(1, player.maxHp - 4);
     const exp = new Particle(player.x + 145, player.y, 'exp', 8);
     exp.vx = 0; exp.vy = 0; exp.pickupDelay = 0; exp.life = 999999; exp.maxLife = 999999; exp.isAmbient = true;
     gameState.particles.push(exp);
@@ -2676,7 +2706,7 @@ function returnToHallWithIntro() {
     if (!gameState.tutorial || !gameState.tutorial.completed) return finishTutorial();
     exitTutorialBattle();
     gameState.hallIntroShowing = true;
-    document.getElementById('tutorialText').textContent = '欢迎来到大厅！上方可以查看账号等级和金币；中间可选择爬塔、排位爬塔或 5v5 团队模式；下方的英雄、背包、商城、英雄之路和邮件可用于管理账号、查看奖励路线与领取奖励。';
+    document.getElementById('tutorialText').textContent = '欢迎来到大厅！上方可以查看账号等级和金币；中间可选择爬塔、排位爬塔、5v5 团队模式与进化试炼。下方的英雄、背包、商城、英雄之路、皮肤图鉴、邮件与反馈可用于管理账号、查看奖励、收集皮肤和提交建议。每日宝箱与签到奖励也会在大厅显示。';
     document.getElementById('tutorialNext').textContent = '进入大厅';
     document.getElementById('tutorialSkip').style.display = 'none';
     document.getElementById('tutorialModal').classList.remove('hidden');
@@ -2707,7 +2737,7 @@ function completeTutorialBattle() {
     document.getElementById('tutorialCoach').style.display = 'none';
     document.getElementById('tutorialExitButton').style.display = 'none';
     gameState.tutorial.completed = true;
-    document.getElementById('tutorialText').textContent = '新手实战完成！你已经学会移动、拾取、开宝箱、使用技能和战斗。排位与爬塔右侧还有“找死”开关，可让全部敌人主动来战，再按一次即可取消。';
+    document.getElementById('tutorialText').textContent = '新手试炼完成！你已经学会移动、拾取、开宝箱、使用技能和战斗。以后升级时可从不同品质技能中选择强化；排位、爬塔和进化试炼右侧还有“找死”开关，可让全部敌人主动来战，再按一次即可取消。';
     document.getElementById('tutorialNext').textContent = '返回大厅并了解大厅';
     document.getElementById('tutorialSkip').style.display = '';
     document.getElementById('tutorialModal').classList.remove('hidden');
@@ -4258,6 +4288,7 @@ function gameLoop(timestamp = performance.now()) {
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 0 && Math.hypot(gameState.player.vx, gameState.player.vy) > .05) {
             setTutorialStep(1);
         }
+        if (gameState.mode === 'tutorial') refreshTutorialCoachPosition();
         updateTeamTargets();
         gameState.allies.forEach(ally => ally.update(frameScale));
         gameState.enemies.forEach(enemy => enemy.update(frameScale));
