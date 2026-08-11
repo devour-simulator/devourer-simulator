@@ -1302,7 +1302,7 @@ function build3DMesh(entity, kind) {
     const wing = (x, colorMat = material) => { const w = add(new Three.ConeGeometry(0.28 * size, 0.75 * size, 3), colorMat, x * size, 0.54 * size, 0.18 * size); w.rotation.z = x < 0 ? -1.25 : 1.25; };
     const type = entity.type;
     if (entity.evolution?.name === '九尾狐') {
-        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；用柔软毛团而不是硬直管状模型。
+        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；尾身连续、带纹线，末端自然弯曲。
         const furMat = new Three.MeshStandardMaterial({ color:0xfff4fa, emissive:0x742349, emissiveIntensity:.18, roughness:.5 });
         const tipMat = new Three.MeshStandardMaterial({ color:0xd62976, emissive:0x8a1649, emissiveIntensity:.7, roughness:.38 });
         for (let i = 0; i < 9; i++) {
@@ -1310,17 +1310,20 @@ function build3DMesh(entity, kind) {
             const outer = Math.abs(spread);
             const root = new Three.Vector3(0, .55 * size, .47 * size);
             const mid = new Three.Vector3(spread * .48 * size, (.78 + (1 - outer) * .45) * size, (1.02 + outer * .18) * size);
-            const end = new Three.Vector3(spread * 1.32 * size, (.62 + (1 - outer) * .98) * size, (1.56 + outer * .35) * size);
-            const curve = new Three.CatmullRomCurve3([root, mid, end]);
-            for (let puffIndex = 0; puffIndex < 5; puffIndex++) {
-                const progress = puffIndex / 5;
-                const puff = new Three.Mesh(new Three.SphereGeometry((.21 - progress * .075) * size, 9, 7), puffIndex === 4 ? tipMat : furMat);
-                puff.position.copy(curve.getPoint(progress * .9));
-                puff.scale.set(1.05, .86, 1.38);
-                group.add(puff);
-            }
-            const tip = new Three.Mesh(new Three.SphereGeometry(.115 * size, 8, 6), tipMat);
-            tip.position.copy(end); tip.scale.set(1.15, .8, 1.45); group.add(tip);
+            const end = new Three.Vector3(spread * 1.20 * size, (.62 + (1 - outer) * .98) * size, (1.52 + outer * .35) * size);
+            const curlSide = spread === 0 ? (i % 2 ? 1 : -1) : Math.sign(spread);
+            const curl = new Three.Vector3(end.x + curlSide * .30 * size, end.y + (.14 + outer * .12) * size, end.z + .10 * size);
+            const curve = new Three.CatmullRomCurve3([root, mid, end, curl]);
+            // 每条尾巴使用一整根连续的弯曲尾身，彻底取消会看成豆豆或断节的多段模型。
+            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 34, (.155 + (1 - outer) * .028) * size, 10, false), furMat);
+            group.add(tail);
+            // 顶部毛纹是一根贴着尾身的细曲线；最后一段变深粉并随尾尖向上弯钩。
+            const stripeCurve = new Three.CatmullRomCurve3(curve.getPoints(34).map(point => point.clone().add(new Three.Vector3(0, .158 * size, 0))));
+            const stripe = new Three.Mesh(new Three.TubeGeometry(stripeCurve, 28, .022 * size, 5, false), tipMat);
+            group.add(stripe);
+            const tipCurve = new Three.CatmullRomCurve3([curve.getPoint(.78), curve.getPoint(.92), curl]);
+            const tip = new Three.Mesh(new Three.TubeGeometry(tipCurve, 10, (.06 + (1 - outer) * .008) * size, 7, false), tipMat);
+            group.add(tip);
         }
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
