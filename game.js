@@ -1793,6 +1793,23 @@ function renderEnemyLabels() {
             threeLabels.appendChild(hp);
         }
     }
+    // 叠在画面最上层的击杀闪光与拖尾：不依赖3D材质，任何场景都清晰可见。
+    gameState.killEffects.forEach(effect => {
+        const pos = toWorld(effect);
+        const point = new Three.Vector3(pos.x, .62, pos.z).project(threeCamera);
+        if (point.z < -1 || point.z > 1) return;
+        const progress = 1 - Math.max(0, effect.life) / effect.maxLife;
+        const flash = document.createElement('div');
+        flash.className = 'kill-flash';
+        flash.style.left = `${(point.x * .5 + .5) * 100}%`;
+        flash.style.top = `${(-point.y * .5 + .5) * 100}%`;
+        const size = 1.08 + Math.sin(Math.min(1, progress * 2.8) * Math.PI) * .65;
+        flash.style.transform = `translate(-50%,-50%) scale(${size})`;
+        flash.style.opacity = `${Math.max(0, 1 - Math.max(0, progress - .58) / .42)}`;
+        const trailLength = 24 + progress * 64;
+        flash.innerHTML = `<b>✦</b>${Array.from({ length: 8 }, (_, index) => `<i style="height:${trailLength * (index % 2 ? .7 : 1)}px;transform:rotate(${index * 45 + progress * 28}deg) translateY(-${progress * 12}px)"></i>`).join('')}`;
+        threeLabels.appendChild(flash);
+    });
     gameState.enemies.forEach(enemy => {
         const pos = toWorld(enemy);
         const point = new Three.Vector3(pos.x, enemy.isBoss ? 2.8 : 1.35, pos.z).project(threeCamera);
