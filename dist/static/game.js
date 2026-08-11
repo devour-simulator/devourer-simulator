@@ -1092,14 +1092,14 @@ function ensureSkinMotionTrail(mesh, entity) {
     const palettes = {
         moon: [0x7651ff, 0xb46dff, 0xff76d5],
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
-        solar: [0x405dff, 0x7d5cff, 0xd466ff, 0xff8ed8, 0xf5fbff]
+        solar: [0x3155d9, 0x6934c8, 0xb83ebc, 0xee76c7, 0xf2d8ff]
     };
     // 星穹狮王采用流动星河：细光弧、十字星芒和闪点，而不是圆泡泡。
     const dustCount = skinId === 'solar' ? 18 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
         const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
-        const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? 1 : .92, blending:Three.AdditiveBlending, depthWrite:false });
+        const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? .94 : .92, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar' });
         // 星穹狮王不再使用圆润星点，而是和击败特效一致的十字星芒、星环与闪光。
         const part = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
         if (skinId === 'solar') {
@@ -1117,7 +1117,14 @@ function ensureSkinMotionTrail(mesh, entity) {
         return part;
     });
     const glitters = palettes[skinId].concat(palettes[skinId]).map((color, index) => {
-        const sparkle = new Three.Mesh(new Three.IcosahedronGeometry(.035 + (index % 3) * .012, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:Three.AdditiveBlending }));
+        const glitterMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar' });
+        const glitterSize = .035 + (index % 3) * .012;
+        const sparkle = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
+        if (skinId === 'solar') {
+            sparkle.add(new Three.Mesh(new Three.BoxGeometry(glitterSize * .35, glitterSize * 2.4, glitterSize * .08), glitterMaterial));
+            sparkle.add(new Three.Mesh(new Three.BoxGeometry(glitterSize * 2.4, glitterSize * .35, glitterSize * .08), glitterMaterial));
+        }
+        sparkle.userData.glitterMaterial = glitterMaterial;
         sparkle.userData.glitterAngle = index / 10 * Math.PI * 2;
         mesh.add(sparkle);
         return sparkle;
@@ -1754,7 +1761,7 @@ function render3D() {
                 part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * (trail.id === 'solar' ? .46 : .34) + (moving ? .16 : 0));
                 const pulse = (.65 + (Math.sin(phase * 5 + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
-                part.userData.trailMaterial.opacity = trail.id === 'solar' ? .76 + Math.min(.24, pulse * .25) : .48 + Math.min(.45, pulse * .35);
+                part.userData.trailMaterial.opacity = trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
                 if (trail.id === 'solar') {
                     part.rotation.z += .08 + (index % 3) * .025;
                     part.rotation.y = Math.sin(phase * 2.8 + index) * .35;
@@ -1766,7 +1773,7 @@ function render3D() {
                 sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
                 const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
-                sparkle.material.opacity = .35 + twinkle * .5;
+                sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : .35 + twinkle * .5;
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
