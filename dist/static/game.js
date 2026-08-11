@@ -2908,6 +2908,12 @@ function showHall() {
     document.getElementById('hundredSignButton').textContent = hundredSignEnded ? '活动已截止' : hundredDay >= 100 ? '百天签到已完成' : (hundredSignedToday ? '今日已签到' : `签到第 ${hundredDay + 1} 天`);
     const outsideChest = outsideChestState();
     document.getElementById('outsideChestProgress').textContent = outsideChest.claimed ? ((gameState.account.inventory.outsideChestTicket || 0) > 0 ? `今日奖励已领取；背包还有 ${gameState.account.inventory.outsideChestTicket} 张宝箱券可额外开启。` : '今日奖励已领取，明天可再挑战一次。') : `${outsideChest.ticketRun ? '宝箱券挑战' : '今日可挑战'} · 已敲击 ${outsideChest.taps}/4 次，品质：${OUTSIDE_CHEST_TIERS[outsideChest.tier].name}`;
+    const outsideChestButton = document.getElementById('outsideChestOpenButton');
+    if (outsideChestButton) {
+        const hasTicket = (gameState.account.inventory.outsideChestTicket || 0) > 0;
+        outsideChestButton.disabled = outsideChest.claimed && !hasTicket;
+        outsideChestButton.textContent = outsideChest.claimed ? (hasTicket ? `使用宝箱券（${gameState.account.inventory.outsideChestTicket}）` : '今日已领取') : '打开宝箱';
+    }
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
@@ -3108,6 +3114,11 @@ function renderOutsideChest() {
 }
 function openOutsideChest() {
     const state = outsideChestState();
+    // 免费的今日宝箱已领取后，直接停留在大厅显示状态；不会再弹出已完成页面。
+    if (state.claimed && (gameState.account.inventory.outsideChestTicket || 0) <= 0) {
+        showHall();
+        return;
+    }
     // 每日免费宝箱已领完时，背包里的宝箱券可以额外开启一轮完整挑战。
     if (state.claimed && (gameState.account.inventory.outsideChestTicket || 0) > 0) {
         gameState.account.inventory.outsideChestTicket--;
