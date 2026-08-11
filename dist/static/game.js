@@ -1092,7 +1092,8 @@ function ensureSkinMotionTrail(mesh, entity) {
     const palettes = {
         moon: [0x7651ff, 0xb46dff, 0xff76d5],
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
-        solar: [0x3155d9, 0x6934c8, 0xb83ebc, 0xee76c7, 0xf2d8ff]
+        // 星穹狮王：底下的银河云由 galaxyClouds 保持蓝紫色，星芒本身全部白色。
+        solar: [0xffffff]
     };
     // 星穹狮王采用流动星河：细光弧、十字星芒和闪点，而不是圆泡泡。
     const dustCount = skinId === 'solar' ? 44 : 24;
