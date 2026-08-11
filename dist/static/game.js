@@ -1092,9 +1092,22 @@ function ensureSkinMotionTrail(mesh, entity) {
         solar: [0x64e8ff, 0x8e7cff, 0xff94e7, 0xffffff, 0x7bb5ff]
     };
     const parts = palettes[skinId].map((color, index) => {
-        const material = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.78 - index * .09, depthWrite:false });
-        const part = new Three.Mesh(new Three.ConeGeometry(.12 - index * .009, .58 - index * .045, 5), material);
-        part.rotation.x = Math.PI / 2;
+        // 宽头细尾的平面飘带，向角色身后延展，视觉上更像魔法丝带而不是粒子。
+        const segments = 9, vertices = [], indices = [];
+        for (let step = 0; step <= segments; step++) {
+            const t = step / segments;
+            const width = .26 * (1 - t * .72) + .025;
+            const x = Math.sin(step * .82 + index * 1.7) * (.10 + t * .10);
+            const y = Math.sin(step * .92 + index * 1.35) * (.05 + t * .11);
+            const z = step * .28;
+            vertices.push(x - width, y, z, x + width, y, z);
+            if (step < segments) indices.push(step * 2, step * 2 + 1, step * 2 + 2, step * 2 + 1, step * 2 + 3, step * 2 + 2);
+        }
+        const geometry = new Three.BufferGeometry();
+        geometry.setAttribute('position', new Three.Float32BufferAttribute(vertices, 3));
+        geometry.setIndex(indices); geometry.computeVertexNormals();
+        const material = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.82 - index * .08, depthWrite:false, side:Three.DoubleSide, blending:Three.AdditiveBlending });
+        const part = new Three.Mesh(geometry, material);
         part.userData.trailIndex = index;
         mesh.add(part);
         return part;
@@ -1711,16 +1724,18 @@ function render3D() {
                 part.rotation.y += .06;
             });
         }
-        // 高品质皮肤的真正“移动拖尾”：角色移动时从身后持续拉出光带，停下即柔和消散。
+        // 高品质皮肤的真正“移动拖尾”：大型丝带始终跟在动物身后，移动和停下都保持飘动。
         ensureSkinMotionTrail(mesh, entity);
         if (mesh.userData.skinMotionTrail) {
             const trail = mesh.userData.skinMotionTrail;
             trail.parts.forEach((part, index) => {
-                const flowing = (phase * 1.8 + index * .9) % 1;
-                part.visible = moving;
-                part.position.set(Math.sin(phase * 2.4 + index) * .05, .36 + Math.sin(phase * 3 + index) * .05, .54 + index * .27 + flowing * .16);
-                part.scale.setScalar(1.05 - index * .1 + Math.sin(phase * 4 + index) * .08);
-                part.material.opacity = moving ? Math.max(.22, .82 - index * .1) : 0;
+                part.visible = true;
+                part.position.set(0, .38 + index * .025, .38 + index * .055);
+                part.rotation.z = Math.sin(phase * 1.7 + index * 1.4) * (.10 + index * .018);
+                part.rotation.y = Math.sin(phase * 1.15 + index) * .08;
+                const pulse = 1 + Math.sin(phase * 2.8 + index) * .08;
+                part.scale.set(pulse, pulse, 1.15 + (moving ? .12 : 0));
+                part.material.opacity = Math.max(.34, .82 - index * .08);
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
