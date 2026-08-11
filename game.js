@@ -1095,22 +1095,31 @@ function ensureSkinMotionTrail(mesh, entity) {
         // 星穹狮王：底下的银河云由 galaxyClouds 保持蓝紫色，星芒本身全部白色。
         solar: [0xffffff]
     };
-    // 星穹狮王采用流动星河：细光弧、十字星芒和闪点，而不是圆泡泡。
-    const dustCount = skinId === 'solar' ? 44 : 24;
+    // 星穹狮王采用紧凑星河与四角闪耀星，不使用圆泡泡或十字星。
+    const makeTwinkleStar = (size, material) => {
+        const shape = new Three.Shape();
+        shape.moveTo(0, size * 2.1);
+        shape.lineTo(size * .36, size * .36);
+        shape.lineTo(size * 1.35, 0);
+        shape.lineTo(size * .36, -size * .36);
+        shape.lineTo(0, -size * 2.1);
+        shape.lineTo(-size * .36, -size * .36);
+        shape.lineTo(-size * 1.35, 0);
+        shape.lineTo(-size * .36, size * .36);
+        shape.closePath();
+        const star = new Three.Mesh(new Three.ShapeGeometry(shape), material);
+        star.rotation.x = -Math.PI / 2;
+        return star;
+    };
+    const dustCount = skinId === 'solar' ? 34 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
         const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
-        const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? .94 : .92, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar' });
+        const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? .94 : .92, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         // 星穹狮王不再使用圆润星点，而是和击败特效一致的十字星芒、星环与闪光。
         const part = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
         if (skinId === 'solar') {
-            part.add(new Three.Mesh(new Three.BoxGeometry(size * .34, size * 2.35, size * .12), trailMaterial));
-            part.add(new Three.Mesh(new Three.BoxGeometry(size * 2.35, size * .34, size * .12), trailMaterial));
-            if (index % 5 === 0) {
-                const ring = new Three.Mesh(new Three.TorusGeometry(size * 1.18, size * .12, 5, 18), trailMaterial);
-                ring.rotation.x = Math.PI / 2;
-                part.add(ring);
-            }
+            part.add(makeTwinkleStar(size, trailMaterial));
         }
         part.userData.trailMaterial = trailMaterial;
         part.userData.dustIndex = index;
@@ -1118,12 +1127,11 @@ function ensureSkinMotionTrail(mesh, entity) {
         return part;
     });
     const glitters = palettes[skinId].concat(palettes[skinId]).map((color, index) => {
-        const glitterMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar' });
+        const glitterMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         const glitterSize = .035 + (index % 3) * .012;
         const sparkle = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
         if (skinId === 'solar') {
-            sparkle.add(new Three.Mesh(new Three.BoxGeometry(glitterSize * .35, glitterSize * 2.4, glitterSize * .08), glitterMaterial));
-            sparkle.add(new Three.Mesh(new Three.BoxGeometry(glitterSize * 2.4, glitterSize * .35, glitterSize * .08), glitterMaterial));
+            sparkle.add(makeTwinkleStar(glitterSize, glitterMaterial));
         }
         sparkle.userData.glitterMaterial = glitterMaterial;
         sparkle.userData.glitterAngle = index / 10 * Math.PI * 2;
@@ -1131,9 +1139,9 @@ function ensureSkinMotionTrail(mesh, entity) {
         return sparkle;
     });
     const galaxyClouds = skinId === 'solar' ? [
-        { color:0x17118e, x:-.32, z:2.15, scale:[1.18,3.55], turn:-.16, opacity:.50 },
-        { color:0x4d148c, x:.32, z:2.20, scale:[1.18,3.55], turn:.16, opacity:.48 },
-        { color:0x6c178e, x:0, z:2.06, scale:[.92,3.10], turn:0, opacity:.40 }
+        { color:0x17118e, x:-.25, z:1.35, scale:[1.04,2.05], turn:-.16, opacity:.50 },
+        { color:0x4d148c, x:.25, z:1.38, scale:[1.04,2.05], turn:.16, opacity:.48 },
+        { color:0x6c178e, x:0, z:1.30, scale:[.78,1.80], turn:0, opacity:.40 }
     ].map((spec, index) => {
         const cloud = new Three.Mesh(new Three.CircleGeometry(.62, 24), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.NormalBlending }));
         cloud.rotation.set(-Math.PI / 2, spec.turn, 0);
@@ -1777,7 +1785,7 @@ function render3D() {
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.dust.length - 1);
                     const crossing = progress * Math.PI * 4 + (index % 2) * Math.PI;
-                    part.position.set(Math.sin(crossing) * (.22 + progress * .72), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .34 + progress * 3.85 + (moving ? .13 : 0));
+                    part.position.set(Math.sin(crossing) * (.18 + progress * .48), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .30 + progress * 2.15 + (moving ? .10 : 0));
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
@@ -1799,7 +1807,7 @@ function render3D() {
                 if (trail.id === 'solar') {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
                     const crossing = progress * Math.PI * 3 + (index % 2) * Math.PI;
-                    sparkle.position.set(Math.sin(crossing) * (.3 + progress * .65), .40 + Math.cos(index * 2.1) * .16, .48 + progress * 3.5);
+                    sparkle.position.set(Math.sin(crossing) * (.22 + progress * .46), .40 + Math.cos(index * 2.1) * .16, .38 + progress * 2.0);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
                 const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
