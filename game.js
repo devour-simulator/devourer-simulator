@@ -1087,19 +1087,19 @@ function ensureSkinMotionTrail(mesh, entity) {
     const skinId = entity.skin?.id;
     if (!Three || !['moon', 'nebula', 'solar'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
     const palettes = {
-        moon: [0xe8d8ff, 0xaa8cff, 0x7f68df],
-        nebula: [0x55ddff, 0x8a70ff, 0xff9ee8, 0x5b7dff],
-        solar: [0x64e8ff, 0x8e7cff, 0xff94e7, 0xffffff, 0x7bb5ff]
+        moon: [0x7651ff, 0xb46dff, 0xff76d5],
+        nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
+        solar: [0x2bcfff, 0x7558ff, 0xf16bda, 0x37f2e0, 0x9d62ff]
     };
     const parts = palettes[skinId].map((color, index) => {
         // 宽头细尾的平面飘带，向角色身后延展，视觉上更像魔法丝带而不是粒子。
         const segments = 9, vertices = [], indices = [];
         for (let step = 0; step <= segments; step++) {
             const t = step / segments;
-            const width = .26 * (1 - t * .72) + .025;
+            const width = .20 * (1 - t * .72) + .022;
             const x = Math.sin(step * .82 + index * 1.7) * (.10 + t * .10);
             const y = Math.sin(step * .92 + index * 1.35) * (.05 + t * .11);
-            const z = step * .28;
+            const z = step * .17;
             vertices.push(x - width, y, z, x + width, y, z);
             if (step < segments) indices.push(step * 2, step * 2 + 1, step * 2 + 2, step * 2 + 1, step * 2 + 3, step * 2 + 2);
         }
@@ -1112,7 +1112,13 @@ function ensureSkinMotionTrail(mesh, entity) {
         mesh.add(part);
         return part;
     });
-    mesh.userData.skinMotionTrail = { id:skinId, parts };
+    const glitters = palettes[skinId].concat(palettes[skinId]).map((color, index) => {
+        const sparkle = new Three.Mesh(new Three.IcosahedronGeometry(.035 + (index % 3) * .012, 1), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:Three.AdditiveBlending }));
+        sparkle.userData.glitterAngle = index / 10 * Math.PI * 2;
+        mesh.add(sparkle);
+        return sparkle;
+    });
+    mesh.userData.skinMotionTrail = { id:skinId, parts, glitters };
 }
 
 function build3DMesh(entity, kind) {
@@ -1736,6 +1742,14 @@ function render3D() {
                 const pulse = 1 + Math.sin(phase * 2.8 + index) * .08;
                 part.scale.set(pulse, pulse, 1.15 + (moving ? .12 : 0));
                 part.material.opacity = Math.max(.34, .82 - index * .08);
+            });
+            trail.glitters.forEach((sparkle, index) => {
+                const angle = phase * 1.9 + sparkle.userData.glitterAngle;
+                const radius = .34 + (index % 3) * .1;
+                sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
+                const twinkle = .45 + (Math.sin(phase * 6 + index * 2.4) + 1) * .5;
+                sparkle.scale.setScalar(twinkle);
+                sparkle.material.opacity = .35 + twinkle * .5;
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
