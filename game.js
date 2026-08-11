@@ -1343,27 +1343,43 @@ function build3DMesh(entity, kind) {
     const type = entity.type;
     if (entity.evolution?.name === '九尾狐') {
         // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；尾身连续、带纹线，末端自然弯曲。
-        const furMat = new Three.MeshStandardMaterial({ color:0xfff4fa, emissive:0x742349, emissiveIntensity:.18, roughness:.5 });
-        const tipMat = new Three.MeshStandardMaterial({ color:0xd62976, emissive:0x8a1649, emissiveIntensity:.7, roughness:.38 });
+        const furMat = new Three.MeshStandardMaterial({ color:0xfff7fc, emissive:0x563152, emissiveIntensity:.12, roughness:.92, flatShading:false });
+        const softFurMat = new Three.MeshStandardMaterial({ color:0xf3e5f1, emissive:0x8f4b80, emissiveIntensity:.2, roughness:1, flatShading:false });
+        const tipMat = new Three.MeshStandardMaterial({ color:0xe45091, emissive:0x8a1649, emissiveIntensity:.48, roughness:.75, flatShading:false });
         for (let i = 0; i < 9; i++) {
             const spread = (i - 4) / 4;
             const outer = Math.abs(spread);
             const root = new Three.Vector3(0, .55 * size, .47 * size);
-            const mid = new Three.Vector3(spread * .48 * size, (.78 + (1 - outer) * .45) * size, (1.02 + outer * .18) * size);
-            const end = new Three.Vector3(spread * 1.20 * size, (.62 + (1 - outer) * .98) * size, (1.52 + outer * .35) * size);
+            const mid = new Three.Vector3(spread * .50 * size, (.86 + (1 - outer) * .48) * size, (1.00 + outer * .18) * size);
+            const end = new Three.Vector3(spread * 1.28 * size, (.72 + (1 - outer) * 1.04) * size, (1.58 + outer * .34) * size);
             const curlSide = spread === 0 ? (i % 2 ? 1 : -1) : Math.sign(spread);
-            const curl = new Three.Vector3(end.x + curlSide * .30 * size, end.y + (.14 + outer * .12) * size, end.z + .10 * size);
+            const curl = new Three.Vector3(end.x + curlSide * .36 * size, end.y + (.20 + outer * .14) * size, end.z + .12 * size);
             const curve = new Three.CatmullRomCurve3([root, mid, end, curl]);
             // 每条尾巴使用一整根连续的弯曲尾身，彻底取消会看成豆豆或断节的多段模型。
-            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 34, (.155 + (1 - outer) * .028) * size, 10, false), furMat);
+            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 40, (.19 + (1 - outer) * .035) * size, 12, false), furMat);
             group.add(tail);
             // 顶部毛纹是一根贴着尾身的细曲线；最后一段变深粉并随尾尖向上弯钩。
-            const stripeCurve = new Three.CatmullRomCurve3(curve.getPoints(34).map(point => point.clone().add(new Three.Vector3(0, .158 * size, 0))));
-            const stripe = new Three.Mesh(new Three.TubeGeometry(stripeCurve, 28, .022 * size, 5, false), tipMat);
-            group.add(stripe);
-            const tipCurve = new Three.CatmullRomCurve3([curve.getPoint(.78), curve.getPoint(.92), curl]);
-            const tip = new Three.Mesh(new Three.TubeGeometry(tipCurve, 10, (.06 + (1 - outer) * .008) * size, 7, false), tipMat);
-            group.add(tip);
+            // 三条略微偏开的细软毛流，让轮廓看起来蓬松，而不是一根光滑塑料管。
+            [-1, 0, 1].forEach((side, strandIndex) => {
+                const points = curve.getPoints(26).map((point, pointIndex) => {
+                    const t = pointIndex / 26;
+                    return point.clone().add(new Three.Vector3(side * (.08 + t * .055) * size, (.09 + Math.sin(t * Math.PI) * .04) * size, side * .035 * size));
+                });
+                const strand = new Three.Mesh(new Three.TubeGeometry(new Three.CatmullRomCurve3(points), 26, (.052 - strandIndex * .004) * size, 7, false), softFurMat);
+                group.add(strand);
+            });
+            // 尾尖使用短毛束收束成弯钩，不做硬直的粉色管线。
+            const tipCurve = new Three.CatmullRomCurve3([curve.getPoint(.7), curve.getPoint(.88), curl]);
+            group.add(new Three.Mesh(new Three.TubeGeometry(tipCurve, 14, .09 * size, 8, false), tipMat));
+            [.18,.34,.52,.69,.83].forEach(t => {
+                const point = curve.getPoint(t), tangent = curve.getTangent(t).normalize();
+                [-1, 1].forEach(side => {
+                    const tuft = new Three.Mesh(new Three.ConeGeometry((.07 + (1-t) * .04) * size, (.18 + (1-t) * .13) * size, 6), softFurMat);
+                    tuft.position.copy(point).add(new Three.Vector3(side * .12 * size, .08 * size, 0));
+                    tuft.quaternion.setFromUnitVectors(new Three.Vector3(0,1,0), tangent.clone().add(new Three.Vector3(side * .18,.16,0)).normalize());
+                    group.add(tuft);
+                });
+            });
         }
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
