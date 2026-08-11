@@ -1500,6 +1500,10 @@ function build3DMesh(entity, kind) {
         const softFurMat = new Three.MeshStandardMaterial({ color:0xf3e5f1, emissive:0x8f4b80, emissiveIntensity:.2, roughness:1, flatShading:false });
         const tipMat = new Three.MeshStandardMaterial({ color:0xe45091, emissive:0x8a1649, emissiveIntensity:.48, roughness:.75, flatShading:false });
         for (let i = 0; i < 9; i++) {
+            // 尾巴整体缩小，但把尾根略微前移，仍保持从身体自然生长出来的感觉。
+            const tailGroup = new Three.Group();
+            tailGroup.scale.setScalar(.8);
+            tailGroup.position.set(0, .12 * size, .10 * size);
             const spread = (i - 4) / 4;
             const outer = Math.abs(spread);
             const root = new Three.Vector3(0, .55 * size, .47 * size);
@@ -1510,7 +1514,7 @@ function build3DMesh(entity, kind) {
             const curve = new Three.CatmullRomCurve3([root, mid, end, curl]);
             // 每条尾巴使用一整根连续的弯曲尾身，彻底取消会看成豆豆或断节的多段模型。
             const tail = new Three.Mesh(new Three.TubeGeometry(curve, 40, (.19 + (1 - outer) * .035) * size, 12, false), furMat);
-            group.add(tail);
+            tailGroup.add(tail);
             // 顶部毛纹是一根贴着尾身的细曲线；最后一段变深粉并随尾尖向上弯钩。
             // 三条略微偏开的细软毛流，让轮廓看起来蓬松，而不是一根光滑塑料管。
             [-1, 0, 1].forEach((side, strandIndex) => {
@@ -1519,20 +1523,21 @@ function build3DMesh(entity, kind) {
                     return point.clone().add(new Three.Vector3(side * (.08 + t * .055) * size, (.09 + Math.sin(t * Math.PI) * .04) * size, side * .035 * size));
                 });
                 const strand = new Three.Mesh(new Three.TubeGeometry(new Three.CatmullRomCurve3(points), 26, (.052 - strandIndex * .004) * size, 7, false), softFurMat);
-                group.add(strand);
+                tailGroup.add(strand);
             });
             // 尾尖使用短毛束收束成弯钩，不做硬直的粉色管线。
             const tipCurve = new Three.CatmullRomCurve3([curve.getPoint(.7), curve.getPoint(.88), curl]);
-            group.add(new Three.Mesh(new Three.TubeGeometry(tipCurve, 14, .09 * size, 8, false), tipMat));
+            tailGroup.add(new Three.Mesh(new Three.TubeGeometry(tipCurve, 14, .09 * size, 8, false), tipMat));
             [.18,.34,.52,.69,.83].forEach(t => {
                 const point = curve.getPoint(t), tangent = curve.getTangent(t).normalize();
                 [-1, 1].forEach(side => {
                     const tuft = new Three.Mesh(new Three.ConeGeometry((.07 + (1-t) * .04) * size, (.18 + (1-t) * .13) * size, 6), softFurMat);
                     tuft.position.copy(point).add(new Three.Vector3(side * .12 * size, .08 * size, 0));
                     tuft.quaternion.setFromUnitVectors(new Three.Vector3(0,1,0), tangent.clone().add(new Three.Vector3(side * .18,.16,0)).normalize());
-                    group.add(tuft);
+                    tailGroup.add(tuft);
                 });
             });
+            group.add(tailGroup);
         }
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
