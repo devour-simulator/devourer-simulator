@@ -1109,15 +1109,30 @@ function build3DMesh(entity, kind) {
         if (skinId === 'solar') {
             [0xff4f88, 0xffd84b, 0xffe64b, 0x5bcfff, 0xb16bff].forEach((color, index) => {
                 const arc = new Three.Mesh(new Three.TorusGeometry(.22 + index * .055, .025, 5, 20, Math.PI * 1.25), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9 }));
-                arc.position.y = .42; arc.rotation.set(Math.PI / 2, index * .68, index * .35); group.add(arc);
+                arc.position.y = .42; arc.rotation.set(Math.PI / 2, index * .68, index * .35); arc.userData.skinTrail = index / 5 * Math.PI * 2; arc.userData.ring = true; group.add(arc);
             });
+            [0xff4f88,0xffd84b,0xffe64b,0x5bcfff,0xb16bff,0xff6bda,0xffffff,0xff943f].forEach((color, index) => {
+                const spark = new Three.Mesh(new Three.IcosahedronGeometry(.045 + (index % 3) * .012, 1), new Three.MeshBasicMaterial({ color }));
+                spark.userData.skinTrail = index / 8 * Math.PI * 2; spark.userData.radius = .48 + (index % 2) * .13; group.add(spark);
+            });
+            group.userData.skinSkill = 'solar';
         } else if (skinId === 'nebula') {
             const ring = new Three.Mesh(new Three.TorusGeometry(.42, .045, 7, 24), new Three.MeshBasicMaterial({ color:0x55d9ff, transparent:true, opacity:.82 }));
-            ring.position.y=.42; ring.rotation.x=Math.PI/2; group.add(ring);
+            ring.position.y=.42; ring.rotation.x=Math.PI/2; ring.userData.skinTrail = 0; ring.userData.ring = true; group.add(ring);
             add(new Three.IcosahedronGeometry(.15, 1), new Three.MeshStandardMaterial({ color:0x6f4cff, emissive:0x9d6cff, emissiveIntensity:1.8 }), 0, .42, 0);
+            [0x6f4cff,0x55d9ff,0xffa6ee,0xffffff,0x6f4cff].forEach((color,index) => {
+                const star = new Three.Mesh(new Three.IcosahedronGeometry(.052, 1), new Three.MeshBasicMaterial({color}));
+                star.userData.skinTrail = index / 5 * Math.PI * 2; star.userData.radius = .38 + index * .045; group.add(star);
+            });
+            group.userData.skinSkill = 'nebula';
         } else if (skinId === 'moon') {
             const crescent = new Three.Mesh(new Three.TorusGeometry(.35, .05, 6, 24, Math.PI * 1.55), new Three.MeshBasicMaterial({ color:0xd9ccff, transparent:true, opacity:.95 }));
-            crescent.position.y=.42; crescent.rotation.set(Math.PI / 2, .45, .3); group.add(crescent);
+            crescent.position.y=.42; crescent.rotation.set(Math.PI / 2, .45, .3); crescent.userData.skinTrail = 0; crescent.userData.ring = true; group.add(crescent);
+            [0xd9ccff,0xb29aff,0xffffff,0xd9ccff].forEach((color,index) => {
+                const star = new Three.Mesh(new Three.IcosahedronGeometry(.05, 1), new Three.MeshBasicMaterial({color}));
+                star.userData.skinTrail = index / 4 * Math.PI * 2; star.userData.radius = .34 + index * .03; group.add(star);
+            });
+            group.userData.skinSkill = 'moon';
         }
         threeScene.add(group); return group;
     }
@@ -1589,14 +1604,21 @@ function render3D() {
             mesh.scale.setScalar(pulse);
         }
         if (kind === 'skill' && mesh.userData.skinSkill) {
-            mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .17 : .1;
+            const speed = mesh.userData.skinSkill === 'solar' ? 3.4 : mesh.userData.skinSkill === 'nebula' ? 2.6 : 2.1;
+            mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .13 : .08;
+            mesh.scale.multiplyScalar(1 + Math.sin(phase * speed) * .012);
             mesh.children.forEach((part, index) => {
-                if (!part.userData.skinOrbit) return;
-                const angle = phase * 2.2 + part.userData.skinOrbit + index;
-                const radius = part.userData.skinRadius || .42;
+                if (part.userData.skinTrail === undefined) return;
+                const angle = phase * speed + part.userData.skinTrail + index * .4;
+                const radius = part.userData.radius || .46;
+                if (part.userData.ring) {
+                    part.rotation.z += .13 + index * .025;
+                    part.scale.setScalar(1 + Math.sin(phase * speed + index) * .12);
+                    return;
+                }
                 part.position.x = Math.cos(angle) * radius;
                 part.position.z = Math.sin(angle) * radius;
-                part.position.y = .35 + Math.sin(angle * 2) * .18;
+                part.position.y = .42 + Math.sin(angle * 2) * .22;
             });
         }
     };
