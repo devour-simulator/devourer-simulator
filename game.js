@@ -1129,6 +1129,18 @@ function build3DMesh(entity, kind) {
                 const spark = new Three.Mesh(new Three.IcosahedronGeometry(.055 + (index % 3) * .016, 1), new Three.MeshBasicMaterial({ color }));
                 spark.userData.skinTrail = index / 8 * Math.PI * 2; spark.userData.radius = .62 + (index % 2) * .17; group.add(spark);
             });
+            // 十字星不是普通圆点：会在光波外缘一闪一闪，像星空中飞过的彗星碎屑。
+            [0xffffff,0xa8eeff,0xe2bcff,0x86a7ff,0xffffff,0x9cf4ff].forEach((color, index) => {
+                const sparkle = new Three.Group();
+                const sparkleMat = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.96 });
+                const vertical = new Three.Mesh(new Three.BoxGeometry(.026, .22 + (index % 2) * .11, .026), sparkleMat);
+                const horizontal = new Three.Mesh(new Three.BoxGeometry(.22 + (index % 2) * .11, .026, .026), sparkleMat);
+                sparkle.add(vertical, horizontal);
+                sparkle.userData.skinTrail = index / 6 * Math.PI * 2 + .2;
+                sparkle.userData.radius = .82 + (index % 3) * .09;
+                sparkle.userData.sparkle = true;
+                group.add(sparkle);
+            });
             group.userData.skinSkill = 'solar';
         } else if (skinId === 'nebula') {
             const ring = new Three.Mesh(new Three.TorusGeometry(.42, .045, 7, 24), new Three.MeshBasicMaterial({ color:0x55d9ff, transparent:true, opacity:.82 }));
@@ -1634,6 +1646,11 @@ function render3D() {
                 part.position.x = Math.cos(angle) * radius;
                 part.position.z = Math.sin(angle) * radius;
                 part.position.y = .42 + Math.sin(angle * 2) * .22;
+                if (part.userData.sparkle) {
+                    const twinkle = .65 + (Math.sin(phase * 7 + index * 2.1) + 1) * .42;
+                    part.scale.setScalar(twinkle);
+                    part.rotation.z += .12;
+                }
             });
         }
     };
@@ -2254,7 +2271,7 @@ class SkillEffect {
             ctx.globalCompositeOperation = 'lighter';
             for (let i=0; i<7; i++) {
                 const angle = performance.now() / 220 + i / 7 * Math.PI * 2;
-                ctx.strokeStyle = `hsl(${(hue + i * 52) % 360} 98% 66%)`;
+                ctx.strokeStyle = ['#6f8cff','#62e5ff','#c491ff','#ff8ae9','#ffffff','#7aa8ff','#9ef3ff'][i];
                 ctx.lineWidth = 4;
                 ctx.beginPath();
                 ctx.moveTo(this.x + Math.cos(angle) * this.radius * .32, this.y + Math.sin(angle) * this.radius * .32);
@@ -2262,8 +2279,16 @@ class SkillEffect {
                 ctx.stroke();
             }
             const glow = ctx.createRadialGradient(this.x, this.y, 2, this.x, this.y, this.radius * .72);
-            glow.addColorStop(0, '#fff8b8'); glow.addColorStop(.45, `hsla(${hue} 100% 68% / .72)`); glow.addColorStop(1, 'rgba(255,86,198,0)');
+            glow.addColorStop(0, '#ffffff'); glow.addColorStop(.42, 'rgba(105,222,255,.78)'); glow.addColorStop(.72, 'rgba(172,116,255,.38)'); glow.addColorStop(1, 'rgba(90,86,255,0)');
             ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * .72, 0, Math.PI * 2); ctx.fill();
+            for (let i=0; i<6; i++) {
+                const angle = performance.now() / 170 + i / 6 * Math.PI * 2;
+                const distance = this.radius * (.84 + (i % 2) * .18);
+                const x = this.x + Math.cos(angle) * distance, y = this.y + Math.sin(angle) * distance;
+                const glowSize = 3 + (Math.sin(performance.now() / 90 + i) + 1) * 2;
+                ctx.strokeStyle = i % 2 ? '#a8eeff' : '#fff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(x-glowSize,y); ctx.lineTo(x+glowSize,y); ctx.moveTo(x,y-glowSize); ctx.lineTo(x,y+glowSize); ctx.stroke();
+            }
             ctx.globalCompositeOperation = 'source-over';
         }
         ctx.lineWidth = 4;
