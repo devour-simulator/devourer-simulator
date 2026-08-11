@@ -374,6 +374,9 @@ function heroesByRarity(entries = Object.entries(ANIMALS)) {
 }
 function heroIconMarkup(key, hero, skin = null) {
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
+    if (key === 'fox' && skin?.id === 'moon') return '<span class="skin-hero-icon moon-fox-icon" role="img" aria-label="月影灵狐">🦊<i>☾</i></span>';
+    if (key === 'shark' && skin?.id === 'nebula') return '<span class="skin-hero-icon nebula-shark-icon" role="img" aria-label="星海巨鲨">🦈<i>✦</i><b>✦</b></span>';
+    if (key === 'lion' && skin?.id === 'solar') return '<span class="skin-hero-icon solar-lion-icon" role="img" aria-label="虹光狮王">🦁<i>✦</i></span>';
     if (key === 'orca') return '<span class="orca-icon" role="img" aria-label="虎鲸"><i></i><b class="orca-eye-patch"></b><b class="orca-belly-patch"></b></span>';
     if (key === 'bear') return '<span class="black-bear-icon" role="img" aria-label="黑熊"><i></i><b></b><b></b></span>';
     if (key === 'pigeon') return '<span class="pigeon-icon" role="img" aria-label="信鸽"><i>✉</i></span>';
@@ -1107,13 +1110,24 @@ function build3DMesh(entity, kind) {
         }
         // 专属技能核心：固定在技能本体上，不再把彩球挂在角色周围。
         if (skinId === 'solar') {
+            // 传说虹光狮王：技能核心是一轮彩虹太阳，外圈是前冲的七色光芒。
+            const core = new Three.Mesh(new Three.SphereGeometry(.22, 14, 10), new Three.MeshStandardMaterial({ color:0xfff1a0, emissive:0xff5fae, emissiveIntensity:2.1, roughness:.18 }));
+            core.position.y=.42; group.add(core);
+            const solarLight = new Three.PointLight(0xff68bf, 2.3, 4.2); solarLight.position.y=.42; group.add(solarLight);
             [0xff4f88, 0xffd84b, 0xffe64b, 0x5bcfff, 0xb16bff].forEach((color, index) => {
-                const arc = new Three.Mesh(new Three.TorusGeometry(.22 + index * .055, .025, 5, 20, Math.PI * 1.25), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9 }));
+                const arc = new Three.Mesh(new Three.TorusGeometry(.28 + index * .065, .032, 5, 24, Math.PI * 1.36), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.96 }));
                 arc.position.y = .42; arc.rotation.set(Math.PI / 2, index * .68, index * .35); arc.userData.skinTrail = index / 5 * Math.PI * 2; arc.userData.ring = true; group.add(arc);
             });
+            [0xff4f88,0xff943f,0xffe64b,0x6edd8a,0x5bcfff,0x7a80ff,0xc56bff].forEach((color,index) => {
+                const angle = index / 7 * Math.PI * 2;
+                const ray = new Three.Mesh(new Three.ConeGeometry(.055, .48, 5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.84 }));
+                ray.position.set(Math.cos(angle) * .42, .42, Math.sin(angle) * .42);
+                ray.quaternion.setFromUnitVectors(new Three.Vector3(0,1,0), new Three.Vector3(Math.cos(angle),0,Math.sin(angle)));
+                ray.userData.solarRay = true; group.add(ray);
+            });
             [0xff4f88,0xffd84b,0xffe64b,0x5bcfff,0xb16bff,0xff6bda,0xffffff,0xff943f].forEach((color, index) => {
-                const spark = new Three.Mesh(new Three.IcosahedronGeometry(.045 + (index % 3) * .012, 1), new Three.MeshBasicMaterial({ color }));
-                spark.userData.skinTrail = index / 8 * Math.PI * 2; spark.userData.radius = .48 + (index % 2) * .13; group.add(spark);
+                const spark = new Three.Mesh(new Three.IcosahedronGeometry(.055 + (index % 3) * .016, 1), new Three.MeshBasicMaterial({ color }));
+                spark.userData.skinTrail = index / 8 * Math.PI * 2; spark.userData.radius = .62 + (index % 2) * .17; group.add(spark);
             });
             group.userData.skinSkill = 'solar';
         } else if (skinId === 'nebula') {
@@ -2230,6 +2244,23 @@ class SkillEffect {
             });
             ctx.strokeStyle = this.rainbowSkin ? `hsl(${hue} 95% 60%)` : this.color;
         }
+        if (this.skinEffect === 'solar') {
+            // 2D 备用画面同样保留彩虹太阳与七色光芒，避免低性能设备看不到传说特效。
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i=0; i<7; i++) {
+                const angle = performance.now() / 220 + i / 7 * Math.PI * 2;
+                ctx.strokeStyle = `hsl(${(hue + i * 52) % 360} 98% 66%)`;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(this.x + Math.cos(angle) * this.radius * .32, this.y + Math.sin(angle) * this.radius * .32);
+                ctx.lineTo(this.x + Math.cos(angle) * this.radius * 1.18, this.y + Math.sin(angle) * this.radius * 1.18);
+                ctx.stroke();
+            }
+            const glow = ctx.createRadialGradient(this.x, this.y, 2, this.x, this.y, this.radius * .72);
+            glow.addColorStop(0, '#fff8b8'); glow.addColorStop(.45, `hsla(${hue} 100% 68% / .72)`); glow.addColorStop(1, 'rgba(255,86,198,0)');
+            ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * .72, 0, Math.PI * 2); ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+        }
         ctx.lineWidth = 4;
         if (this.effect === 'reflect') {
             const durian = this.owner.skin?.id === 'durian';
@@ -2973,13 +3004,13 @@ function openAccountPanel(kind) {
             .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(b.skin)));
         const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
-            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
+            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero, skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
         }).join('') || '<div class="tip">皮肤正在制作中。</div>');
         const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
         const fragmentGroups = ['normal','epic','mythic','legendary'].map(rarity => {
             const exchangeSkins = skinShopEntries.filter(({ skin }) => skinRarity(skin) === rarity);
             const amount = gameState.account.inventory[`fragment_${rarity}`] || 0, cost = SKIN_FRAGMENT_COST[rarity];
-            return `<div class="skill-card"><div class="skill-name" style="color:${SKIN_RARITY_INFO[rarity].color}">${SKIN_RARITY_INFO[rarity].label}皮肤碎片 · ${amount}/${cost}</div><div class="animals-grid">${exchangeSkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey])}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} 专属皮肤<br>${ownsSkin(heroKey,skin) ? '✅ 已拥有' : `🧩 ${cost} 个${SKIN_RARITY_INFO[rarity].label}碎片`}</div><button class="btn btn-success" type="button" ${ownsSkin(heroKey,skin) ? 'disabled' : ''} onclick="redeemSkinFragments('${heroKey}','${skin.id}')">碎片兑换</button></div>`).join('') || '<div class="tip">该品质皮肤暂未开放兑换。</div>'}</div></div>`;
+            return `<div class="skill-card"><div class="skill-name" style="color:${SKIN_RARITY_INFO[rarity].color}">${SKIN_RARITY_INFO[rarity].label}皮肤碎片 · ${amount}/${cost}</div><div class="animals-grid">${exchangeSkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey], skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} 专属皮肤<br>${ownsSkin(heroKey,skin) ? '✅ 已拥有' : `🧩 ${cost} 个${SKIN_RARITY_INFO[rarity].label}碎片`}</div><button class="btn btn-success" type="button" ${ownsSkin(heroKey,skin) ? 'disabled' : ''} onclick="redeemSkinFragments('${heroKey}','${skin.id}')">碎片兑换</button></div>`).join('') || '<div class="tip">该品质皮肤暂未开放兑换。</div>'}</div></div>`;
         }).join('');
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('fragment')">🧩 碎片兑换</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopFragment" style="display:none">${fragmentGroups}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
@@ -3006,7 +3037,7 @@ function openHeroSkinGallery(key) {
     const cards = skins.map(skin => {
         const how = skin.id === 'default' ? '英雄自带' : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
         const owned = ownsSkin(key, skin);
-        const preview = key === 'hedgehog' ? (skin.id === 'durian' ? '<span class="durian-hedgehog-icon">🦔</span>' : '🦔') : heroIconMarkup(key, hero);
+        const preview = heroIconMarkup(key, hero, skin);
         return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
     }).join('');
     document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里只展示皮肤；购买与使用请前往商城 → 皮肤。</div><div class="animals-grid">${cards}</div>`;
