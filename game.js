@@ -581,6 +581,7 @@ let gameState = {
     allies: [],
     particles: [],
     skillEffects: [],
+    killEffects: [],
     chests: [],
     obstacles: [],
     damageNumbers: [],
@@ -609,6 +610,7 @@ const RANKED_RUN_SAVE_KEY = 'rankedTowerRun';
 const TOWER_RUN_SAVE_KEY = 'towerRun';
 const EVOLUTION_RUN_SAVE_KEY = 'evolutionTrialRun';
 let lastRankedSaveAt = 0;
+let nextKillEffectId = 1;
 let pendingSaveMode = null;
 
 function spawnDamageNumber(target, amount, critical = false, source = '', combo = false) {
@@ -1059,6 +1061,27 @@ function build3DMesh(entity, kind) {
         const lid = new Three.Mesh(new Three.BoxGeometry(.62, .16, .47), new Three.MeshStandardMaterial({ color: 0xc77b2b, emissive: 0x442000 }));
         const lock = new Three.Mesh(new Three.BoxGeometry(.12, .16, .04), new Three.MeshStandardMaterial({ color: 0xffd64a, emissive: 0x665000 }));
         box.position.y=.25; lid.position.y=.54; lock.position.set(0,.43,-.24); group.add(box,lid,lock); threeScene.add(group); return group;
+    }
+    if (kind === 'kill') {
+        // 击杀星爆：核心闪光、彩色星环和向外绽放的星尘。
+        const core = new Three.Mesh(new Three.IcosahedronGeometry(.18, 1), new Three.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1 }));
+        core.position.y = .48; group.add(core);
+        const glow = new Three.PointLight(0x91eaff, 2.7, 4.2); glow.position.y = .48; group.add(glow);
+        [0x55dfff, 0x9677ff, 0xf38ee8, 0xffffff].forEach((color, index) => {
+            const ring = new Three.Mesh(new Three.TorusGeometry(.22 + index * .1, .026, 5, 24, Math.PI * 1.5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.94 }));
+            ring.position.y = .48; ring.rotation.set(Math.PI / 2, index * .7, index * .45); ring.userData.killRing = index; group.add(ring);
+        });
+        [0xffffff,0x8eeaff,0xb28aff,0xffa6e9,0x73adff,0xffffff,0xa8f5ff,0xe3b5ff,0x8eeaff,0xffffff].forEach((color, index) => {
+            const spark = new Three.Group();
+            const sparkMat = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.98 });
+            spark.add(new Three.Mesh(new Three.BoxGeometry(.026, .18 + (index % 2) * .1, .026), sparkMat));
+            spark.add(new Three.Mesh(new Three.BoxGeometry(.18 + (index % 2) * .1, .026, .026), sparkMat));
+            spark.userData.killSpark = index / 10 * Math.PI * 2;
+            spark.userData.killDistance = .2 + (index % 3) * .07;
+            group.add(spark);
+        });
+        group.userData.killBurst = true;
+        threeScene.add(group); return group;
     }
     if (kind === 'skill') {
         const skillMat = new Three.MeshStandardMaterial({ color: entity.color, emissive: entity.color, emissiveIntensity: 1.25, roughness: .25 });
@@ -1620,6 +1643,25 @@ function render3D() {
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
+        if (kind === 'kill' && mesh.userData.killBurst) {
+            const progress = 1 - Math.max(0, entity.life) / entity.maxLife;
+            mesh.rotation.y += .16;
+            mesh.scale.setScalar(.55 + progress * 1.5);
+            mesh.children.forEach((part, index) => {
+                if (part.userData.killRing !== undefined) {
+                    part.rotation.z += .12 + part.userData.killRing * .025;
+                    part.scale.setScalar(1 + progress * .7);
+                }
+                if (part.userData.killSpark !== undefined) {
+                    const angle = part.userData.killSpark + progress * .75;
+                    const distance = part.userData.killDistance + progress * (.55 + (index % 3) * .12);
+                    part.position.set(Math.cos(angle) * distance, .48 + progress * .6 + Math.sin(angle * 2) * .08, Math.sin(angle) * distance);
+                    part.scale.setScalar(Math.max(.15, 1.25 - progress * .82));
+                    part.rotation.z += .15;
+                }
+            });
+            return;
+        }
         if (entity.attackFlash > 0) {
             const hit = Math.min(1, entity.attackFlash / 10);
             mesh.scale.setScalar(evolutionScale * (1 + (entity.bossRoar ? .34 : .06) * hit));
@@ -1660,6 +1702,7 @@ function render3D() {
         gameState.enemies.forEach(enemy => sync(enemy, 'enemy', `enemy-${enemy.id}`));
         gameState.particles.forEach(particle => sync(particle, 'particle', `particle-${particle.id}`));
         gameState.skillEffects.forEach((effect, index) => sync(effect, 'skill', `skill-${index}`));
+        gameState.killEffects.forEach(effect => sync(effect, 'kill', `kill-${effect.id}`));
         gameState.chests.forEach((chest, index) => sync(chest, 'chest', `chest-${index}`));
     }
     threeMeshes.forEach((mesh, id) => { if (!active.has(id)) { threeScene.remove(mesh); threeMeshes.delete(id); } });
@@ -2337,10 +2380,22 @@ function spawnSkillEffect(owner, active) {
     gameState.skillEffects.push(new SkillEffect(owner, active));
 }
 
+function spawnKillEffect(x, y) {
+    gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 34, maxLife: 34, color: '#8eeaff' });
+}
+
+function updateKillEffects(frameScale = 1) {
+    for (let i = gameState.killEffects.length - 1; i >= 0; i--) {
+        gameState.killEffects[i].life -= frameScale;
+        if (gameState.killEffects[i].life <= 0) gameState.killEffects.splice(i, 1);
+    }
+}
+
 function defeatEnemyBySkill(enemy) {
     const player = gameState.player;
     const index = gameState.enemies.indexOf(enemy);
     if (!player || index < 0) return;
+    spawnKillEffect(enemy.x, enemy.y);
     if (gameState.mode !== 'skinTrial') {
         gameState.stats.killCount++;
         gameState.stats.coins += enemy.isBoss ? 80 : 12;
@@ -2712,6 +2767,7 @@ function spawnTutorialBattle() {
     gameState.allies = [];
     gameState.particles = [];
     gameState.skillEffects = [];
+    gameState.killEffects = [];
     gameState.chests = [];
     // 刻意留出少量生命缺口，让新玩家能立刻看见经验点的 +1 回复。
     player.hp = Math.max(1, player.maxHp - 4);
@@ -2750,6 +2806,7 @@ function exitTutorialBattle() {
     gameState.allies = [];
     gameState.particles = [];
     gameState.skillEffects = [];
+    gameState.killEffects = [];
     gameState.chests = [];
     gameState.screen = 'hall';
     document.getElementById('tutorialCoach').style.display = 'none';
@@ -3459,6 +3516,7 @@ function startGame(animalType, savedRun = null) {
     gameState.enemies = [];
     gameState.particles = [];
     gameState.skillEffects = [];
+    gameState.killEffects = [];
     gameState.chests = [];
     gameState.damageNumbers = [];
     gameState.provokeActive = false;
@@ -3596,6 +3654,7 @@ function checkCollisions() {
 
             if (enemyDefeated) {
                 // 获胜
+                spawnKillEffect(enemy.x, enemy.y);
                 if (gameState.mode !== 'skinTrial') {
                     gameState.stats.killCount++;
                     gameState.stats.coins += enemy.isBoss ? 80 : 12;
@@ -4343,6 +4402,7 @@ function gameLoop(timestamp = performance.now()) {
             }
         }
         updateSkillEffects(frameScale);
+        updateKillEffects(frameScale);
         updateDamageNumbers(frameScale);
         
         checkCollisions();
