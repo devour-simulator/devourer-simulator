@@ -386,7 +386,7 @@ function heroIconMarkup(key, hero, skin = null) {
 
 // 皮肤不会改变面板数值，只改变进入对局后的配色；拥有英雄后即可在“英雄”页选择。
 const HERO_SKINS = {
-    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000},{id:'solar',name:'虹光狮王',color:'#f4f1ff',effectColor:'#ff4fb3',price:25000}],
+    lion:[{id:'default',name:'草原雄狮',color:'#d99132'},{id:'sunset',name:'落日雄狮',color:'#c56a2f',effectColor:'#ff642e',price:4000},{id:'solar',name:'虹光狮王',color:'#d8663e',effectColor:'#ff4fb3',price:25000}],
     tiger:[{id:'default',name:'橙纹猛虎',color:'#FF8C00'}],
     northeastTiger:[{id:'default',name:'东北虎',color:'#d98224'},{id:'snow',name:'雪林虎王',color:'#eef1ee',effectColor:'#83d9ff',price:4000}],
     shark:[{id:'default',name:'深海灰鲨',color:'#63869b'},{id:'abyss',name:'深渊蓝鲨',color:'#274e72',effectColor:'#215fc9',price:4000},{id:'nebula',name:'星海巨鲨',color:'#261857',effectColor:'#a45dff',price:15000}],
@@ -1060,31 +1060,6 @@ function build3DMesh(entity, kind) {
     if (kind === 'skill') {
         const skillMat = new Three.MeshStandardMaterial({ color: entity.color, emissive: entity.color, emissiveIntensity: 1.25, roughness: .25 });
         const skinId = entity.owner?.skin?.id;
-        // 高品质皮肤的所有实体技能都带专属粒子，不仅改一层颜色。
-        if (skinId === 'solar') {
-            const rainbow = [0xff416c,0xff923f,0xffe143,0x5de17b,0x3fd8ff,0x6077ff,0xd064ff];
-            rainbow.forEach((color, index) => {
-                const orb = new Three.Mesh(new Three.IcosahedronGeometry(.07 + (index % 2) * .018, 1), new Three.MeshBasicMaterial({ color }));
-                orb.userData.skinOrbit = index / rainbow.length * Math.PI * 2; orb.userData.skinRadius = .36 + (index % 2) * .13;
-                group.add(orb);
-            });
-            group.userData.skinSkill = 'solar';
-        } else if (skinId === 'nebula') {
-            [0x6d4cff,0x40ddff,0xffa3f5,0xffffff,0x8b5cff].forEach((color, index) => {
-                const star = new Three.Mesh(new Three.IcosahedronGeometry(.065, 1), new Three.MeshBasicMaterial({ color }));
-                star.userData.skinOrbit = index / 5 * Math.PI * 2; star.userData.skinRadius = .34 + index * .045;
-                group.add(star);
-            });
-            group.userData.skinSkill = 'nebula';
-        } else if (skinId === 'moon') {
-            const moonMat = new Three.MeshBasicMaterial({ color:0xd5c7ff, transparent:true, opacity:.92 });
-            const moon = new Three.Mesh(new Three.TorusGeometry(.34, .035, 6, 20), moonMat); moon.rotation.x = Math.PI / 2; group.add(moon);
-            for (let index=0; index<3; index++) {
-                const star = new Three.Mesh(new Three.IcosahedronGeometry(.06, 1), moonMat);
-                star.userData.skinOrbit = index / 3 * Math.PI * 2; star.userData.skinRadius = .38; group.add(star);
-            }
-            group.userData.skinSkill = 'moon';
-        }
         if (entity.effect === 'shield' || entity.effect === 'healShield') {
             // 护盾贴着英雄形成半透明护甲球，而不是仅在地面画一圈。
             const skinColor = entity.owner?.skin?.id !== 'default' ? skillEffectColor(entity.owner) : null;
@@ -1129,6 +1104,20 @@ function build3DMesh(entity, kind) {
             ring.rotation.x = -Math.PI / 2; ring.position.y = .09; group.add(ring);
         } else {
             add(new Three.IcosahedronGeometry(entity.radius / 55, 1), skillMat, 0, .42, 0);
+        }
+        // 专属技能核心：固定在技能本体上，不再把彩球挂在角色周围。
+        if (skinId === 'solar') {
+            [0xff4f88, 0xffd84b, 0xffe64b, 0x5bcfff, 0xb16bff].forEach((color, index) => {
+                const arc = new Three.Mesh(new Three.TorusGeometry(.22 + index * .055, .025, 5, 20, Math.PI * 1.25), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9 }));
+                arc.position.y = .42; arc.rotation.set(Math.PI / 2, index * .68, index * .35); group.add(arc);
+            });
+        } else if (skinId === 'nebula') {
+            const ring = new Three.Mesh(new Three.TorusGeometry(.42, .045, 7, 24), new Three.MeshBasicMaterial({ color:0x55d9ff, transparent:true, opacity:.82 }));
+            ring.position.y=.42; ring.rotation.x=Math.PI/2; group.add(ring);
+            add(new Three.IcosahedronGeometry(.15, 1), new Three.MeshStandardMaterial({ color:0x6f4cff, emissive:0x9d6cff, emissiveIntensity:1.8 }), 0, .42, 0);
+        } else if (skinId === 'moon') {
+            const crescent = new Three.Mesh(new Three.TorusGeometry(.35, .05, 6, 24, Math.PI * 1.55), new Three.MeshBasicMaterial({ color:0xd9ccff, transparent:true, opacity:.95 }));
+            crescent.position.y=.42; crescent.rotation.set(Math.PI / 2, .45, .3); group.add(crescent);
         }
         threeScene.add(group); return group;
     }
@@ -1275,22 +1264,12 @@ function build3DMesh(entity, kind) {
         fin(-.48, .47, -.02, 1, -.95); fin(.48, .47, -.02, 1, .95); // 胸鳍
         const tail = new Three.Mesh(new Three.ConeGeometry(.34, .7, 4), material);
         tail.position.set(0, .54, .96); tail.rotation.x = Math.PI / 2; group.add(tail); fins.push(tail);
-        // 神话「星海巨鲨」不是单纯换紫色：背鳍周围有星云环与会转动的星点。
+        // 神话「星海巨鲨」：深紫背部、蓝紫发光侧纹和星光鳍缘，贴着鲨鱼身体而不是漂浮彩球。
         if (entity.skin?.id === 'nebula') {
-            const nebulaColors = [0x6d4cff, 0x36d8ff, 0xf09cff, 0xffffff];
-            const nebulaParts = [];
-            const haloMat = new Three.MeshBasicMaterial({ color:0x8a5cff, transparent:true, opacity:.68 });
-            [-.22, .22].forEach((tilt, index) => {
-                const halo = new Three.Mesh(new Three.TorusGeometry(.72 + index * .12, .026, 6, 28), haloMat);
-                halo.position.y = .62; halo.rotation.set(Math.PI / 2 + tilt, tilt, 0); group.add(halo); nebulaParts.push(halo);
-            });
-            for (let i=0; i<9; i++) {
-                const starMat = new Three.MeshBasicMaterial({ color:nebulaColors[i % nebulaColors.length] });
-                const star = new Three.Mesh(new Three.IcosahedronGeometry(.055 + (i % 3) * .018, 1), starMat);
-                star.userData.orbit = i / 9 * Math.PI * 2; star.userData.radius = .72 + (i % 2) * .18; star.userData.height = .5 + (i % 3) * .15;
-                group.add(star); nebulaParts.push(star);
-            }
-            group.userData.skinOrbit = { kind:'nebula', parts:nebulaParts };
+            const stripeMat = new Three.MeshStandardMaterial({ color:0x56d6ff, emissive:0x326eff, emissiveIntensity:1.4, roughness:.2, flatShading:true });
+            [-.32, 0, .32].forEach(z => add(new Three.BoxGeometry(.52, .04, .07), stripeMat, 0, .65, z));
+            [-1, 1].forEach(side => add(new Three.SphereGeometry(.065, 7, 6), stripeMat, side * .17, .67, -.72));
+            const finGlow = add(new Three.ConeGeometry(.06,.45,5), stripeMat,0,1.02,.16); finGlow.rotation.x=-.18;
         }
         group.userData.flying = false;
         group.userData.swimming = true;
@@ -1469,35 +1448,26 @@ function build3DMesh(entity, kind) {
         [-.14, .14].forEach(x => add(new Three.SphereGeometry(.072 * size, 7, 6), abyssGlow, x * size, .7 * size, -.4 * size));
         const dorsalGlow = add(new Three.ConeGeometry(.09 * size, .5 * size, 5), abyssGlow, 0, .96 * size, .34 * size); dorsalGlow.rotation.x = -.18;
     }
-    // 史诗「月影灵狐」：月轮、月光尾焰与三枚环绕星屑，远看也能辨认。
+    // 史诗「月影灵狐」：雪白胸口、耳尖、尾尖和一枚固定月牙，外观贴合狐狸本体。
     if (type === 'fox' && entity.skin?.id === 'moon') {
-        const moonMat = new Three.MeshStandardMaterial({ color:0xc9b9ff, emissive:0x7b5cff, emissiveIntensity:1.45, roughness:.2 });
-        const moonRing = new Three.Mesh(new Three.TorusGeometry(.62 * size, .055 * size, 7, 28), moonMat);
-        moonRing.position.set(0, .92 * size, .15 * size); moonRing.rotation.x = Math.PI / 2; group.add(moonRing);
-        const orbitParts = [moonRing];
-        for (let i=0; i<3; i++) {
-            const wisp = new Three.Mesh(new Three.IcosahedronGeometry(.075 * size, 1), moonMat);
-            wisp.userData.orbit = i / 3 * Math.PI * 2; wisp.userData.radius = .62 * size; wisp.userData.height = .78 * size + i * .12;
-            group.add(wisp); orbitParts.push(wisp);
-        }
-        group.userData.skinOrbit = { kind:'moon', parts:orbitParts };
+        const moonMat = new Three.MeshStandardMaterial({ color:0xe8e4ff, emissive:0x7b5cff, emissiveIntensity:.55, roughness:.35, flatShading:true });
+        add(new Three.SphereGeometry(.21 * size, 9, 7), moonMat, 0, .45 * size, -.39 * size, 1.1, .84, .42);
+        [-1, 1].forEach(side => add(new Three.ConeGeometry(.07 * size, .22 * size, 5), moonMat, side * .25 * size, 1.2 * size, -.02 * size));
+        const tailTip = add(new Three.ConeGeometry(.14 * size, .35 * size, 6), moonMat, 0, .34 * size, .9 * size); tailTip.rotation.x=Math.PI/2;
+        const crescent = new Three.Mesh(new Three.TorusGeometry(.18 * size,.035 * size,6,18,Math.PI*1.5), moonMat);
+        crescent.position.set(.34 * size, 1.17 * size, .1 * size); crescent.rotation.y=.65; group.add(crescent);
     }
-    // 传说「虹光狮王」：彩虹鬃毛、七色光环和动态虹光粒子；不再是普通的金色换皮。
+    // 传说「虹光狮王」：彩虹从鬃毛由暖到冷渐变，做成鬃毛本身而不是在身体外挂光圈。
     if (type === 'lion' && entity.skin?.id === 'solar') {
-        const rainbow = [0xff4c70,0xff943f,0xffdd42,0x6edd73,0x4edaff,0x6b75ff,0xcf6bff];
-        const orbitParts = [];
+        const rainbow = [0xff4b6e,0xff9346,0xffd747,0xffe264,0xb65ee8,0x6f7dff];
         rainbow.forEach((color, index) => {
             const mat = new Three.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:1.15, roughness:.2 });
-            const angle = index / rainbow.length * Math.PI * 2;
-            const mane = add(new Three.SphereGeometry(.115 * size, 8, 6), mat, Math.cos(angle) * .42 * size, (.7 + Math.sin(angle) * .3) * size, -.06 * size);
-            orbitParts.push(mane);
+            const x = (index - (rainbow.length - 1) / 2) * .14 * size;
+            const mane = add(new Three.ConeGeometry(.1 * size, .44 * size, 5), mat, x, 1.03 * size, .15 * size);
+            mane.rotation.z = -x * .75;
         });
-        rainbow.forEach((color, index) => {
-            const mat = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.78 });
-            const ring = new Three.Mesh(new Three.TorusGeometry((.66 + index * .025) * size, .018 * size, 6, 26), mat);
-            ring.position.y = .62 * size; ring.rotation.set(Math.PI / 2 + (index - 3) * .035, 0, (index - 3) * .05); group.add(ring); orbitParts.push(ring);
-        });
-        group.userData.skinOrbit = { kind:'rainbow', parts:orbitParts };
+        const chestMat = new Three.MeshStandardMaterial({ color:0xffd57b, emissive:0xff7b56, emissiveIntensity:.3, roughness:.35 });
+        add(new Three.SphereGeometry(.27 * size,10,7), chestMat,0,.46 * size,-.38 * size,1.15,.9,.36);
     }
     if (type === 'owl') { add(new Three.SphereGeometry(.16,8,6),light,-.15*size,.72*size,-.34*size); add(new Three.SphereGeometry(.16,8,6),light,.15*size,.72*size,-.34*size); }
     if (type === 'crane') { const neck=add(new Three.CylinderGeometry(.08*size,.12*size,.7*size,7),light,0,1.05*size,.08*size); neck.rotation.z=.18; }
