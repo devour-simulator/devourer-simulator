@@ -3230,6 +3230,38 @@ function saveAccount() {
     const a = gameState.account;
     localStorage.setItem('playerName', a.name); localStorage.setItem('accountLevel', a.level); localStorage.setItem('accountExp', a.exp); localStorage.setItem('reputation', a.reputation); localStorage.setItem('inventory', JSON.stringify(a.inventory));
 }
+// 存档备份保存在玩家电脑中；它与 GitHub 账号、网站地址无关，可用于换设备恢复记录。
+function exportGameSave() {
+    saveAccount();
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) data[key] = localStorage.getItem(key);
+    }
+    const backup = { game:'吞噬模拟器', version:1, exportedAt:new Date().toISOString(), data };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `吞噬模拟器存档_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(link.href);
+    window.alert('存档已导出！请把下载的 JSON 文件保存在安全的位置。');
+}
+window.exportGameSave = exportGameSave;
+function importGameSave(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const backup = JSON.parse(reader.result);
+            if (backup?.game !== '吞噬模拟器' || !backup.data || typeof backup.data !== 'object') throw new Error('invalid save');
+            if (!window.confirm('导入会覆盖当前浏览器里的游戏记录，确定继续吗？')) return;
+            Object.entries(backup.data).forEach(([key, value]) => { if (typeof value === 'string') localStorage.setItem(key, value); });
+            window.alert('存档导入成功！游戏将重新打开并读取恢复后的记录。');
+            window.location.reload();
+        } catch (_) { window.alert('这个文件不是有效的《吞噬模拟器》存档。'); }
+    };
+    reader.readAsText(file);
+}
 function accountExp(amount) {
     const a=gameState.account; a.exp+=amount;
     while (a.exp >= a.level * 100) {
@@ -4650,5 +4682,9 @@ window.addEventListener('load', () => {
     });
     init();
     init3DRenderer();
+    document.getElementById('importSaveFile')?.addEventListener('change', event => {
+        importGameSave(event.target.files?.[0]);
+        event.target.value = '';
+    });
 });
 window.addEventListener('pagehide', saveRankedRun);
