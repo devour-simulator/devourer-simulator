@@ -623,6 +623,7 @@ let gameState = {
     chests: [],
     obstacles: [],
     damageNumbers: [],
+    teamObjective: null,
     provokeActive: false,
     levelUpShown: false,  // 防止升级界面重复生成
     pendingLevelUpSkills: [], // 升级选项会随排位/爬塔存档保留
@@ -2253,6 +2254,7 @@ class Character {
         if (this.bossSkillCooldown > 0) this.bossSkillCooldown = Math.max(0, this.bossSkillCooldown - frameScale);
         if (this.activeCooldown > 0) this.activeCooldown = Math.max(0, this.activeCooldown - frameScale);
         if (this.speedBoostTicks > 0) this.speedBoostTicks = Math.max(0, this.speedBoostTicks - frameScale);
+        if (this.teamPowerTicks > 0) this.teamPowerTicks = Math.max(0, this.teamPowerTicks - frameScale);
         if (this.slowTicks > 0) this.slowTicks = Math.max(0, this.slowTicks - frameScale);
     }
 
@@ -2699,6 +2701,7 @@ function rollBattleDamage(attacker) {
 function attackOnce(attacker, defender) {
     if (attacker.cooldown > 0) return false;
     let damage = rollBattleDamage(attacker);
+    if ((attacker.teamPowerTicks || 0) > 0) damage = Math.ceil(damage * 1.25);
     const canUseBossSkill = attacker.isBoss && attacker.bossSkillCooldown <= 0;
     if (canUseBossSkill) {
         damage = Math.ceil(damage * 2.25 + 8);
@@ -4056,6 +4059,32 @@ function spawnTeamBattle() {
         foe.name = `敌方·${foe.name}`; foe.team = 'red'; foe.color = '#ef5350';
         gameState.enemies.push(foe);
     }
+    gameState.teamObjective = { x:GAME_WIDTH / 2, y:GAME_HEIGHT / 2, radius:92, progress:0, owner:null, cooldown:7 * TARGET_FPS, active:false, announced:false };
+}
+
+function updateTeamObjective(frameScale = 1) {
+    const objective = gameState.teamObjective;
+    if (gameState.mode !== 'team' || !objective) return;
+    if (!objective.active) {
+        objective.cooldown = Math.max(0, objective.cooldown - frameScale);
+        if (objective.cooldown === 0) { objective.active = true; objective.announced = true; }
+        return;
+    }
+    const nearby = (unit) => unit.hp > 0 && Math.hypot(unit.x - objective.x, unit.y - objective.y) <= objective.radius;
+    const blue = (gameState.player.hp > 0 && nearby(gameState.player) ? 1 : 0) + gameState.allies.filter(nearby).length;
+    const red = gameState.enemies.filter(nearby).length;
+    const side = blue === red ? 0 : blue > red ? 1 : -1;
+    objective.progress = Math.max(-100, Math.min(100, objective.progress + side * frameScale * 1.15));
+    if (Math.abs(objective.progress) < 100) return;
+    const winner = objective.progress > 0 ? 'blue' : 'red';
+    const winners = winner === 'blue' ? [gameState.player, ...gameState.allies] : gameState.enemies;
+    winners.forEach(unit => {
+        unit.teamPowerTicks = 12 * TARGET_FPS;
+        unit.hp = Math.min(unit.maxHp, unit.hp + Math.ceil(unit.maxHp * .18));
+        unit.activeCooldown = 0;
+    });
+    gameState.rankItemNotice = winner === 'blue' ? '✨ 我方夺得星辉据点！全队攻击提高 25%，并回复生命。' : '⚠️ 敌方夺得星辉据点！敌军攻击提高 25%。';
+    objective.owner = winner; objective.active = false; objective.progress = 0; objective.cooldown = 18 * TARGET_FPS; objective.announced = false;
 }
 
 function checkTeamBattles() {
@@ -4098,8 +4127,10 @@ function checkRankedAIBattles() {
 function updateTeamTargets() {
     if (gameState.mode !== 'team') return;
     const closest = (unit, targets) => targets.reduce((best, target) => !best || Math.hypot(unit.x-target.x, unit.y-target.y) < Math.hypot(unit.x-best.x, unit.y-best.y) ? target : best, null);
-    gameState.allies.forEach(ally => { const target = closest(ally, gameState.enemies); if (target) { ally.targetX = target.x; ally.targetY = target.y; } });
-    gameState.enemies.forEach(enemy => { const targets = [...(gameState.player.hp > 0 ? [gameState.player] : []), ...gameState.allies]; const target = closest(enemy, targets); if (target) { enemy.targetX = target.x; enemy.targetY = target.y; } });
+    const objective = gameState.teamObjective;
+    const needsCapture = objective?.active && Math.abs(objective.progress) < 70;
+    gameState.allies.forEach(ally => { const target = closest(ally, gameState.enemies); if (needsCapture && Math.hypot(ally.x-objective.x, ally.y-objective.y) > 110) { ally.targetX=objective.x; ally.targetY=objective.y; } else if (target) { ally.targetX = target.x; ally.targetY = target.y; } });
+    gameState.enemies.forEach(enemy => { const targets = [...(gameState.player.hp > 0 ? [gameState.player] : []), ...gameState.allies]; const target = closest(enemy, targets); if (needsCapture && Math.hypot(enemy.x-objective.x, enemy.y-objective.y) > 110) { enemy.targetX=objective.x; enemy.targetY=objective.y; } else if (target) { enemy.targetX = target.x; enemy.targetY = target.y; } });
 }
 
 // Boss 不必等到与玩家重叠才会施放技能；进入威胁范围后会主动使用专属攻击。
@@ -4574,6 +4605,9 @@ function updateUI() {
     document.getElementById('enemyCount').textContent = gameState.enemies.length;
     document.getElementById('worldLevel').textContent = gameState.world.level;
     document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : gameState.mode === 'evolution' ? `进化试炼 ${gameState.world.level} 层` : `爬塔 ${gameState.world.level} 层`;
+    const objective = gameState.teamObjective;
+    const objectiveText = document.getElementById('teamObjectiveText');
+    if (objectiveText) objectiveText.textContent = gameState.mode !== 'team' ? '' : (!objective.active ? `星辉据点将在 ${Math.ceil(objective.cooldown / TARGET_FPS)} 秒后出现` : `星辉据点争夺中 ${Math.abs(Math.round(objective.progress))}%`);
 }
 
 // ============ 游戏循环 ============
@@ -4626,6 +4660,7 @@ function gameLoop(timestamp = performance.now()) {
         // 试玩的任何击杀路径都由这里兜底检查，训练兔不会因某一条逻辑漏调而停止刷新。
         if (gameState.mode === 'skinTrial' && gameState.enemies.length === 0) queueSkinTrialOpponent();
         updateTeamTargets();
+        updateTeamObjective(frameScale);
         gameState.allies.forEach(ally => ally.update(frameScale));
         gameState.enemies.forEach(enemy => enemy.update(frameScale));
         for (const enemy of [...gameState.enemies]) {
