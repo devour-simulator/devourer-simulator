@@ -3757,7 +3757,7 @@ function startGame(animalType, savedRun = null) {
     document.getElementById('skinTrialExitButton').hidden = gameState.mode !== 'skinTrial';
     gameState.levelUpShown = false;  // 重置升级标志
     gameState.player = new Character(animalType);
-    if (gameState.mode === 'team') { gameState.rankItemNotice = '📍 团队提示：7 秒后出现星辉据点。站进据点并压过敌方人数即可夺取；获胜方全队回复生命、技能冷却完成，并获得 12 秒攻击加成。'; gameState.teamIntroTicks = 6 * TARGET_FPS; }
+    if (gameState.mode === 'team') { gameState.rankItemNotice = '📍 团队提示：星辉据点已出现！站进据点并压过敌方人数即可夺取；获胜方全队回复生命、技能冷却完成，并获得 12 秒攻击加成。'; gameState.teamIntroTicks = 5 * TARGET_FPS; }
     gameState.enemies = [];
     gameState.particles = [];
     gameState.skillEffects = [];
@@ -4060,7 +4060,7 @@ function spawnTeamBattle() {
         foe.name = `敌方·${foe.name}`; foe.team = 'red'; foe.color = '#ef5350';
         gameState.enemies.push(foe);
     }
-    gameState.teamObjective = { x:GAME_WIDTH / 2, y:GAME_HEIGHT / 2, radius:92, progress:0, owner:null, cooldown:7 * TARGET_FPS, active:false, announced:false };
+    gameState.teamObjective = { x:GAME_WIDTH / 2, y:GAME_HEIGHT / 2, radius:92, progress:0, owner:null, cooldown:0, active:true, announced:true };
 }
 
 function updateTeamObjective(frameScale = 1) {
