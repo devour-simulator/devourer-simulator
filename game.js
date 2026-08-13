@@ -3757,6 +3757,7 @@ function startGame(animalType, savedRun = null) {
     document.getElementById('skinTrialExitButton').hidden = gameState.mode !== 'skinTrial';
     gameState.levelUpShown = false;  // 重置升级标志
     gameState.player = new Character(animalType);
+    if (gameState.mode === 'team') { gameState.rankItemNotice = '📍 团队提示：7 秒后出现星辉据点。站进据点并压过敌方人数即可夺取；获胜方全队回复生命、技能冷却完成，并获得 12 秒攻击加成。'; gameState.teamIntroTicks = 6 * TARGET_FPS; }
     gameState.enemies = [];
     gameState.particles = [];
     gameState.skillEffects = [];
@@ -4065,6 +4066,10 @@ function spawnTeamBattle() {
 function updateTeamObjective(frameScale = 1) {
     const objective = gameState.teamObjective;
     if (gameState.mode !== 'team' || !objective) return;
+    if (gameState.teamIntroTicks > 0) {
+        gameState.teamIntroTicks = Math.max(0, gameState.teamIntroTicks - frameScale);
+        if (gameState.teamIntroTicks === 0) gameState.rankItemNotice = '';
+    }
     if (!objective.active) {
         objective.cooldown = Math.max(0, objective.cooldown - frameScale);
         if (objective.cooldown === 0) { objective.active = true; objective.announced = true; }
@@ -4607,7 +4612,7 @@ function updateUI() {
     document.getElementById('modeLabel').textContent = gameState.mode === 'skinTrial' ? '皮肤试玩' : gameState.mode === 'ranked' ? '排位' : gameState.mode === 'evolution' ? `进化试炼 ${gameState.world.level} 层` : `爬塔 ${gameState.world.level} 层`;
     const objective = gameState.teamObjective;
     const objectiveText = document.getElementById('teamObjectiveText');
-    if (objectiveText) objectiveText.textContent = gameState.mode !== 'team' ? '' : (!objective.active ? `星辉据点将在 ${Math.ceil(objective.cooldown / TARGET_FPS)} 秒后出现` : `星辉据点争夺中 ${Math.abs(Math.round(objective.progress))}%`);
+    if (objectiveText) objectiveText.textContent = gameState.mode !== 'team' ? '' : (gameState.rankItemNotice || (!objective.active ? `星辉据点将在 ${Math.ceil(objective.cooldown / TARGET_FPS)} 秒后出现` : `星辉据点争夺中 ${Math.abs(Math.round(objective.progress))}%`));
 }
 
 // ============ 游戏循环 ============
