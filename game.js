@@ -3414,7 +3414,7 @@ function openAccountPanel(kind) {
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchShopTab('game')">🎮 游戏</button><button class="btn" type="button" onclick="switchShopTab('skin')">🎨 皮肤</button><button class="btn" type="button" onclick="switchShopTab('fragment')">🧩 碎片兑换</button><button class="btn" type="button" onclick="switchShopTab('item')">🎒 道具</button></div><div id="shopGame">${gameShop}</div><div id="shopSkin" style="display:none">${skinShop}</div><div id="shopFragment" style="display:none">${fragmentGroups}</div><div id="shopItem" style="display:none">${itemShop}</div>`;
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
-        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.13 · 游戏存档备份</div><div>更新时间：2026 年 8 月 12 日</div></div><div class="skill-card"><div class="skill-name">💾 导出与导入存档</div><div class="skill-desc">• 大厅新增“游戏存档备份”。<br>• 点击“导出存档”可把当前账号记录保存为文件；换设备或担心浏览器数据丢失时，可使用“导入存档”恢复。<br>• 导入会覆盖当前浏览器记录，请确认选择正确的《吞噬模拟器》存档文件。</div></div><div class="skill-card"><div class="skill-name">🎨 新皮肤</div><div class="skill-desc">• 新增史诗皮肤：小狐狸「月影灵狐」。<br>• 新增神话皮肤：鲨鱼「星海巨鲨」。<br>• 新增传说皮肤：狮子「烈阳狮王」。<br>• 三款皮肤均可直接用金币购买，也可通过对应品质碎片兑换。</div></div><div class="skill-card"><div class="skill-name">🧩 碎片兑换</div><div class="skill-desc">• 背包新增普通、史诗、神话、传说皮肤碎片。<br>• 商城新增“碎片兑换”页，位于皮肤与道具之间，按品质分区展示可兑换皮肤。<br>• 史诗皮肤需 20 碎片 / 10000 金币；神话需 35 碎片 / 15000 金币；传说需 50 碎片 / 25000 金币。</div></div><div class="skill-card"><div class="skill-name">🎁 局外宝箱掉落</div><div class="skill-desc">• 普通、稀有宝箱可获得普通碎片，或少量史诗碎片。<br>• 史诗宝箱可获得史诗碎片，或少量神话碎片；神话宝箱可获得神话碎片，或少量传说碎片。<br>• 传说宝箱可获得传说碎片；若降档则会获得更多对应品质碎片。</div></div><div class="skill-card"><div class="skill-name">📅 百天签到</div><div class="skill-desc">• 百天签到第 50、75、100 天改为赠送局外宝箱券。<br>• 宝箱券会放进背包，在当天免费宝箱领取后可额外开启一轮完整宝箱挑战。</div></div>`;
+        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.14 · 5v5 三据点争夺</div><div>更新时间：2026 年 8 月 13 日</div></div><div class="skill-card"><div class="skill-name">🏳️ A / B / C 三据点</div><div class="skill-desc">• 团队战新增 A 蓝方前哨、B 中央据点、C 红方前哨。<br>• 单队站住据点时，每秒获得 5% 侵略值；双方同时进入同一据点时，进度暂停。<br>• 已占领据点可以反抢：先每秒清除对方 5% 侵略值，清零后再增长己方侵略值。率先占领全部三座据点的一方获胜。</div></div><div class="skill-card"><div class="skill-name">⚔️ 团队战规则优化</div><div class="skill-desc">• 击败英雄不再获得经验或生命回复，胜负只由据点决定。<br>• 阵亡后 3 秒在己方出生点复活，并获得 1.5 秒无敌。<br>• 队友与敌人头顶会显示所用英雄；双方 AI 会从接近玩家战力的英雄中匹配，阵容更加公平。<br>• 据点加入明显的 A/B/C 标记、蓝红颜色和实时侵略值显示。</div></div><div class="skill-card"><div class="skill-name">💾 导出与导入存档</div><div class="skill-desc">• 大厅新增“游戏存档备份”。<br>• 点击“导出存档”可把当前账号记录保存为文件；换设备或担心浏览器数据丢失时，可使用“导入存档”恢复。<br>• 导入会覆盖当前浏览器记录，请确认选择正确的《吞噬模拟器》存档文件。</div></div><div class="skill-card"><div class="skill-name">🎨 新皮肤</div><div class="skill-desc">• 新增史诗皮肤：小狐狸「月影灵狐」。<br>• 新增神话皮肤：鲨鱼「星海巨鲨」。<br>• 新增传说皮肤：狮子「烈阳狮王」。<br>• 三款皮肤均可直接用金币购买，也可通过对应品质碎片兑换。</div></div>`;
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -3939,11 +3939,13 @@ function checkCollisions() {
     // 检测玩家与敌人的碰撞（战斗）
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
         const enemy = gameState.enemies[i];
+        if (enemy.hp <= 0) continue;
         const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
 
         if (distance < player.radius + enemy.radius) {
             const enemyDefeated = attackOnce(player, enemy);
             if (!enemyDefeated && enemy.cooldown <= 0) attackOnce(enemy, player);
+            if (gameState.mode === 'team' && player.hp <= 0) return;
 
             if (enemyDefeated) {
                 // 获胜
@@ -4720,7 +4722,8 @@ function updateUI() {
                 const inRange = unit => unit.hp > 0 && Math.hypot(unit.x - objective.x, unit.y - objective.y) <= objective.radius;
                 return ((inRange(gameState.player) ? 1 : 0) + gameState.allies.filter(inRange).length) > 0 && gameState.enemies.filter(inRange).length > 0;
             });
-            objectiveText.textContent = gameState.rankItemNotice || `据点：我方 ${blue}/3 · 敌方 ${red}/3${contesting ? ` · ${contesting.label}争夺暂停` : ''}`;
+            const valueText = objectives.map(objective => `${objective.mark}${Math.round(Math.abs(objective.progress))}%`).join(' · ');
+            objectiveText.textContent = `${gameState.rankItemNotice ? `${gameState.rankItemNotice} · ` : ''}据点：我方 ${blue}/3 · 敌方 ${red}/3 · ${valueText}${contesting ? ` · ${contesting.label}争夺暂停` : ''}`;
         }
     }
 }
