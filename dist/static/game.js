@@ -624,6 +624,9 @@ let gameState = {
     obstacles: [],
     damageNumbers: [],
     teamObjectives: [],
+    teamPowerAwarded: false,
+    teamAngelTeam: null,
+    teamDemonTeam: null,
     provokeActive: false,
     levelUpShown: false,  // 防止升级界面重复生成
     pendingLevelUpSkills: [], // 升级选项会随排位/爬塔存档保留
@@ -1970,15 +1973,17 @@ function renderEnemyLabels() {
         if (gameState.environment === 'polar') label.style.color = '#101820';
         const percent = Math.max(0, Math.min(100, enemy.hp / enemy.maxHp * 100));
         const foeState = gameState.mode === 'team' && enemy.hp <= 0 ? ` · 复活 ${Math.ceil((enemy.respawnTicks || 0) / TARGET_FPS)} 秒` : gameState.mode === 'team' && enemy.invulnerableTicks > 0 ? ' · 无敌' : '';
+        const foePower = gameState.mode === 'team' && enemy.teamAngel ? ' · 😇天使' : gameState.mode === 'team' && enemy.teamDemon ? ' · 😈魔王' : '';
         const foeName = gameState.mode === 'team' ? `🔴 ${enemy.name}` : enemy.name;
-        label.innerHTML = `<span>${enemy.isBoss ? '👑 ' : ''}Lv.${enemy.level} ${foeName}${foeState}${enemy.lastActionText && enemy.attackFlash > 0 ? ` · ${enemy.lastActionText}` : ''}</span><div class="enemy-hp"><i style="width:${percent}%"></i></div>`;
+        label.innerHTML = `<span>${enemy.isBoss ? '👑 ' : ''}Lv.${enemy.level} ${foeName}${foeState}${foePower}${enemy.lastActionText && enemy.attackFlash > 0 ? ` · ${enemy.lastActionText}` : ''}</span><div class="enemy-hp"><i style="width:${percent}%"></i></div>`;
         threeLabels.appendChild(label);
     });
     gameState.allies.forEach(ally => {
         const pos=toWorld(ally), point=new Three.Vector3(pos.x,1.35,pos.z).project(threeCamera);
         const label=document.createElement('div'); label.className='enemy-label'; label.style.left=`${(point.x*.5+.5)*100}%`; label.style.top=`${(-point.y*.5+.5)*100}%`;
         const allyState = ally.hp <= 0 ? ` · 复活 ${Math.ceil((ally.respawnTicks || 0) / TARGET_FPS)} 秒` : ally.invulnerableTicks > 0 ? ' · 无敌' : '';
-        label.innerHTML=`<span style="color:#8fd3ff">🔵 ${ally.name} · Lv.${ally.level}${allyState}</span><div class="enemy-hp"><i style="width:${Math.max(0,ally.hp/ally.maxHp*100)}%;background:#3599ff"></i></div>`; threeLabels.appendChild(label);
+        const allyPower = ally.teamAngel ? ' · 😇天使' : ally.teamDemon ? ' · 😈魔王' : '';
+        label.innerHTML=`<span style="color:#8fd3ff">🔵 ${ally.name} · Lv.${ally.level}${allyState}${allyPower}</span><div class="enemy-hp"><i style="width:${Math.max(0,ally.hp/ally.maxHp*100)}%;background:#3599ff"></i></div>`; threeLabels.appendChild(label);
     });
     (gameState.teamObjectives || []).forEach(objective => {
         const pos = toWorld(objective), point = new Three.Vector3(pos.x, .82, pos.z).project(threeCamera);
@@ -2198,7 +2203,8 @@ class Character {
         }
 
         spawnSkillEffect(this, active);
-        this.activeCooldown = active.cooldown * (1 - this.activeCooldownReduction) * TARGET_FPS;
+        const angelCooldown = this.teamAngel ? .20 : 0;
+        this.activeCooldown = active.cooldown * Math.max(.1, 1 - this.activeCooldownReduction - angelCooldown) * TARGET_FPS;
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 3) {
             const enemy = new Enemy('rabbit', this.x + 300, this.y);
             enemy.name = '训练小兔';
@@ -4121,6 +4127,36 @@ function spawnTeamBattle() {
         { id:'center', mark:'B', label:'中央据点', x:GAME_WIDTH / 2, y:GAME_HEIGHT / 2, radius:88, progress:0, owner:null },
         { id:'red-base', mark:'C', label:'红方前哨', x:GAME_WIDTH - 260, y:GAME_HEIGHT / 2, radius:82, progress:0, owner:null }
     ];
+    gameState.teamPowerAwarded = false;
+    gameState.teamAngelTeam = null;
+    gameState.teamDemonTeam = null;
+}
+
+function teamUnits(side) {
+    return side === 'blue' ? [gameState.player, ...gameState.allies] : gameState.enemies;
+}
+
+function grantTeamMinutePowers() {
+    if (gameState.mode !== 'team' || gameState.teamPowerAwarded || gameState.world.time < 60) return;
+    const objectives = gameState.teamObjectives || [];
+    const blueInvasion = objectives.reduce((sum, objective) => sum + Math.max(0, objective.progress), 0);
+    const redInvasion = objectives.reduce((sum, objective) => sum + Math.max(0, -objective.progress), 0);
+    // 正好平局时先不发放，等任意一方取得侵略值优势后再结算。
+    if (blueInvasion === redInvasion) return;
+    const angel = blueInvasion > redInvasion ? 'blue' : 'red';
+    const demon = angel === 'blue' ? 'red' : 'blue';
+    teamUnits(angel).forEach(unit => { unit.teamAngel = true; });
+    teamUnits(demon).forEach(unit => {
+        unit.teamDemon = true;
+        unit.attack = Math.ceil(unit.attack * 1.05);
+        unit.defense = Math.ceil(unit.defense * 1.05);
+    });
+    gameState.teamPowerAwarded = true;
+    gameState.teamAngelTeam = angel;
+    gameState.teamDemonTeam = demon;
+    const angelText = angel === 'blue' ? '我方获得天使之力：技能冷却 -20%、侵略值获取 +5%' : '敌方获得天使之力：技能冷却 -20%、侵略值获取 +5%';
+    const demonText = demon === 'blue' ? '我方获得魔王之力：攻击、防御 +5%' : '敌方获得魔王之力：攻击、防御 +5%';
+    gameState.rankItemNotice = `⏱️ 1 分钟战局加持！${angelText}；${demonText}`;
 }
 
 function updateTeamObjective(frameScale = 1) {
@@ -4138,10 +4174,11 @@ function updateTeamObjective(frameScale = 1) {
         // 两队都在据点中时完全暂停，不按人数多寡推进。
         if ((blue > 0 && red > 0) || (blue === 0 && red === 0)) return;
         const side = blue > 0 ? 1 : -1;
+        const angelCaptureBoost = (side === 1 ? gameState.teamAngelTeam === 'blue' : gameState.teamAngelTeam === 'red') ? 1.05 : 1;
         // 已占领据点也能反抢：先以每秒 5% 清空对方侵略值，归零后才增长己方侵略值。
-        if (side > 0 && objective.progress < 0) objective.progress = Math.min(0, objective.progress + capturePerFrame * frameScale);
-        else if (side < 0 && objective.progress > 0) objective.progress = Math.max(0, objective.progress - capturePerFrame * frameScale);
-        else objective.progress = Math.max(-100, Math.min(100, objective.progress + side * capturePerFrame * frameScale));
+        if (side > 0 && objective.progress < 0) objective.progress = Math.min(0, objective.progress + capturePerFrame * angelCaptureBoost * frameScale);
+        else if (side < 0 && objective.progress > 0) objective.progress = Math.max(0, objective.progress - capturePerFrame * angelCaptureBoost * frameScale);
+        else objective.progress = Math.max(-100, Math.min(100, objective.progress + side * capturePerFrame * angelCaptureBoost * frameScale));
         if (objective.progress === 0) objective.owner = null;
         if (objective.progress === 100 && objective.owner !== 'blue') {
             objective.owner = 'blue';
@@ -4153,6 +4190,7 @@ function updateTeamObjective(frameScale = 1) {
     });
     if (objectives.every(objective => objective.owner === 'blue')) finishRankedMatch(true);
     else if (objectives.every(objective => objective.owner === 'red')) finishRankedMatch(false);
+    else grantTeamMinutePowers();
 }
 
 function teamSpawnPoint(unit) {
@@ -4723,7 +4761,10 @@ function updateUI() {
                 return ((inRange(gameState.player) ? 1 : 0) + gameState.allies.filter(inRange).length) > 0 && gameState.enemies.filter(inRange).length > 0;
             });
             const valueText = objectives.map(objective => `${objective.mark}${Math.round(Math.abs(objective.progress))}%`).join(' · ');
-            objectiveText.textContent = `${gameState.rankItemNotice ? `${gameState.rankItemNotice} · ` : ''}据点：我方 ${blue}/3 · 敌方 ${red}/3 · ${valueText}${contesting ? ` · ${contesting.label}争夺暂停` : ''}`;
+            const powerText = !gameState.teamPowerAwarded
+                ? ` · 天使/魔王之力将在 ${Math.max(0, Math.ceil(60 - gameState.world.time))} 秒后判定`
+                : ` · 😇${gameState.teamAngelTeam === 'blue' ? '我方' : '敌方'}天使 · 😈${gameState.teamDemonTeam === 'blue' ? '我方' : '敌方'}魔王`;
+            objectiveText.textContent = `${gameState.rankItemNotice ? `${gameState.rankItemNotice} · ` : ''}据点：我方 ${blue}/3 · 敌方 ${red}/3 · ${valueText}${contesting ? ` · ${contesting.label}争夺暂停` : ''}${powerText}`;
         }
     }
 }
