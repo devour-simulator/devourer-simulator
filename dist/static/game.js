@@ -627,6 +627,8 @@ let gameState = {
     teamPowerAwarded: false,
     teamAngelTeam: null,
     teamDemonTeam: null,
+    teamOvertime: false,
+    teamOvertimeStartedAt: 0,
     provokeActive: false,
     levelUpShown: false,  // 防止升级界面重复生成
     pendingLevelUpSkills: [], // 升级选项会随排位/爬塔存档保留
@@ -1901,7 +1903,7 @@ function render3D() {
         sync(gameState.player, 'player', 'player');
         gameState.allies.forEach((ally, index) => sync(ally, 'ally', `ally-${index}-${ally.type}`));
         gameState.enemies.forEach(enemy => sync(enemy, 'enemy', `enemy-${enemy.id}`));
-        (gameState.teamObjectives || []).forEach(objective => sync(objective, 'objective', `objective-${objective.id}`));
+        (gameState.teamObjectives || []).filter(objective => objective.visible !== false).forEach(objective => sync(objective, 'objective', `objective-${objective.id}`));
         gameState.particles.forEach(particle => sync(particle, 'particle', `particle-${particle.id}`));
         gameState.skillEffects.forEach((effect, index) => sync(effect, 'skill', `skill-${index}`));
         gameState.killEffects.forEach(effect => sync(effect, 'kill', `kill-${effect.id}`));
@@ -1985,7 +1987,7 @@ function renderEnemyLabels() {
         const allyPower = ally.teamAngel ? ' · 😇天使' : ally.teamDemon ? ' · 😈魔王' : '';
         label.innerHTML=`<span style="color:#8fd3ff">🔵 ${ally.name} · Lv.${ally.level}${allyState}${allyPower}</span><div class="enemy-hp"><i style="width:${Math.max(0,ally.hp/ally.maxHp*100)}%;background:#3599ff"></i></div>`; threeLabels.appendChild(label);
     });
-    (gameState.teamObjectives || []).forEach(objective => {
+    (gameState.teamObjectives || []).filter(objective => objective.visible !== false).forEach(objective => {
         const pos = toWorld(objective), point = new Three.Vector3(pos.x, .82, pos.z).project(threeCamera);
         if (point.z < -1 || point.z > 1) return;
         const label = document.createElement('div');
@@ -2237,8 +2239,11 @@ class Character {
 
     update(frameScale = 1) {
         // 移动
-        this.x += this.vx * frameScale;
-        this.y += this.vy * frameScale;
+        const overtimeMoveBoost = gameState.mode === 'team' && gameState.teamOvertime
+            ? 1.10 + Math.min(.20, Math.max(0, gameState.world.time - gameState.teamOvertimeStartedAt) / 180 * .20)
+            : 1;
+        this.x += this.vx * frameScale * overtimeMoveBoost;
+        this.y += this.vy * frameScale * overtimeMoveBoost;
 
         // 边界检测
         this.x = Math.max(this.radius, Math.min(GAME_WIDTH - this.radius, this.x));
@@ -2748,6 +2753,10 @@ function attackOnce(attacker, defender) {
     if (attacker.cooldown > 0) return false;
     let damage = rollBattleDamage(attacker);
     if ((attacker.teamPowerTicks || 0) > 0) damage = Math.ceil(damage * 1.25);
+    if (gameState.mode === 'team' && gameState.teamOvertime) {
+        const overtimeDamageBoost = 1.10 + Math.min(.20, Math.max(0, gameState.world.time - gameState.teamOvertimeStartedAt) / 180 * .20);
+        damage = Math.ceil(damage * overtimeDamageBoost);
+    }
     const canUseBossSkill = attacker.isBoss && attacker.bossSkillCooldown <= 0;
     if (canUseBossSkill) {
         damage = Math.ceil(damage * 2.25 + 8);
@@ -4130,43 +4139,80 @@ function spawnTeamBattle() {
     gameState.teamPowerAwarded = false;
     gameState.teamAngelTeam = null;
     gameState.teamDemonTeam = null;
+    gameState.teamOvertime = false;
+    gameState.teamOvertimeStartedAt = 0;
 }
 
 function teamUnits(side) {
     return side === 'blue' ? [gameState.player, ...gameState.allies] : gameState.enemies;
 }
 
-function grantTeamMinutePowers() {
-    if (gameState.mode !== 'team' || gameState.teamPowerAwarded || gameState.world.time < 60) return;
-    const objectives = gameState.teamObjectives || [];
+function clearTeamPowers() {
+    ['blue', 'red'].forEach(side => teamUnits(side).forEach(unit => {
+        if (!unit) return;
+        if (unit.teamBaseAttack !== undefined) unit.attack = unit.teamBaseAttack;
+        if (unit.teamBaseDefense !== undefined) unit.defense = unit.teamBaseDefense;
+        unit.teamAngel = false; unit.teamDemon = false;
+    }));
+    gameState.teamPowerAwarded = false;
+    gameState.teamAngelTeam = null;
+    gameState.teamDemonTeam = null;
+}
+
+function updateTeamMinutePowers(objectives = gameState.teamObjectives || []) {
+    if (gameState.mode !== 'team' || gameState.world.time < 60) return;
     const blueInvasion = objectives.reduce((sum, objective) => sum + Math.max(0, objective.progress), 0);
     const redInvasion = objectives.reduce((sum, objective) => sum + Math.max(0, -objective.progress), 0);
-    // 正好平局时先不发放，等任意一方取得侵略值优势后再结算。
+    // 正好平局时保持当前加持；第一次平局则暂不发放。
     if (blueInvasion === redInvasion) return;
     const angel = blueInvasion > redInvasion ? 'blue' : 'red';
     const demon = angel === 'blue' ? 'red' : 'blue';
-    teamUnits(angel).forEach(unit => { unit.teamAngel = true; });
-    teamUnits(demon).forEach(unit => {
-        unit.teamDemon = true;
-        unit.attack = Math.ceil(unit.attack * 1.05);
-        unit.defense = Math.ceil(unit.defense * 1.05);
-    });
+    const hadPower = gameState.teamPowerAwarded;
+    const changed = !hadPower || gameState.teamAngelTeam !== angel;
+    ['blue', 'red'].forEach(side => teamUnits(side).forEach(unit => {
+        if (!unit) return;
+        if (unit.teamBaseAttack === undefined) unit.teamBaseAttack = unit.attack;
+        if (unit.teamBaseDefense === undefined) unit.teamBaseDefense = unit.defense;
+        unit.teamAngel = side === angel;
+        unit.teamDemon = side === demon;
+        unit.attack = Math.ceil(unit.teamBaseAttack * (unit.teamDemon ? 1.05 : 1));
+        unit.defense = Math.ceil(unit.teamBaseDefense * (unit.teamDemon ? 1.05 : 1));
+    }));
     gameState.teamPowerAwarded = true;
     gameState.teamAngelTeam = angel;
     gameState.teamDemonTeam = demon;
+    if (!changed) return;
     const angelText = angel === 'blue' ? '我方获得天使之力：技能冷却 -20%、侵略值获取 +5%' : '敌方获得天使之力：技能冷却 -20%、侵略值获取 +5%';
     const demonText = demon === 'blue' ? '我方获得魔王之力：攻击、防御 +5%' : '敌方获得魔王之力：攻击、防御 +5%';
-    gameState.rankItemNotice = `⏱️ 1 分钟战局加持！${angelText}；${demonText}`;
+    gameState.rankItemNotice = `${hadPower ? '⚖️ 局势反转！' : '⏱️ 1 分钟战局加持！'}${angelText}；${demonText}`;
+}
+
+function startTeamOvertime() {
+    if (gameState.teamOvertime || gameState.mode !== 'team') return;
+    gameState.teamOvertime = true;
+    gameState.teamOvertimeStartedAt = gameState.world.time;
+    (gameState.teamObjectives || []).forEach(objective => {
+        objective.visible = objective.id === 'center';
+        objective.owner = null;
+        objective.progress = 0;
+        if (objective.id === 'center') {
+            objective.mark = 'B'; objective.label = '决胜据点'; objective.radius = 104;
+        }
+    });
+    // 加时重新从中立局面开始计算阵营加持，前 3 分钟的优势不带入决胜点。
+    clearTeamPowers();
+    gameState.rankItemNotice = '⚔️ 加时决战开始！A、C 据点已消失，B 决胜据点已重置；每秒占领 10%，先占满即获胜。';
 }
 
 function updateTeamObjective(frameScale = 1) {
-    const objectives = gameState.teamObjectives || [];
-    if (gameState.mode !== 'team' || !objectives.length) return;
+    if (gameState.mode !== 'team' || !(gameState.teamObjectives || []).length) return;
+    if (!gameState.teamOvertime && gameState.world.time >= 180) startTeamOvertime();
+    const objectives = (gameState.teamObjectives || []).filter(objective => objective.visible !== false);
     if (gameState.teamIntroTicks > 0) {
         gameState.teamIntroTicks = Math.max(0, gameState.teamIntroTicks - frameScale);
         if (gameState.teamIntroTicks === 0) gameState.rankItemNotice = '';
     }
-    const capturePerFrame = 5 / TARGET_FPS; // 每秒 5% 侵略值
+    const capturePerFrame = (gameState.teamOvertime ? 10 : 5) / TARGET_FPS;
     objectives.forEach(objective => {
         const nearby = unit => unit.hp > 0 && !unit.respawnTicks && Math.hypot(unit.x - objective.x, unit.y - objective.y) <= objective.radius;
         const blue = (nearby(gameState.player) ? 1 : 0) + gameState.allies.filter(nearby).length;
@@ -4190,7 +4236,7 @@ function updateTeamObjective(frameScale = 1) {
     });
     if (objectives.every(objective => objective.owner === 'blue')) finishRankedMatch(true);
     else if (objectives.every(objective => objective.owner === 'red')) finishRankedMatch(false);
-    else grantTeamMinutePowers();
+    else updateTeamMinutePowers(objectives);
 }
 
 function teamSpawnPoint(unit) {
@@ -4200,8 +4246,9 @@ function teamSpawnPoint(unit) {
 
 function markTeamDefeated(unit) {
     if (!unit || unit.respawnTicks > 0) return;
-    unit.hp = 0; unit.vx = 0; unit.vy = 0; unit.respawnTicks = 3 * TARGET_FPS;
-    if (unit === gameState.player) gameState.rankItemNotice = '💤 你已被击败：3 秒后在我方出生点复活。';
+    const respawnSeconds = gameState.teamOvertime ? 5 : 3;
+    unit.hp = 0; unit.vx = 0; unit.vy = 0; unit.respawnTicks = respawnSeconds * TARGET_FPS;
+    if (unit === gameState.player) gameState.rankItemNotice = `💤 你已被击败：${respawnSeconds} 秒后在我方出生点复活。`;
 }
 
 function updateTeamRespawns(frameScale = 1) {
@@ -4256,7 +4303,7 @@ function checkRankedAIBattles() {
 function updateTeamTargets() {
     if (gameState.mode !== 'team') return;
     const closest = (unit, targets) => targets.reduce((best, target) => !best || Math.hypot(unit.x-target.x, unit.y-target.y) < Math.hypot(unit.x-best.x, unit.y-best.y) ? target : best, null);
-    const objectives = gameState.teamObjectives || [];
+    const objectives = (gameState.teamObjectives || []).filter(objective => objective.visible !== false);
     const objectiveFor = (unit, side) => {
         const available = objectives.filter(objective => objective.owner !== side);
         return closest(unit, available.length ? available : objectives);
@@ -4712,6 +4759,9 @@ function updateUI() {
     if ((player.magnetTicks || 0) > 0) statuses.push({ icon:'🧲', text:`吸铁石 ${secondsLeft(player.magnetTicks)}秒` });
     if ((player.battleTonicTicks || 0) > 0) statuses.push({ icon:'⚔️', text:`锋芒药剂 ${secondsLeft(player.battleTonicTicks)}秒` });
     if ((player.shieldHits || 0) > 0) statuses.push({ icon:'🛡️', text:`护盾 ${player.shieldHits}次` });
+    if (gameState.mode === 'team' && player.teamAngel) statuses.push({ icon:'😇', text:'天使之力' });
+    if (gameState.mode === 'team' && player.teamDemon) statuses.push({ icon:'😈', text:'魔王之力' });
+    if (gameState.mode === 'team' && gameState.teamOvertime) statuses.push({ icon:'⚔️', text:'加时决战' });
     statusEffects.innerHTML = statuses.map(status => `<span class="status-effect"><span>${status.icon}</span>${status.text}</span>`).join('');
     statusEffects.hidden = !statuses.length;
 
@@ -4753,7 +4803,7 @@ function updateUI() {
     if (objectiveText) {
         if (gameState.mode !== 'team') objectiveText.textContent = '';
         else {
-            const objectives = gameState.teamObjectives || [];
+            const objectives = (gameState.teamObjectives || []).filter(objective => objective.visible !== false);
             const blue = objectives.filter(objective => objective.owner === 'blue').length;
             const red = objectives.filter(objective => objective.owner === 'red').length;
             const contesting = objectives.find(objective => {
@@ -4762,9 +4812,10 @@ function updateUI() {
             });
             const valueText = objectives.map(objective => `${objective.mark}${Math.round(Math.abs(objective.progress))}%`).join(' · ');
             const powerText = !gameState.teamPowerAwarded
-                ? ` · 天使/魔王之力将在 ${Math.max(0, Math.ceil(60 - gameState.world.time))} 秒后判定`
+                ? (gameState.teamOvertime ? ' · B 点出现优势后将重新判定天使/魔王之力' : ` · 天使/魔王之力将在 ${Math.max(0, Math.ceil(60 - gameState.world.time))} 秒后判定`)
                 : ` · 😇${gameState.teamAngelTeam === 'blue' ? '我方' : '敌方'}天使 · 😈${gameState.teamDemonTeam === 'blue' ? '我方' : '敌方'}魔王`;
-            objectiveText.textContent = `${gameState.rankItemNotice ? `${gameState.rankItemNotice} · ` : ''}据点：我方 ${blue}/3 · 敌方 ${red}/3 · ${valueText}${contesting ? ` · ${contesting.label}争夺暂停` : ''}${powerText}`;
+            const scoreText = gameState.teamOvertime ? '加时决战：B 决胜点' : `据点：我方 ${blue}/3 · 敌方 ${red}/3`;
+            objectiveText.textContent = `${gameState.rankItemNotice ? `${gameState.rankItemNotice} · ` : ''}${scoreText} · ${valueText}${contesting ? ` · ${contesting.label}争夺暂停` : ''}${powerText}`;
         }
     }
 }
