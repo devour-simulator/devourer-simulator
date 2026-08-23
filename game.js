@@ -629,6 +629,8 @@ let gameState = {
     teamDemonTeam: null,
     teamOvertime: false,
     teamOvertimeStartedAt: 0,
+    teamEasterEgg: null,
+    teamEasterEggTimer: 0,
     provokeActive: false,
     levelUpShown: false,  // 防止升级界面重复生成
     pendingLevelUpSkills: [], // 升级选项会随排位/爬塔存档保留
@@ -1195,6 +1197,15 @@ function build3DMesh(entity, kind) {
         group.userData.objective = { ringMat, ring, light };
         threeScene.add(group); return group;
     }
+    if (kind === 'easterEgg') {
+        const flagMat = new Three.MeshStandardMaterial({ color:0xffd34d, emissive:0xa45b05, emissiveIntensity:1.25, roughness:.22 });
+        const pole = new Three.Mesh(new Three.CylinderGeometry(.035, .035, .95, 6), flagMat); pole.position.y=.48; group.add(pole);
+        const flag = new Three.Mesh(new Three.PlaneGeometry(.52, .34), flagMat); flag.position.set(.25,.74,0); group.add(flag);
+        const star = new Three.Mesh(new Three.OctahedronGeometry(.16, 0), new Three.MeshBasicMaterial({ color:0xffffff })); star.position.y=1.02; group.add(star);
+        const glow = new Three.PointLight(0xffd657, 2.2, 4.4); glow.position.y=.65; group.add(glow);
+        group.userData.easterEgg = { flag, star, glow };
+        threeScene.add(group); return group;
+    }
     if (kind === 'kill') {
         // 击杀星爆：核心闪光、彩色星环和向外绽放的星尘。
         const core = new Three.Mesh(new Three.IcosahedronGeometry(.18, 1), new Three.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1 }));
@@ -1754,6 +1765,13 @@ function render3D() {
             mesh.userData.objective.ring.rotation.z += .018;
             mesh.userData.objective.ring.scale.setScalar(1 + Math.sin(phase * 1.8) * .05);
         }
+        if (kind === 'easterEgg' && mesh.userData.easterEgg) {
+            const egg = mesh.userData.easterEgg;
+            egg.flag.rotation.y = Math.sin(phase * 1.7) * .18;
+            egg.star.rotation.y += .08;
+            egg.star.position.y = 1.02 + Math.sin(phase * 2.6) * .08;
+            egg.glow.intensity = 1.6 + Math.sin(phase * 3) * .7;
+        }
         // 地面英雄朝移动方向行走，不再原地持续旋转；掉落物保留旋转效果。
         if (kind === 'particle') mesh.rotation.y += 0.12;
         else if (Math.hypot(entity.vx || 0, entity.vy || 0) > 0.05) mesh.rotation.y = Math.atan2(entity.vx, entity.vy) + Math.PI;
@@ -1904,6 +1922,7 @@ function render3D() {
         gameState.allies.forEach((ally, index) => sync(ally, 'ally', `ally-${index}-${ally.type}`));
         gameState.enemies.forEach(enemy => sync(enemy, 'enemy', `enemy-${enemy.id}`));
         (gameState.teamObjectives || []).filter(objective => objective.visible !== false).forEach(objective => sync(objective, 'objective', `objective-${objective.id}`));
+        if (gameState.teamEasterEgg) sync(gameState.teamEasterEgg, 'easterEgg', 'team-easter-egg');
         gameState.particles.forEach(particle => sync(particle, 'particle', `particle-${particle.id}`));
         gameState.skillEffects.forEach((effect, index) => sync(effect, 'skill', `skill-${index}`));
         gameState.killEffects.forEach(effect => sync(effect, 'kill', `kill-${effect.id}`));
@@ -1998,6 +2017,15 @@ function renderEnemyLabels() {
         label.innerHTML = `<span style="color:${color};font-size:14px">${objective.mark} · ${objective.label}</span><div style="font-size:11px;color:${color}">${side}侵略值 ${amount}%</div>`;
         threeLabels.appendChild(label);
     });
+    if (gameState.teamEasterEgg) {
+        const egg = gameState.teamEasterEgg, pos = toWorld(egg), point = new Three.Vector3(pos.x, 1.28, pos.z).project(threeCamera);
+        if (point.z >= -1 && point.z <= 1) {
+            const label = document.createElement('div'); label.className = 'enemy-label';
+            label.style.left = `${(point.x * .5 + .5) * 100}%`; label.style.top = `${(-point.y * .5 + .5) * 100}%`;
+            label.innerHTML = `<span style="color:#ffe486;font-size:14px">🎏 神秘战旗</span><div style="font-size:11px;color:#fff3bd">占领 ${Math.round(Math.abs(egg.progress))}% · ${Math.ceil(egg.life / TARGET_FPS)}秒</div>`;
+            threeLabels.appendChild(label);
+        }
+    }
     // 宝箱奖励会显示明确的文字，和普通小经验点区分开。
     gameState.particles.filter(p => p.chestReward).forEach(particle => {
         const pos = toWorld(particle), point = new Three.Vector3(pos.x,.75,pos.z).project(threeCamera);
@@ -2300,6 +2328,7 @@ class Character {
         if (this.activeCooldown > 0) this.activeCooldown = Math.max(0, this.activeCooldown - frameScale);
         if (this.speedBoostTicks > 0) this.speedBoostTicks = Math.max(0, this.speedBoostTicks - frameScale);
         if (this.teamPowerTicks > 0) this.teamPowerTicks = Math.max(0, this.teamPowerTicks - frameScale);
+        if (this.teamRallyTicks > 0) this.teamRallyTicks = Math.max(0, this.teamRallyTicks - frameScale);
         if (this.invulnerableTicks > 0) this.invulnerableTicks = Math.max(0, this.invulnerableTicks - frameScale);
         if (this.slowTicks > 0) this.slowTicks = Math.max(0, this.slowTicks - frameScale);
     }
@@ -2753,6 +2782,7 @@ function attackOnce(attacker, defender) {
     if (attacker.cooldown > 0) return false;
     let damage = rollBattleDamage(attacker);
     if ((attacker.teamPowerTicks || 0) > 0) damage = Math.ceil(damage * 1.25);
+    if ((attacker.teamRallyTicks || 0) > 0) damage = Math.ceil(damage * 1.15);
     if (gameState.mode === 'team' && gameState.teamOvertime) {
         const overtimeDamageBoost = 1.10 + Math.min(.20, Math.max(0, gameState.world.time - gameState.teamOvertimeStartedAt) / 180 * .20);
         damage = Math.ceil(damage * overtimeDamageBoost);
@@ -3678,7 +3708,11 @@ function confirmPurchase(key) {
     openAccountPanel('shop');
 }
 
-function chooseMode(mode) {
+function chooseMode(mode, acknowledgedTeamNotice = false) {
+    if (mode === 'team' && !acknowledgedTeamNotice && localStorage.getItem('hideTeamModeUpdateNotice') !== '1') {
+        document.getElementById('teamUpdateModal').classList.remove('hidden');
+        return;
+    }
     if (['ranked','tower','evolution'].includes(mode) && getSavedRankedRun(mode)) {
         pendingSaveMode = mode;
         document.getElementById('saveChoiceModal').classList.remove('hidden');
@@ -4050,9 +4084,9 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     const rankProgress = isRankProgressMode();
     if (rankProgress) clearRankedRun();
     if (rankProgress && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
-    // 团队模式是轻量娱乐局；排位经验随抵达层数显著提高。
+    // 团队模式的单局时间较长，结算账号经验相应提高；排位经验随抵达层数显著提高。
     const accountReward = gameState.mode === 'team'
-        ? (won ? 12 : 5)
+        ? (won ? 50 : 20)
         : (won ? 45 + gameState.world.level * 14 : 12 + gameState.world.level * 4);
     accountExp(accountReward);
     let rankReward = 0;
@@ -4141,6 +4175,8 @@ function spawnTeamBattle() {
     gameState.teamDemonTeam = null;
     gameState.teamOvertime = false;
     gameState.teamOvertimeStartedAt = 0;
+    gameState.teamEasterEgg = null;
+    gameState.teamEasterEggTimer = 35 * TARGET_FPS;
 }
 
 function teamUnits(side) {
@@ -4201,7 +4237,62 @@ function startTeamOvertime() {
     });
     // 加时重新从中立局面开始计算阵营加持，前 3 分钟的优势不带入决胜点。
     clearTeamPowers();
+    gameState.teamEasterEgg = null;
     gameState.rankItemNotice = '⚔️ 加时决战开始！A、C 据点已消失，B 决胜据点已重置；每秒占领 10%，先占满即获胜。';
+}
+
+function resetTeamEasterEggTimer() {
+    gameState.teamEasterEggTimer = (32 + Math.random() * 16) * TARGET_FPS;
+}
+
+function spawnTeamEasterEgg() {
+    const points = (gameState.teamObjectives || []).filter(objective => objective.visible !== false);
+    if (!points.length) return;
+    const point = points[Math.floor(Math.random() * points.length)];
+    const angle = Math.random() * Math.PI * 2, distance = 95 + Math.random() * 45;
+    gameState.teamEasterEgg = {
+        x: Math.max(70, Math.min(GAME_WIDTH - 70, point.x + Math.cos(angle) * distance)),
+        y: Math.max(70, Math.min(GAME_HEIGHT - 70, point.y + Math.sin(angle) * distance)),
+        radius: 58, progress: 0, life: 14 * TARGET_FPS
+    };
+    gameState.rankItemNotice = '🎏 神秘战旗出现！先单独守住 2 秒的一队可获得随机战术增益。';
+}
+
+function grantTeamEasterEgg(side) {
+    const units = teamUnits(side).filter(unit => unit && unit.hp > 0);
+    const rewards = ['rally', 'shield', 'charge'];
+    const reward = rewards[Math.floor(Math.random() * rewards.length)];
+    if (reward === 'rally') {
+        units.forEach(unit => { unit.teamRallyTicks = 8 * TARGET_FPS; });
+        gameState.rankItemNotice = `${side === 'blue' ? '🔵 我方' : '🔴 敌方'}夺得神秘战旗：战意激发，8 秒内伤害 +15%！`;
+    } else if (reward === 'shield') {
+        units.forEach(unit => { unit.shieldHits = Math.max(unit.shieldHits || 0, 3); unit.shieldReduction = Math.max(unit.shieldReduction || 0, .35); });
+        gameState.rankItemNotice = `${side === 'blue' ? '🔵 我方' : '🔴 敌方'}夺得神秘战旗：全队获得 3 次守护护盾！`;
+    } else {
+        units.forEach(unit => { unit.activeCooldown = 0; });
+        gameState.rankItemNotice = `${side === 'blue' ? '🔵 我方' : '🔴 敌方'}夺得神秘战旗：全队技能冷却立刻完成！`;
+    }
+    gameState.teamEasterEgg = null;
+    resetTeamEasterEggTimer();
+}
+
+function updateTeamEasterEgg(frameScale = 1) {
+    if (gameState.mode !== 'team' || gameState.teamOvertime) return;
+    if (!gameState.teamEasterEgg) {
+        gameState.teamEasterEggTimer = Math.max(0, (gameState.teamEasterEggTimer || 0) - frameScale);
+        if (gameState.teamEasterEggTimer === 0) spawnTeamEasterEgg();
+        return;
+    }
+    const egg = gameState.teamEasterEgg;
+    egg.life = Math.max(0, egg.life - frameScale);
+    const nearby = unit => unit.hp > 0 && Math.hypot(unit.x - egg.x, unit.y - egg.y) <= egg.radius;
+    const blue = (nearby(gameState.player) ? 1 : 0) + gameState.allies.filter(nearby).length;
+    const red = gameState.enemies.filter(nearby).length;
+    if (blue > 0 && red === 0) egg.progress = Math.min(100, egg.progress + frameScale * 50 / TARGET_FPS);
+    else if (red > 0 && blue === 0) egg.progress = Math.max(-100, egg.progress - frameScale * 50 / TARGET_FPS);
+    if (egg.progress >= 100) return grantTeamEasterEgg('blue');
+    if (egg.progress <= -100) return grantTeamEasterEgg('red');
+    if (egg.life === 0) { gameState.teamEasterEgg = null; resetTeamEasterEggTimer(); gameState.rankItemNotice = '🎏 神秘战旗无人夺取，已消失。'; }
 }
 
 function updateTeamObjective(frameScale = 1) {
@@ -4513,6 +4604,13 @@ document.getElementById('towerModeButton').addEventListener('click', () => choos
 document.getElementById('rankedModeButton').addEventListener('click', () => chooseMode('ranked'));
 document.getElementById('teamModeButton').addEventListener('click', () => chooseMode('team'));
 document.getElementById('evolutionModeButton').addEventListener('click', () => chooseMode('evolution'));
+document.getElementById('teamUpdateConfirmButton').addEventListener('click', () => {
+    const skipNextTime = document.getElementById('teamUpdateSkipCheckbox').checked;
+    if (skipNextTime) localStorage.setItem('hideTeamModeUpdateNotice', '1');
+    else localStorage.removeItem('hideTeamModeUpdateNotice');
+    document.getElementById('teamUpdateModal').classList.add('hidden');
+    chooseMode('team', true);
+});
 document.getElementById('resumeSaveButton').addEventListener('click', () => {
     const mode = pendingSaveMode; pendingSaveMode = null;
     document.getElementById('saveChoiceModal').classList.add('hidden');
@@ -4759,6 +4857,7 @@ function updateUI() {
     if ((player.magnetTicks || 0) > 0) statuses.push({ icon:'🧲', text:`吸铁石 ${secondsLeft(player.magnetTicks)}秒` });
     if ((player.battleTonicTicks || 0) > 0) statuses.push({ icon:'⚔️', text:`锋芒药剂 ${secondsLeft(player.battleTonicTicks)}秒` });
     if ((player.shieldHits || 0) > 0) statuses.push({ icon:'🛡️', text:`护盾 ${player.shieldHits}次` });
+    if ((player.teamRallyTicks || 0) > 0) statuses.push({ icon:'🎏', text:`战旗战意 ${secondsLeft(player.teamRallyTicks)}秒` });
     if (gameState.mode === 'team' && player.teamAngel) statuses.push({ icon:'😇', text:'天使之力' });
     if (gameState.mode === 'team' && player.teamDemon) statuses.push({ icon:'😈', text:'魔王之力' });
     if (gameState.mode === 'team' && gameState.teamOvertime) statuses.push({ icon:'⚔️', text:'加时决战' });
@@ -4872,6 +4971,7 @@ function gameLoop(timestamp = performance.now()) {
         updateTeamRespawns(frameScale);
         updateTeamTargets();
         updateTeamObjective(frameScale);
+        updateTeamEasterEgg(frameScale);
         gameState.allies.forEach(ally => ally.update(frameScale));
         gameState.enemies.forEach(enemy => enemy.update(frameScale));
         for (const enemy of [...gameState.enemies]) {

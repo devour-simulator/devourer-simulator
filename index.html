@@ -509,6 +509,26 @@
         </div>
     </div>
 
+    <div id="teamUpdateModal" class="modal hidden">
+        <div class="modal-content game-over-container" style="max-width:650px">
+            <div class="modal-title">👥 5V5 已更新</div>
+            <div class="rank-info" style="text-align:left;line-height:1.75">
+                <strong>🏳️ 三据点争夺</strong><br>
+                A、B、C 三座据点都可反复抢回。单队站住据点时每秒增加 5% 侵略值；双方同时在场时进度暂停。率先占领全部据点即可获胜。<br><br>
+                <strong>🎏 战场彩蛋：神秘战旗</strong><br>
+                每隔一段时间会出现神秘战旗。单队守住 2 秒即可随机获得战意爆发、守护护盾或全队技能充能；不会生成经验点或宝箱。<br><br>
+                <strong>💤 阵亡与复活</strong><br>
+                阵亡后 3 秒在己方出生点复活，并获得 1.5 秒无敌。击败英雄不会获得经验或回血。<br><br>
+                <strong>😇😈 一分钟战局加持</strong><br>
+                侵略值领先方获得天使之力：技能冷却 -20%、侵略值 +5%；落后方获得魔王之力：攻击、防御 +5%。局势反转时，两种力量会交换阵营。<br><br>
+                <strong>⚔️ 三分钟加时决战</strong><br>
+                3 分钟未分胜负时，A、C 点消失，B 点重置为决胜点；占领变为每秒 10%，复活变为 5 秒，所有英雄攻击和移动会逐渐提高。
+            </div>
+            <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin:18px 0 12px;cursor:pointer"><input id="teamUpdateSkipCheckbox" type="checkbox"> 下次不再提醒</label>
+            <button id="teamUpdateConfirmButton" class="btn btn-success" type="button">我知道了</button>
+        </div>
+    </div>
+
     <!-- 角色选择模态框 -->
     <div id="selectModal" class="modal hidden">
         <div class="modal-content">
@@ -608,6 +628,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.5.75"></script>
+    <script src="game.js?v=3.5.77"></script>
 </body>
 </html>
