@@ -3457,6 +3457,13 @@ function openAccountPanel(kind) {
         const activityTabs = content.firstElementChild;
         const activityDaily = document.getElementById('activityDaily');
         const activityLimited = document.getElementById('activityLimited');
+        // 超级星期五属于每周固定日常，放在日常活动页；限时活动页只保留当前可开启的宝箱内容。
+        const fridayInfo = activityLimited?.querySelector('.feedback-box');
+        const fridayTrialsNode = fridayInfo?.nextElementSibling;
+        if (activityDaily && fridayInfo) {
+            activityDaily.insertBefore(fridayInfo, activityDaily.firstChild);
+            if (fridayTrialsNode) activityDaily.insertBefore(fridayTrialsNode, fridayInfo.nextElementSibling);
+        }
         const legacyChoiceCard = activityLimited?.querySelector('.skill-card');
         if (legacyChoiceCard) legacyChoiceCard.outerHTML = skinChoicePickerMarkup();
         const chestInfo = [...(activityLimited?.querySelectorAll('.feedback-box') || [])].find(card => card.textContent.includes('皮肤碎片自选宝箱'));
