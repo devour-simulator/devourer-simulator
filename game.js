@@ -3450,6 +3450,20 @@ function openAccountPanel(kind) {
         const fridayTrials = isSuperFriday() ? `<div class="animals-grid">${fridaySkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey], skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} · 周五免费体验</div><button class="btn btn-success" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 免费试玩</button></div>`).join('')}</div>` : '<div class="tip">超级星期五将于下一个周五 00:00 开启：届时可免费体验全部普通、稀有皮肤。</div>';
         const fridayStatus = isSuperFriday() ? (localStorage.getItem('superFridayFirstRankDate') === dailyActivityDate() ? '今日首局排位已结算。' : '今天第一局排位胜利可额外 +1 星。') : '每周五 00:00 至 23:59 开启。';
         content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchActivityTab('daily')">📅 日常活动</button><button class="btn" type="button" onclick="switchActivityTab('limited')">⏳ 限时活动</button></div><div id="activityDaily"><div class="feedback-box"><div class="feedback-heading">每日游玩时长</div><div>每天北京时间 00:00 刷新。进入对局后的有效游玩时间会自动累计，奖励会通过邮件发放。</div></div>${playCards}<div class="feedback-box"><div class="feedback-heading">🗓️ 日常签到</div><div>每天 00:00 刷新。今日签到奖励将通过邮件发放。</div></div><div class="animals-grid">${weekly}</div><button class="btn ${signed ? '' : 'btn-success'}" type="button" ${signed ? 'disabled' : ''} onclick="claimWeeklyDailySign()">${signed ? '今日已签到' : '领取今日签到奖励'}</button></div><div id="activityLimited" style="display:none"><div class="feedback-box"><div class="feedback-heading">🌟 超级星期五 ${isSuperFriday() ? '· 正在进行' : ''}</div><div>周五免费体验全部普通、稀有皮肤；当天第一局<strong>排位模式</strong>胜利额外 +1 星。失败不会抵扣扣星，也不会变成保护卡。进化试炼的账号经验与金币奖励提升 50%。<br>${fridayStatus}</div></div>${fridayTrials}<div class="feedback-box"><div class="feedback-heading">🎀 皮肤碎片自选宝箱</div><div>当前拥有：${gameState.account.inventory.skinChoiceChest || 0} 个。每个宝箱可任选一份奖励；有多个宝箱时可分开选择不同品质。</div></div><div class="skill-card"><div class="skill-name">自选一份皮肤碎片</div><div class="skill-desc">普通 ×20 · 稀有 ×10 · 史诗 ×5 · 神话 ×3 · 传说 ×1</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${choices}</div></div><div class="tip">周六、周日的日常签到可获得皮肤碎片自选宝箱。</div></div>`;
+        // 限时活动优先展示：把它放到日常活动前面，并作为进入活动中心时的默认页。
+        const activityTabs = content.firstElementChild;
+        const activityDaily = document.getElementById('activityDaily');
+        const activityLimited = document.getElementById('activityLimited');
+        if (activityTabs && activityDaily && activityLimited) {
+            const [dailyButton, limitedButton] = activityTabs.querySelectorAll('button');
+            if (dailyButton && limitedButton) {
+                activityTabs.insertBefore(limitedButton, dailyButton);
+                limitedButton.classList.add('btn-primary');
+                dailyButton.classList.remove('btn-primary');
+            }
+            activityDaily.style.display = 'none';
+            activityLimited.style.display = '';
+        }
     } else if (kind === 'road') {
         title.textContent = '🧭 英雄之路';
         const rankRoad = RANK_TIERS.slice(1).map((tier, index) => `<div class="skill-card"><div class="skill-name">${gameState.rank.tier >= index + 1 ? '✅' : '🔒'} 晋升 ${tier}</div><div class="skill-desc">奖励：${heroIconMarkup(POLAR_RANK_REWARDS[index], ANIMALS[POLAR_RANK_REWARDS[index]])} ${ANIMALS[POLAR_RANK_REWARDS[index]].name}</div></div>`).join('');
