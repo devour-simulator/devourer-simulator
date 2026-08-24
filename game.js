@@ -2683,6 +2683,7 @@ function defeatEnemyBySkill(enemy) {
     spawnKillEffect(enemy.x, enemy.y);
     if (gameState.mode !== 'skinTrial') {
         gameState.stats.killCount++;
+        trackBattlePassKill();
         gameState.stats.coins += Math.ceil((enemy.isBoss ? 80 : 12) * (isFridayEvolution() ? 1.5 : 1));
         localStorage.setItem('coins', gameState.stats.coins);
         player.addExp(Math.floor(10 * (1 + enemy.level * 0.5)));
@@ -3437,6 +3438,25 @@ function openAccountPanel(kind) {
             return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>商城售价：🪙 ${skin.price}</div></div>`;
         }).join('');
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
+    } else if (kind === 'battlePass') {
+        title.textContent = '📜 吞噬战令 · 启程篇';
+        const pass = battlePassState(), level = battlePassLevel(pass), levelExp = pass.exp % 100;
+        const taskDefs = [
+            { key:'match', group:'每日', name:'完成 1 局对战', progress:pass.dailyMatches, target:1, exp:60 },
+            { key:'kill', group:'每日', name:'击败 15 名敌人', progress:pass.dailyKills, target:15, exp:80 },
+            { key:'time', group:'每日', name:'游玩 10 分钟', progress:Math.floor(dailyPlaySeconds() / 60), target:10, exp:80 },
+            { key:'weekly', group:'每周', name:'赢得 3 局对战', progress:pass.weeklyWins, target:3, exp:180 }
+        ];
+        const taskCards = taskDefs.map(task => {
+            const claimed = task.key === 'weekly' ? pass.weeklyClaimed : pass.dailyClaimed[task.key];
+            const done = task.progress >= task.target;
+            return `<div class="skill-card"><div class="skill-name">${task.group} · ${task.name}</div><div class="skill-desc">进度 ${Math.min(task.progress, task.target)}/${task.target} · 战令经验 +${task.exp}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !done ? 'disabled' : ''} onclick="claimBattlePassTask('${task.key}')">${claimed ? '已领取' : done ? '领取战令经验' : '进行中'}</button></div>`;
+        }).join('');
+        const rewards = Array.from({length:BATTLE_PASS_LEVELS}, (_, index) => {
+            const tier = index + 1, reward = battlePassReward(tier), claimed = !!pass.rewardClaims[tier], unlocked = tier <= level;
+            return `<div class="animal-card" style="opacity:${unlocked ? 1 : .55}"><div class="animal-emoji">${tier % 10 === 0 ? '🎀' : tier % 5 === 0 ? '🎁' : '⭐'}</div><div class="animal-name">战令 Lv.${tier}</div><div class="animal-stats">${rewardText(reward).replace(/\n/g, '<br>')}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !unlocked ? 'disabled' : ''} onclick="claimBattlePassReward(${tier})">${claimed ? '已领取' : unlocked ? '领取' : '未解锁'}</button></div>`;
+        }).join('');
+        content.innerHTML = `<div class="feedback-box" style="background:linear-gradient(135deg,#202a55,#58377e);color:#fff"><div class="feedback-heading">📜 免费吞噬战令</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62d9ff,#c079ff)"></div></div></div><div class="tip">每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。战令为免费路线，奖励可手动领取。</div><h3>任务</h3>${taskCards}<h3>战令奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'activity') {
         title.textContent = '🎉 活动中心';
         const played = dailyPlaySeconds();
@@ -3610,6 +3630,71 @@ const DAILY_WEEKLY_REWARDS = [
 ];
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
+const BATTLE_PASS_LEVELS = 20;
+function battlePassWeekKey() {
+    const now = new Date();
+    const shanghai = new Date(now.toLocaleString('en-US', { timeZone:'Asia/Shanghai' }));
+    const day = (shanghai.getDay() + 6) % 7;
+    shanghai.setDate(shanghai.getDate() - day);
+    return shanghai.toISOString().slice(0, 10);
+}
+function battlePassState() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem('battlePassState') || '{}'); } catch (_) { state = {}; }
+    const today = dailyActivityDate(), week = battlePassWeekKey();
+    if (state.dailyDate !== today) Object.assign(state, { dailyDate:today, dailyMatches:0, dailyKills:0, dailyClaimed:{} });
+    if (state.weekKey !== week) Object.assign(state, { weekKey:week, weeklyWins:0, weeklyClaimed:false });
+    state.exp = Math.max(0, state.exp || 0);
+    state.dailyMatches = Math.max(0, state.dailyMatches || 0);
+    state.dailyKills = Math.max(0, state.dailyKills || 0);
+    state.dailyClaimed = state.dailyClaimed || {};
+    state.weeklyWins = Math.max(0, state.weeklyWins || 0);
+    state.rewardClaims = state.rewardClaims || {};
+    return state;
+}
+function saveBattlePassState(state) { localStorage.setItem('battlePassState', JSON.stringify(state)); }
+function battlePassLevel(state = battlePassState()) { return Math.min(BATTLE_PASS_LEVELS, Math.floor(state.exp / 100) + 1); }
+function trackBattlePassKill() { const state = battlePassState(); state.dailyKills++; saveBattlePassState(state); }
+function trackBattlePassMatch(won) { const state = battlePassState(); state.dailyMatches++; if (won) state.weeklyWins++; saveBattlePassState(state); }
+function claimBattlePassTask(key) {
+    const state = battlePassState();
+    const tasks = {
+        match:{ label:'完成 1 局对战', done:state.dailyMatches >= 1, exp:60 },
+        kill:{ label:'击败 15 名敌人', done:state.dailyKills >= 15, exp:80 },
+        time:{ label:'游玩 10 分钟', done:dailyPlaySeconds() >= 600, exp:80 },
+        weekly:{ label:'每周赢得 3 局', done:state.weeklyWins >= 3, exp:180 }
+    };
+    const task = tasks[key];
+    if (!task || state.dailyClaimed[key] || (key === 'weekly' && state.weeklyClaimed) || !task.done) return;
+    state.exp += task.exp;
+    if (key === 'weekly') state.weeklyClaimed = true; else state.dailyClaimed[key] = true;
+    saveBattlePassState(state);
+    window.alert(`战令经验 +${task.exp}！`);
+    openAccountPanel('battlePass');
+}
+function battlePassReward(level) {
+    if (level % 10 === 0) return { skinChoiceChest:1 };
+    if (level % 5 === 0) return { outsideChestTicket:1, coins:500 };
+    if (level % 4 === 0) return { rankStarCard:1, rankProtectCard:1 };
+    if (level % 3 === 0) return { skinFragments:{ rare:5 } };
+    if (level % 2 === 0) return { skinFragments:{ normal:10 } };
+    return { coins:200 + level * 30 };
+}
+function claimBattlePassReward(level) {
+    const state = battlePassState(), current = battlePassLevel(state);
+    if (level < 1 || level > current || state.rewardClaims[level]) return;
+    const reward = battlePassReward(level);
+    state.rewardClaims[level] = true;
+    if (reward.coins) { gameState.stats.coins += reward.coins; localStorage.setItem('coins', gameState.stats.coins); }
+    if (reward.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + reward.rankStarCard;
+    if (reward.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + reward.rankProtectCard;
+    if (reward.outsideChestTicket) gameState.account.inventory.outsideChestTicket = (gameState.account.inventory.outsideChestTicket || 0) + reward.outsideChestTicket;
+    if (reward.skinChoiceChest) gameState.account.inventory.skinChoiceChest = (gameState.account.inventory.skinChoiceChest || 0) + reward.skinChoiceChest;
+    addSkinFragments(reward); saveBattlePassState(state); saveAccount();
+    window.alert(`战令奖励已领取！\n${rewardText(reward)}`);
+    openAccountPanel('battlePass');
+    if (reward.skinChoiceChest) showSkinChoiceChestPrompt(reward.skinChoiceChest);
+}
 function pendingSkinChoiceChestCount() { return Math.max(0, parseInt(localStorage.getItem('pendingSkinChoiceChest')) || 0); }
 function availableSkinChoiceChestCount() { return pendingSkinChoiceChestCount() || (gameState.account.inventory.skinChoiceChest || 0); }
 function dailyActivityDate() { return new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date()); }
@@ -3734,6 +3819,8 @@ window.confirmSkinChoiceSelection = confirmSkinChoiceSelection;
 window.showSkinChoiceChestPrompt = showSkinChoiceChestPrompt;
 window.deferSkinChoiceChest = deferSkinChoiceChest;
 window.openSkinChoiceChestNow = openSkinChoiceChestNow;
+window.claimBattlePassTask = claimBattlePassTask;
+window.claimBattlePassReward = claimBattlePassReward;
 const OUTSIDE_CHEST_TIERS = [
     { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
     { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
@@ -4198,6 +4285,7 @@ function checkCollisions() {
                 spawnKillEffect(enemy.x, enemy.y);
                 if (gameState.mode !== 'skinTrial' && gameState.mode !== 'team') {
                     gameState.stats.killCount++;
+                    trackBattlePassKill();
                     gameState.stats.coins += Math.ceil((enemy.isBoss ? 80 : 12) * (isFridayEvolution() ? 1.5 : 1));
                     localStorage.setItem('coins', gameState.stats.coins);
                     const expReward = Math.floor(10 * (1 + enemy.level * 0.5));
@@ -4278,6 +4366,7 @@ function checkCollisions() {
 function finishRankedMatch(won, rankRewardOverride = null) {
     gameState.screen = 'gameover';
     exitGameFullscreen();
+    trackBattlePassMatch(won);
     const rankProgress = isRankProgressMode();
     if (rankProgress) clearRankedRun();
     if (rankProgress && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
@@ -4657,6 +4746,7 @@ function endGame() {
         finishRankedMatch(false);
         return;
     }
+    trackBattlePassMatch(false);
     gameState.screen = 'gameover';
     accountExp(15 + gameState.stats.killCount * 2);
     const score = gameState.stats.killCount;
