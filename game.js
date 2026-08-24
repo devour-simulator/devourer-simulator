@@ -426,7 +426,7 @@ function skinRarity(skin) {
     if (skin.id === 'solar') return 'legendary';
     return 'normal';
 }
-const SKIN_FRAGMENT_COST = { normal:8, rare:10, epic:20, mythic:35, legendary:50 };
+const SKIN_FRAGMENT_COST = { normal:100, rare:100, epic:100, mythic:100, legendary:100 };
 function addSkinFragments(rewards) {
     const fragments = rewards?.skinFragments || {};
     Object.entries(fragments).forEach(([rarity, amount]) => gameState.account.inventory[`fragment_${rarity}`] = (gameState.account.inventory[`fragment_${rarity}`] || 0) + amount);
