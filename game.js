@@ -469,7 +469,7 @@ window.selectHeroSkin = selectHeroSkin;
 function startSkinTrial(type, skinId) {
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
     if (!skin) return;
-    gameState.skinTrial = { type, skinId, respawnPending: false };
+    gameState.skinTrial = { type, skinId, respawnPending: false, playerRespawnPending: false };
     gameState.mode = 'skinTrial';
     document.getElementById('subPageModal').classList.add('hidden');
     startGame(type);
@@ -500,6 +500,31 @@ function queueSkinTrialOpponent() {
         foe.maxHp = 50; foe.hp = 50; foe.attack = 4; foe.defense = 1;
         gameState.enemies = [foe];
     }, 1400);
+}
+
+function respawnSkinTrialPlayer() {
+    const trial = gameState.skinTrial;
+    const player = gameState.player;
+    if (!trial || !player || trial.playerRespawnPending) return;
+    trial.playerRespawnPending = true;
+    player.hp = 0;
+    player.vx = 0;
+    player.vy = 0;
+    gameState.rankItemNotice = '💫 试玩中被击败，1.2 秒后在地图中央复活。';
+    window.setTimeout(() => {
+        if (gameState.mode !== 'skinTrial' || gameState.screen !== 'playing' || gameState.skinTrial !== trial || !gameState.player) return;
+        const centerX = GAME_WIDTH / 2;
+        const centerY = GAME_HEIGHT / 2;
+        gameState.obstacles = (gameState.obstacles || []).filter(obstacle => Math.hypot(obstacle.x - centerX, obstacle.y - centerY) > obstacle.radius + gameState.player.radius + 32);
+        gameState.player.x = gameState.player.targetX = centerX;
+        gameState.player.y = gameState.player.targetY = centerY;
+        gameState.player.vx = 0;
+        gameState.player.vy = 0;
+        gameState.player.hp = gameState.player.maxHp;
+        gameState.player.invulnerableTicks = 1.5 * TARGET_FPS;
+        trial.playerRespawnPending = false;
+        gameState.rankItemNotice = '🛡️ 已在地图中央复活，并获得 1.5 秒无敌时间。';
+    }, 1200);
 }
 
 function exitSkinTrialToHall() {
@@ -3439,7 +3464,7 @@ function openAccountPanel(kind) {
         }).join('');
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'battlePass') {
-        title.textContent = `📜 吞噬战令 · ${BATTLE_PASS_SEASON} 启程篇`;
+        title.textContent = `📜 吞噬战令 · ${BATTLE_PASS_SEASON} ${BATTLE_PASS_THEME}`;
         const pass = battlePassState(), level = battlePassLevel(pass), levelExp = pass.exp % 100;
         const taskDefs = [
             { key:'match', group:'每日', name:'完成 1 局对战', progress:pass.dailyMatches, target:1, exp:60 },
@@ -3460,7 +3485,7 @@ function openAccountPanel(kind) {
             const tier = index + 1, reward = battlePassReward(tier), claimed = !!pass.rewardClaims[tier], unlocked = tier <= level;
             return `<div class="animal-card" style="opacity:${unlocked ? 1 : .55}"><div class="animal-emoji">${tier % 10 === 0 ? '🎀' : tier % 5 === 0 ? '🎁' : '⭐'}</div><div class="animal-name">战令 Lv.${tier}</div><div class="animal-stats">${rewardText(reward).replace(/\n/g, '<br>')}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !unlocked ? 'disabled' : ''} onclick="claimBattlePassReward(${tier})">${claimed ? '已领取' : unlocked ? '领取' : '未解锁'}</button></div>`;
         }).join('');
-        content.innerHTML = `<div class="feedback-box" style="background:linear-gradient(135deg,#202a55,#58377e);color:#fff"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · 免费吞噬战令</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62d9ff,#c079ff)"></div></div></div><div class="tip">现在是 ${BATTLE_PASS_SEASON} 赛季。每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。战令共 ${BATTLE_PASS_LEVELS} 级，全部为免费路线，奖励可手动领取。</div><h3>每日与每周任务</h3>${taskCards}<h3>战令奖励</h3><div class="animals-grid">${rewards}</div>`;
+        content.innerHTML = `<div class="feedback-box" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c);color:#fff"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>森林、草原、海洋、天空与极地的英雄共同踏上第一段赛季旅程。</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div></div><div class="tip">现在是 ${BATTLE_PASS_SEASON}「${BATTLE_PASS_THEME}」赛季。每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。战令共 ${BATTLE_PASS_LEVELS} 级，全部为免费路线，奖励可手动领取。</div><h3>每日与每周任务</h3>${taskCards}<h3>战令奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'skinChoiceChest') {
         title.textContent = '🎀 开启皮肤碎片自选宝箱';
         content.innerHTML = availableSkinChoiceChestCount() ? skinChoicePickerMarkup() : '<div class="tip">背包里暂时没有皮肤碎片自选宝箱。</div>';
@@ -3536,7 +3561,7 @@ function openAccountPanel(kind) {
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.15 · 活动中心与超级星期五</div><div>最新活动内容</div></div><div class="skill-card"><div class="skill-name">🎉 活动中心</div><div class="skill-desc">• 大厅新增“活动”，分为日常活动和限时活动。<br>• 每日累计游玩 15、30、60、90、120 分钟可领取金币奖励，每天北京时间 00:00 刷新。<br>• 每日签到按星期发放金币、局外宝箱券、排位加星/保护卡或皮肤碎片自选宝箱，奖励通过邮件领取。</div></div><div class="skill-card"><div class="skill-name">🎀 皮肤碎片自选宝箱与稀有品质</div><div class="skill-desc">• 周六、周日签到可获得皮肤碎片自选宝箱，多个宝箱可累计并分别选择奖励。<br>• 每个宝箱可任选：普通碎片 ×20、稀有 ×10、史诗 ×5、神话 ×3 或传说 ×1。<br>• 新增稀有皮肤品质与稀有碎片兑换；苍鹰新增稀有皮肤「极光苍鹰」。</div></div><div class="skill-card"><div class="skill-name">🌟 超级星期五</div><div class="skill-desc">• 每周五免费体验全部普通、稀有皮肤。<br>• 当天第一局排位胜利额外 +1 星；失败仍正常结算，额外星数不会抵扣扣星。<br>• 周五的进化试炼账号经验与击败敌人金币奖励提升 50%。</div></div><div class="skill-card"><div class="skill-name">🏳️ 5v5 三据点争夺</div><div class="skill-desc">• 团队战新增 A、B、C 三据点，可反复抢占；率先占领全部据点的一方获胜。<br>• 阵亡后 3 秒复活，击败英雄不获得经验或生命回复。</div></div>`;
-        content.insertAdjacentHTML('afterbegin', `<div class="feedback-box"><div class="feedback-heading">v3.5.16 · S1 吞噬战令</div><div>150 级免费赛季战令现已开放</div></div><div class="skill-card"><div class="skill-name">📜 S1 免费吞噬战令</div><div class="skill-desc">• 大厅新增“吞噬战令”，所有玩家都可免费参与，共 150 级，没有付费路线。<br>• 每天可完成对局、胜利、击败敌人和游玩时长任务；每周另有完成 10 局、赢得 5 局、击败 100 名敌人和累计游玩 120 分钟等高经验任务。<br>• 每日任务于北京时间 00:00 刷新，每周任务于周一刷新。<br>• 升级后可手动领取金币、皮肤碎片、排位加星卡、排位保护卡、局外宝箱券和皮肤碎片自选宝箱等奖励。</div></div>`);
+        content.insertAdjacentHTML('afterbegin', `<div class="feedback-box"><div class="feedback-heading">v3.5.16 · S1 万兽启程</div><div>150 级免费赛季战令现已开放</div></div><div class="skill-card"><div class="skill-name">📜 S1「万兽启程」免费战令</div><div class="skill-desc">• S1 主题为“万兽启程”，代表森林、草原、海洋、天空与极地英雄共同开启第一段赛季旅程。<br>• 大厅新增“吞噬战令”，所有玩家都可免费参与，共 150 级，没有付费路线。<br>• 每天可完成对局、胜利、击败敌人和游玩时长任务；每周另有完成 10 局、赢得 5 局、击败 100 名敌人和累计游玩 120 分钟等高经验任务。<br>• 每日任务于北京时间 00:00 刷新，每周任务于周一刷新；升级后可手动领取各类奖励。</div></div>`);
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -3638,6 +3663,7 @@ const DAILY_WEEKLY_REWARDS = [
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
 const BATTLE_PASS_SEASON = 'S1';
+const BATTLE_PASS_THEME = '万兽启程';
 const BATTLE_PASS_LEVELS = 150;
 function battlePassWeekKey() {
     const now = new Date();
@@ -4286,8 +4312,8 @@ function checkCollisions() {
         }
     }
 
-    // 5V5 阵亡后等待出生点复活，期间不能攻击。
-    if (gameState.mode === 'team' && player.hp <= 0) return;
+    // 5V5 与皮肤试玩阵亡后等待复活，期间不能攻击。
+    if ((gameState.mode === 'team' || gameState.mode === 'skinTrial') && player.hp <= 0) return;
 
     // 检测玩家与敌人的碰撞（战斗）
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
@@ -4759,8 +4785,8 @@ function updateBossSkills() {
 }
 
 function endGame() {
+    if (gameState.mode === 'skinTrial') return respawnSkinTrialPlayer();
     exitGameFullscreen();
-    if (gameState.mode === 'skinTrial') return finishSkinTrial(false);
     if (gameState.mode === 'tower') clearRankedRun('tower');
     if (isRankProgressMode()) {
         finishRankedMatch(false);
