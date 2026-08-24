@@ -247,8 +247,8 @@ Object.assign(ANIMALS, {
 });
 ANIMALS.seasonStag = { name:'星角鹿', emoji:'🦌', baseAttack:10, baseDefense:6, baseSpeed:9, baseHp:58, color:'#6f73c8', unlocked:false, rewardOnly:true, seasonReward:true, rarityOverride:'mythic' };
 ABILITIES.seasonStag = {
-    passive:{ name:'群星引路', desc:'速度 +1、最大生命 +5', bonus:{ speed:1, hp:5 } },
-    active:{ name:'星角冲锋', desc:'沿面向冲锋 200 像素并撞击路径上的敌人', effect:'dash', distance:200, cooldown:9 }
+    passive:{ name:'万兽引路', desc:'为同行的万兽点亮方向：速度 +1、最大生命 +5', bonus:{ speed:1, hp:5 } },
+    active:{ name:'启程号角', desc:'沿万兽足迹向前冲锋 200 像素并撞击路径上的敌人', effect:'dash', distance:200, cooldown:9 }
 };
 // S2“深海觉醒”内容会提前随版本发布，但在赛季开始前不会进入图鉴、选人或敌人池。
 ANIMALS.abyssSwordfish = { name:'潮汐剑鱼', emoji:'🐟', baseAttack:12, baseDefense:5, baseSpeed:11, baseHp:52, color:'#245f91', unlocked:false, rewardOnly:true, seasonReward:true, futureSeason:'S2', rarityOverride:'mythic' };
@@ -391,7 +391,7 @@ function heroesByRarity(entries = Object.entries(ANIMALS)) {
     });
 }
 function heroIconMarkup(key, hero, skin = null) {
-    if (key === 'seasonStag' && skin?.id === 'starbloom') return '<span class="skin-hero-icon" role="img" aria-label="繁星花冠">🦌<i>✦</i></span>';
+    if (key === 'seasonStag' && skin?.id === 'starbloom') return '<span class="skin-hero-icon starbloom-stag-icon" role="img" aria-label="繁星花冠">🦌<i>🐾</i><b>✦</b></span>';
     if (key === 'abyssSwordfish') return `<span class="skin-hero-icon" role="img" aria-label="${skin?.id === 'thunderTide' ? '雷渊潮汐' : '潮汐剑鱼'}">🐟${skin?.id === 'thunderTide' ? '<i>⚡</i>' : ''}</span>`;
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'fox' && skin?.id === 'moon') return '<span class="skin-hero-icon moon-fox-icon" role="img" aria-label="月影灵狐">🦊<i>☾</i></span>';
@@ -417,7 +417,7 @@ const HERO_SKINS = {
     hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',effectColor:'#c7d84a',price:10000}],
     fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000},{id:'moon',name:'月影灵狐',color:'#7767d7',effectColor:'#b79cff',price:10000}],
     eagle:[{id:'default',name:'苍穹猎鹰',color:'#DAA520'},{id:'aurora',name:'极光苍鹰',color:'#6bb7da',effectColor:'#61f0d1',price:6000,rarity:'rare'}],
-    seasonStag:[{id:'default',name:'启程星角鹿',color:'#6f73c8'},{id:'starbloom',name:'繁星花冠',color:'#7047b8',effectColor:'#b8a0ff',rarity:'epic',battlePassOnly:true}],
+    seasonStag:[{id:'default',name:'启程星角鹿',color:'#6f73c8'},{id:'starbloom',name:'繁星花冠',color:'#7047b8',effectColor:'#8ff0c7',rarity:'epic',battlePassOnly:true,themeText:'万兽足迹与启程星路'}],
     abyssSwordfish:[{id:'default',name:'潮汐剑鱼',color:'#245f91',futureSeason:'S2'},{id:'thunderTide',name:'雷渊潮汐',color:'#25236f',effectColor:'#50bfff',rarity:'epic',battlePassOnly:true,futureSeason:'S2'}]
 };
 function ownedSkinKeys() {
@@ -1169,10 +1169,11 @@ function toWorld(entity) { return { x: (entity.x - GAME_WIDTH / 2) / 42, z: (ent
 
 function ensureSkinMotionTrail(mesh, entity) {
     const skinId = entity.skin?.id;
-    if (!Three || !['moon', 'nebula', 'solar'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
+    if (!Three || !['moon', 'nebula', 'solar', 'starbloom'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
     const palettes = {
         moon: [0x7651ff, 0xb46dff, 0xff76d5],
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
+        starbloom: [0x8ff0c7, 0xd1b1ff, 0xffe69b, 0xffffff],
         // 星穹狮王：底下的银河云由 galaxyClouds 保持蓝紫色，星芒本身全部白色。
         solar: [0xffffff]
     };
@@ -1192,13 +1193,24 @@ function ensureSkinMotionTrail(mesh, entity) {
         star.rotation.x = -Math.PI / 2;
         return star;
     };
-    const dustCount = skinId === 'solar' ? 34 : 24;
+    const makePawPrint = (size, material) => {
+        const paw = new Three.Group();
+        const pad = new Three.Mesh(new Three.SphereGeometry(size * .82, 8, 6), material);
+        pad.scale.set(1, .22, 1.18); paw.add(pad);
+        [-.65, 0, .65].forEach((offset, index) => {
+            const toe = new Three.Mesh(new Three.SphereGeometry(size * .34, 7, 5), material);
+            toe.position.set(offset * size, .01, -.78 * size - (index === 1 ? .18 * size : 0));
+            toe.scale.y = .24; paw.add(toe);
+        });
+        return paw;
+    };
+    const dustCount = skinId === 'solar' ? 34 : skinId === 'starbloom' ? 18 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
-        const size = (skinId === 'solar' ? .065 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
+        const size = (skinId === 'solar' ? .065 : skinId === 'starbloom' ? .075 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
         const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? .94 : .92, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         // 星穹狮王不再使用圆润星点，而是和击败特效一致的十字星芒、星环与闪光。
-        const part = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
+        const part = skinId === 'solar' ? new Three.Group() : skinId === 'starbloom' ? makePawPrint(size, trailMaterial) : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
         if (skinId === 'solar') {
             part.add(makeTwinkleStar(size, trailMaterial));
         }
@@ -1210,8 +1222,8 @@ function ensureSkinMotionTrail(mesh, entity) {
     const glitters = palettes[skinId].concat(palettes[skinId]).map((color, index) => {
         const glitterMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         const glitterSize = .035 + (index % 3) * .012;
-        const sparkle = skinId === 'solar' ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
-        if (skinId === 'solar') {
+        const sparkle = ['solar','starbloom'].includes(skinId) ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
+        if (['solar','starbloom'].includes(skinId)) {
             sparkle.add(makeTwinkleStar(glitterSize, glitterMaterial));
         }
         sparkle.userData.glitterMaterial = glitterMaterial;
@@ -1219,11 +1231,16 @@ function ensureSkinMotionTrail(mesh, entity) {
         mesh.add(sparkle);
         return sparkle;
     });
-    const galaxyClouds = skinId === 'solar' ? [
+    const pathCloudSpecs = skinId === 'solar' ? [
         { color:0x07146b, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.26 },
         { color:0x16288f, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.24 },
         { color:0x3d258b, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.21 }
-    ].map((spec, index) => {
+    ] : skinId === 'starbloom' ? [
+        { color:0x1a7b68, x:-.12, z:1.22, scale:[.82,1.72], turn:0, opacity:.14 },
+        { color:0x7652a6, x:.12, z:1.22, scale:[.82,1.72], turn:0, opacity:.13 },
+        { color:0xe5bd68, x:0, z:1.22, scale:[.48,1.72], turn:0, opacity:.08 }
+    ] : [];
+    const galaxyClouds = pathCloudSpecs.map((spec, index) => {
         const cloud = new Three.Mesh(new Three.PlaneGeometry(1, 1), new Three.MeshBasicMaterial({ color:spec.color, transparent:true, opacity:spec.opacity, depthWrite:false, blending:Three.AdditiveBlending }));
         cloud.rotation.set(-Math.PI / 2, spec.turn, 0);
         cloud.position.set(spec.x, .13 + index * .012, spec.z);
@@ -1233,7 +1250,7 @@ function ensureSkinMotionTrail(mesh, entity) {
         cloud.userData.baseTurn = spec.turn;
         mesh.add(cloud);
         return cloud;
-    }) : [];
+    });
     // 不使用线条：只留下深蓝、紫、粉与白色的星空闪点和星芒。
     const ribbons = [];
     mesh.userData.skinMotionTrail = { id:skinId, dust, glitters, galaxyClouds, ribbons };
@@ -1406,6 +1423,20 @@ function build3DMesh(entity, kind) {
                 star.userData.skinTrail = index / 4 * Math.PI * 2; star.userData.radius = .34 + index * .03; group.add(star);
             });
             group.userData.skinSkill = 'moon';
+        } else if (skinId === 'starbloom') {
+            const pathMat = new Three.MeshBasicMaterial({ color:0x8ff0c7, transparent:true, opacity:.9 });
+            const ring = new Three.Mesh(new Three.TorusGeometry(.44,.045,7,24),pathMat);
+            ring.position.y=.42; ring.rotation.x=Math.PI/2; ring.userData.skinTrail=0; ring.userData.ring=true; group.add(ring);
+            [0x8ff0c7,0xd1b1ff,0xffe69b,0xffffff,0x8ff0c7].forEach((color,index) => {
+                const paw = new Three.Group();
+                const pawMat = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.95 });
+                const pad = new Three.Mesh(new Three.SphereGeometry(.065,7,5),pawMat); pad.scale.set(1,.36,1.18); paw.add(pad);
+                [-.055,0,.055].forEach((x,toeIndex) => { const toe=new Three.Mesh(new Three.SphereGeometry(.025,6,5),pawMat); toe.position.set(x,.012,-.07-(toeIndex===1?.018:0)); toe.scale.y=.4; paw.add(toe); });
+                paw.userData.skinTrail=index/5*Math.PI*2; paw.userData.radius=.38+index*.045; paw.userData.sparkle=true; group.add(paw);
+            });
+            const beacon=add(new Three.OctahedronGeometry(.14,0),new Three.MeshStandardMaterial({color:0xfff2a8,emissive:0x8ff0c7,emissiveIntensity:1.8}),0,.42,0);
+            beacon.userData.skinTrail=.2; beacon.userData.radius=.12; beacon.userData.sparkle=true;
+            group.userData.skinSkill='starbloom';
         }
         threeScene.add(group); return group;
     }
@@ -1778,6 +1809,29 @@ function build3DMesh(entity, kind) {
         const crescent = new Three.Mesh(new Three.TorusGeometry(.18 * size,.035 * size,6,18,Math.PI*1.5), moonMat);
         crescent.position.set(.34 * size, 1.17 * size, .1 * size); crescent.rotation.y=.65; group.add(crescent);
     }
+    // S1史诗「繁星花冠」：花冠、发光枝角与胸前足迹徽记共同表现“万兽启程”的引路者。
+    if (type === 'seasonStag' && entity.skin?.id === 'starbloom') {
+        const pathMat = new Three.MeshStandardMaterial({ color:0x8ff0c7, emissive:0x39a983, emissiveIntensity:1.15, roughness:.26, flatShading:true });
+        const starMat = new Three.MeshStandardMaterial({ color:0xffe69b, emissive:0xd79932, emissiveIntensity:1.25, roughness:.2, flatShading:true });
+        const bloomMat = new Three.MeshStandardMaterial({ color:0xd3b1ff, emissive:0x7f51b6, emissiveIntensity:.95, roughness:.3, flatShading:true });
+        const crown = new Three.Mesh(new Three.TorusGeometry(.31 * size,.035 * size,6,22),pathMat);
+        crown.rotation.x=Math.PI/2; crown.position.set(0,1.03 * size,-.02 * size); group.add(crown);
+        [-.24,-.12,0,.12,.24].forEach((x,index) => {
+            const blossom=add(new Three.OctahedronGeometry((index===2?.095:.072)*size,0),index%2?starMat:bloomMat,x*size,(1.08+Math.cos(index)*.05)*size,-.2*size);
+            blossom.rotation.z=index*.55;
+        });
+        [-1,1].forEach(side => {
+            const branch=add(new Three.CylinderGeometry(.025*size,.045*size,.62*size,6),pathMat,side*.19*size,1.28*size,.04*size);
+            branch.rotation.z=side*.42;
+            [-.12,.12].forEach((offset,index) => {
+                const tine=add(new Three.ConeGeometry(.035*size,.25*size,5),index?starMat:pathMat,(side*.34+offset)*size,(1.42+index*.13)*size,.03*size);
+                tine.rotation.z=side*(.38+index*.2);
+            });
+        });
+        const pad=add(new Three.SphereGeometry(.085*size,8,6),pathMat,0,.55*size,-.43*size,1,.35,1.15);
+        [-.085,0,.085].forEach((x,index) => add(new Three.SphereGeometry(.035*size,7,5),starMat,x*size,(.63+(index===1?.025:0))*size,-.45*size,1,.35,1));
+        const guideLight = new Three.PointLight(0x9ff3cf, 1.65, 3.2); guideLight.position.set(0,1.12,0); group.add(guideLight);
+    }
     // 传说「虹光狮王」：彩虹从鬃毛由暖到冷渐变，做成鬃毛本身而不是在身体外挂光圈。
     if (type === 'lion' && entity.skin?.id === 'solar') {
         const rainbow = [0xff4b6e,0xff9346,0xffd747,0xffe264,0xb65ee8,0x6f7dff];
@@ -1911,12 +1965,17 @@ function render3D() {
                     const progress = index / Math.max(1, trail.dust.length - 1);
                     const scatter = ((index * 37) % 100) / 100 - .5;
                     part.position.set(scatter * (1.04 - progress * .28), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .50 + progress * 1.25 + (moving ? .08 : 0));
+                } else if (trail.id === 'starbloom') {
+                    const progress = index / Math.max(1, trail.dust.length - 1);
+                    const lane = index % 2 ? .2 : -.2;
+                    part.position.set(lane, .075, .58 + progress * 1.72 + (moving ? .12 : 0));
+                    part.rotation.y = index % 2 ? .16 : -.16;
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
-                const pulse = (.65 + (Math.sin(phase * (trail.id === 'solar' ? 2 : 5) + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
+                const pulse = trail.id === 'starbloom' ? .82 + (Math.sin(phase * 2.2 + index * 1.4) + 1) * .08 : (.65 + (Math.sin(phase * (trail.id === 'solar' ? 2 : 5) + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
                 part.scale.setScalar(pulse);
-                part.userData.trailMaterial.opacity = trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
+                part.userData.trailMaterial.opacity = trail.id === 'starbloom' ? .5 + pulse * .28 : trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
                 if (trail.id === 'solar') {
                     part.rotation.set(0, 0, index * .41);
                 }
@@ -1924,7 +1983,7 @@ function render3D() {
             trail.galaxyClouds?.forEach((cloud, index) => {
                 cloud.rotation.set(-Math.PI / 2, cloud.userData.baseTurn, 0);
                 cloud.scale.set(cloud.userData.baseScale[0], cloud.userData.baseScale[1], 1);
-                cloud.material.opacity = .21 + index * .025;
+                cloud.material.opacity = trail.id === 'starbloom' ? .1 + index * .025 : .21 + index * .025;
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
@@ -1933,8 +1992,11 @@ function render3D() {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
                     const scatter = ((index * 53) % 100) / 100 - .5;
                     sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .55 + progress * 1.15);
+                } else if (trail.id === 'starbloom') {
+                    const progress = index / Math.max(1, trail.glitters.length - 1);
+                    sparkle.position.set(Math.sin(index * 2.2) * .48, .28 + Math.cos(index * 1.7) * .11, .55 + progress * 1.38);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
-                const twinkle = .45 + (Math.sin(phase * (trail.id === 'solar' ? 2.2 : 6) + index * 2.4) + 1) * .5;
+                const twinkle = .45 + (Math.sin(phase * (trail.id === 'starbloom' ? 2.8 : trail.id === 'solar' ? 2.2 : 6) + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
                 sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : .35 + twinkle * .5;
             });
@@ -2691,6 +2753,18 @@ class SkillEffect {
                 ctx.beginPath(); ctx.moveTo(x-glowSize,y); ctx.lineTo(x+glowSize,y); ctx.moveTo(x,y-glowSize); ctx.lineTo(x,y+glowSize); ctx.stroke();
             }
             ctx.globalCompositeOperation = 'source-over';
+        } else if (this.skinEffect === 'starbloom') {
+            // 低性能设备也能看到“万兽启程”：固定青绿/紫金色的足迹沿技能方向亮起。
+            const facingAngle = Math.atan2(this.owner.facing?.y || 0, this.owner.facing?.x || 1);
+            ['#8ff0c7','#d1b1ff','#ffe69b','#ffffff'].forEach((color,index) => {
+                const distance = this.radius * (.35 + index * .23);
+                const side = index % 2 ? 7 : -7;
+                const x = this.x + Math.cos(facingAngle) * distance + Math.cos(facingAngle + Math.PI/2) * side;
+                const y = this.y + Math.sin(facingAngle) * distance + Math.sin(facingAngle + Math.PI/2) * side;
+                ctx.fillStyle=color;
+                ctx.beginPath(); ctx.ellipse(x,y,4.5,6.5,facingAngle,0,Math.PI*2); ctx.fill();
+                [-1,0,1].forEach(toe => { ctx.beginPath(); ctx.arc(x + Math.cos(facingAngle + Math.PI/2) * toe * 4 + Math.cos(facingAngle) * 6, y + Math.sin(facingAngle + Math.PI/2) * toe * 4 + Math.sin(facingAngle) * 6, 2, 0, Math.PI*2); ctx.fill(); });
+            });
         }
         ctx.lineWidth = 4;
         if (this.effect === 'reflect') {
@@ -2740,9 +2814,9 @@ function spawnSkillEffect(owner, active) {
 
 function spawnKillEffect(x, y, killer = gameState.player) {
     const skinId = killer?.skin?.id;
-    const supported = (killer?.type === 'lion' && skinId === 'solar') || (killer?.type === 'shark' && skinId === 'nebula') || (killer?.type === 'fox' && skinId === 'moon');
+    const supported = (killer?.type === 'lion' && skinId === 'solar') || (killer?.type === 'shark' && skinId === 'nebula') || (killer?.type === 'fox' && skinId === 'moon') || (killer?.type === 'seasonStag' && skinId === 'starbloom');
     if (!supported) return;
-    const color = skinId === 'moon' ? '#d7b8ff' : skinId === 'nebula' ? '#8a75ff' : '#8eeaff';
+    const color = skinId === 'starbloom' ? '#8ff0c7' : skinId === 'moon' ? '#d7b8ff' : skinId === 'nebula' ? '#8a75ff' : '#8eeaff';
     gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color, skinId });
 }
 
@@ -3527,7 +3601,7 @@ function openAccountPanel(kind) {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             const preview = heroIconMarkup(heroKey, hero, skin);
             const how = skin.battlePassOnly ? `${skin.futureSeason || 'S1'} 进阶战令 Lv.50` : `商城售价：🪙 ${skin.price}`;
-            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${how}</div></div>`;
+            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}</div></div>`;
         }).join('');
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'battlePass') {
@@ -3548,7 +3622,7 @@ function openAccountPanel(kind) {
         const seasonStatus = battlePassSeasonActive() ? '进行中' : '已结束';
         const premiumPanel = pass.premium
             ? '<div class="tip" style="border-color:#9c72e8">💎 已解锁进阶战令：已达到的进阶奖励均可领取。</div>'
-            : `<div class="feedback-box"><div class="feedback-heading">💎 进阶战令</div><div>花费 🪙 ${BATTLE_PASS_PREMIUM_PRICE} 金币解锁本赛季进阶奖励。Lv.50 可获得${seasonHero.name}史诗皮肤「${seasonSkin.name}」。新赛季开启后需重新解锁。</div><button class="btn btn-primary" type="button" ${battlePassSeasonActive() ? '' : 'disabled'} onclick="purchasePremiumBattlePass()">解锁进阶战令</button></div>`;
+            : `<div class="feedback-box"><div class="feedback-heading">💎 进阶战令</div><div>花费 🪙 ${BATTLE_PASS_PREMIUM_PRICE} 金币解锁本赛季进阶奖励。Lv.50 可获得${seasonHero.name}史诗皮肤「${seasonSkin.name}」${seasonSkin.themeText ? `，专属主题为“${seasonSkin.themeText}”` : ''}。新赛季开启后需重新解锁。</div><button class="btn btn-primary" type="button" ${battlePassSeasonActive() ? '' : 'disabled'} onclick="purchasePremiumBattlePass()">解锁进阶战令</button></div>`;
         content.innerHTML = `<div class="feedback-box battle-pass-banner" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c)"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>${BATTLE_PASS_CONFIG.description}</div><div>赛季时间：${battlePassDateLabel(BATTLE_PASS_START_AT)}—${battlePassDateLabel(BATTLE_PASS_END_AT)} · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「${seasonHero.name}」。赛季切换后战令等级、任务和领取记录重置，进阶版恢复为未解锁。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'skinChoiceChest') {
         title.textContent = '🎀 开启皮肤碎片自选宝箱';
@@ -3613,7 +3687,7 @@ function openAccountPanel(kind) {
             .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(b.skin)));
         const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
-            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero, skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
+            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero, skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤${skin.themeText ? `<br>主题：${skin.themeText}` : ''}<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
         }).join('') || '<div class="tip">皮肤正在制作中。</div>');
         const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
         const fragmentGroups = ['normal','rare','epic','mythic','legendary'].map(rarity => {
@@ -3648,7 +3722,7 @@ function openHeroSkinGallery(key) {
         const how = skin.id === 'default' ? '英雄自带' : skin.battlePassOnly ? `${skin.futureSeason || 'S1'} 进阶战令 Lv.50` : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
         const owned = ownsSkin(key, skin);
         const preview = heroIconMarkup(key, hero, skin);
-        return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
+        return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
     }).join('');
     document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里展示皮肤和获取方式；已拥有的皮肤可在选英雄界面切换，商城皮肤需前往商城购买。</div><div class="animals-grid">${cards}</div>`;
     document.getElementById('hallModal').classList.add('hidden');
