@@ -493,6 +493,14 @@
         </div>
     </div>
 
+    <div id="skinChoiceChestPrompt" class="modal hidden">
+        <div class="modal-content game-over-container" style="max-width:520px">
+            <div class="modal-title">🎀 获得自选宝箱</div>
+            <div id="skinChoiceChestPromptText" class="rank-info">获得皮肤碎片自选宝箱！要立即开启吗？</div>
+            <div style="display:flex;justify-content:center;gap:12px;margin-top:18px"><button class="btn" type="button" onclick="deferSkinChoiceChest()">暂不开启</button><button class="btn btn-success" type="button" onclick="openSkinChoiceChestNow()">立即开启</button></div>
+        </div>
+    </div>
+
     <div id="skillInfoModal" class="modal hidden">
         <div class="modal-content" style="max-width:560px;">
             <div class="modal-title" id="skillInfoTitle">技能介绍</div>
@@ -629,6 +637,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.5.83"></script>
+    <script src="game.js?v=3.5.84"></script>
 </body>
 </html>

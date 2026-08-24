@@ -3211,6 +3211,7 @@ function claimMail(index) {
     const mail = mails[index];
     if (!mail || mail.claimed) return;
     const rewards = mail.rewards || {};
+    const gainedSkinChoiceChest = rewards.skinChoiceChest || 0;
     if (rewards.coins) {
         gameState.stats.coins += rewards.coins;
         localStorage.setItem('coins', gameState.stats.coins);
@@ -3229,6 +3230,7 @@ function claimMail(index) {
     saveMails(mails); saveAccount();
     showRewardToast(rewards);
     openAccountPanel('mail');
+    if (gainedSkinChoiceChest) showSkinChoiceChestPrompt(gainedSkinChoiceChest);
 }
 
 function rewardText(rewards) {
@@ -3264,6 +3266,7 @@ function claimAllMails() {
     localStorage.setItem('coins', gameState.stats.coins); saveUnlockedHeroes(); saveMails(mails); saveAccount();
     window.alert(`一键领取成功！\n${rewardText(rewards)}${heroes.length ? `\n${heroes.join('\n')}` : ''}`);
     openAccountPanel('mail');
+    if (rewards.skinChoiceChest) showSkinChoiceChestPrompt(rewards.skinChoiceChest);
 }
 
 function showCoinHelp() { window.alert('🪙 金币用途：\n1. 在商城购买可购买的英雄。\n2. 账号升级奖励、战斗奖励和签到奖励都会获得金币。'); }
@@ -3456,6 +3459,8 @@ function openAccountPanel(kind) {
         const activityLimited = document.getElementById('activityLimited');
         const legacyChoiceCard = activityLimited?.querySelector('.skill-card');
         if (legacyChoiceCard) legacyChoiceCard.outerHTML = skinChoicePickerMarkup();
+        const chestInfo = [...(activityLimited?.querySelectorAll('.feedback-box') || [])].find(card => card.textContent.includes('皮肤碎片自选宝箱'));
+        if (chestInfo) chestInfo.querySelector('div:last-child').textContent = `当前待开启：${availableSkinChoiceChestCount()} 个。多个宝箱可累计，并可在下方自由分配不同品质的奖励。`;
         if (activityTabs && activityDaily && activityLimited) {
             const [dailyButton, limitedButton] = activityTabs.querySelectorAll('button');
             if (dailyButton && limitedButton) {
@@ -3598,6 +3603,8 @@ const DAILY_WEEKLY_REWARDS = [
 ];
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
+function pendingSkinChoiceChestCount() { return Math.max(0, parseInt(localStorage.getItem('pendingSkinChoiceChest')) || 0); }
+function availableSkinChoiceChestCount() { return pendingSkinChoiceChestCount() || (gameState.account.inventory.skinChoiceChest || 0); }
 function dailyActivityDate() { return new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date()); }
 function dailyActivityWeekday() {
     const name = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Shanghai', weekday:'short' }).format(new Date());
@@ -3658,14 +3665,15 @@ function claimSkinChoiceChest(rarity) {
 }
 function selectedSkinChoiceCount() { return Object.values(skinChoiceSelection).reduce((sum, count) => sum + (count || 0), 0); }
 function adjustSkinChoiceSelection(rarity, delta) {
-    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const chests = availableSkinChoiceChestCount();
     const current = skinChoiceSelection[rarity] || 0;
     if (delta > 0 && selectedSkinChoiceCount() >= chests) return;
     skinChoiceSelection[rarity] = Math.max(0, current + delta);
     openAccountPanel('activity');
 }
 function confirmSkinChoiceSelection() {
-    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const pending = pendingSkinChoiceChestCount();
+    const chests = availableSkinChoiceChestCount();
     const selected = selectedSkinChoiceCount();
     if (!chests) return;
     if (selected !== chests) return window.alert(`请先选择 ${chests} 份奖励（当前已选择 ${selected} 份）。`);
@@ -3676,14 +3684,15 @@ function confirmSkinChoiceSelection() {
         gameState.account.inventory[`fragment_${rarity}`] = (gameState.account.inventory[`fragment_${rarity}`] || 0) + amount;
         gained[rarity] = amount;
     });
-    gameState.account.inventory.skinChoiceChest -= selected;
+    if (pending) localStorage.removeItem('pendingSkinChoiceChest');
+    else gameState.account.inventory.skinChoiceChest -= selected;
     skinChoiceSelection = {};
     saveAccount();
     window.alert(`皮肤碎片自选宝箱已开启！\n${rewardText({ skinFragments:gained })}`);
     openAccountPanel('activity');
 }
 function skinChoicePickerMarkup() {
-    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const chests = availableSkinChoiceChestCount();
     const chosen = selectedSkinChoiceCount();
     const rewardCards = Object.entries(SKIN_CHOICE_REWARDS).map(([rarity, amount]) => {
         const info = SKIN_RARITY_INFO[rarity], count = skinChoiceSelection[rarity] || 0;
@@ -3691,11 +3700,33 @@ function skinChoicePickerMarkup() {
     }).join('');
     return `<div class="skill-card" style="background:linear-gradient(160deg,#10224e,#1a3d78);border:1px solid #4f9cff"><div class="skill-name" style="color:#dbeeff">🎀 皮肤碎片自选宝箱</div><div class="skill-desc" style="color:#c8dcff">请从以下奖励中选择 ${chests} 份。可以全部选同一种，也可以分开选不同品质。</div><div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0">${rewardCards}</div><div style="text-align:center;color:#fff;font-weight:800;margin:10px 0">已选择 ${chosen}/${chests} 份</div><button class="btn btn-success" type="button" ${chests && chosen === chests ? '' : 'disabled'} onclick="confirmSkinChoiceSelection()">确认领取奖励</button></div>`;
 }
+function showSkinChoiceChestPrompt(count = gameState.account.inventory.skinChoiceChest || 0) {
+    if (!count) return;
+    const label = document.getElementById('skinChoiceChestPromptText');
+    if (label) label.textContent = `获得皮肤碎片自选宝箱 ×${count}！要立即开启吗？`;
+    document.getElementById('skinChoiceChestPrompt').classList.remove('hidden');
+}
+function deferSkinChoiceChest() { document.getElementById('skinChoiceChestPrompt').classList.add('hidden'); }
+function openSkinChoiceChestNow() {
+    const count = gameState.account.inventory.skinChoiceChest || 0;
+    if (!count) return deferSkinChoiceChest();
+    // 点击“立即开启”后先从背包转到待开启栏；关闭页面也不会丢失，下一次仍可继续选择。
+    localStorage.setItem('pendingSkinChoiceChest', String(pendingSkinChoiceChestCount() + count));
+    gameState.account.inventory.skinChoiceChest = 0;
+    skinChoiceSelection = {};
+    saveAccount();
+    deferSkinChoiceChest();
+    openAccountPanel('activity');
+    switchActivityTab('limited');
+}
 window.claimDailyPlayReward = claimDailyPlayReward;
 window.claimWeeklyDailySign = claimWeeklyDailySign;
 window.claimSkinChoiceChest = claimSkinChoiceChest;
 window.adjustSkinChoiceSelection = adjustSkinChoiceSelection;
 window.confirmSkinChoiceSelection = confirmSkinChoiceSelection;
+window.showSkinChoiceChestPrompt = showSkinChoiceChestPrompt;
+window.deferSkinChoiceChest = deferSkinChoiceChest;
+window.openSkinChoiceChestNow = openSkinChoiceChestNow;
 const OUTSIDE_CHEST_TIERS = [
     { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
     { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
@@ -5195,7 +5226,7 @@ function gameLoop(timestamp = performance.now()) {
 window.addEventListener('load', () => {
     const container = document.getElementById('gameContainer');
     // 全屏时把所有弹窗也放进全屏容器，升级/胜负确认不会再卡在容器外。
-    ['hallModal','subPageModal','skillInfoModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','outsideChestModal','playerStats','gameStats'].forEach(id => {
+    ['hallModal','subPageModal','skinChoiceChestPrompt','skillInfoModal','tutorialModal','selectModal','levelUpModal','gameOverModal','saveChoiceModal','outsideChestModal','playerStats','gameStats'].forEach(id => {
         const element = document.getElementById(id); if (element) container.append(element);
     });
     init();
