@@ -3454,6 +3454,8 @@ function openAccountPanel(kind) {
         const activityTabs = content.firstElementChild;
         const activityDaily = document.getElementById('activityDaily');
         const activityLimited = document.getElementById('activityLimited');
+        const legacyChoiceCard = activityLimited?.querySelector('.skill-card');
+        if (legacyChoiceCard) legacyChoiceCard.outerHTML = skinChoicePickerMarkup();
         if (activityTabs && activityDaily && activityLimited) {
             const [dailyButton, limitedButton] = activityTabs.querySelectorAll('button');
             if (dailyButton && limitedButton) {
@@ -3595,6 +3597,7 @@ const DAILY_WEEKLY_REWARDS = [
     { day:0, label:'周日', rewards:{ skinChoiceChest:1 } }
 ];
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
+let skinChoiceSelection = {};
 function dailyActivityDate() { return new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date()); }
 function dailyActivityWeekday() {
     const name = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Shanghai', weekday:'short' }).format(new Date());
@@ -3653,9 +3656,46 @@ function claimSkinChoiceChest(rarity) {
     window.alert(`领取成功！获得 ${amount} 个${SKIN_RARITY_INFO[rarity].label}皮肤碎片。`);
     openAccountPanel('activity');
 }
+function selectedSkinChoiceCount() { return Object.values(skinChoiceSelection).reduce((sum, count) => sum + (count || 0), 0); }
+function adjustSkinChoiceSelection(rarity, delta) {
+    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const current = skinChoiceSelection[rarity] || 0;
+    if (delta > 0 && selectedSkinChoiceCount() >= chests) return;
+    skinChoiceSelection[rarity] = Math.max(0, current + delta);
+    openAccountPanel('activity');
+}
+function confirmSkinChoiceSelection() {
+    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const selected = selectedSkinChoiceCount();
+    if (!chests) return;
+    if (selected !== chests) return window.alert(`请先选择 ${chests} 份奖励（当前已选择 ${selected} 份）。`);
+    const gained = {};
+    Object.entries(skinChoiceSelection).forEach(([rarity, count]) => {
+        if (!count) return;
+        const amount = SKIN_CHOICE_REWARDS[rarity] * count;
+        gameState.account.inventory[`fragment_${rarity}`] = (gameState.account.inventory[`fragment_${rarity}`] || 0) + amount;
+        gained[rarity] = amount;
+    });
+    gameState.account.inventory.skinChoiceChest -= selected;
+    skinChoiceSelection = {};
+    saveAccount();
+    window.alert(`皮肤碎片自选宝箱已开启！\n${rewardText({ skinFragments:gained })}`);
+    openAccountPanel('activity');
+}
+function skinChoicePickerMarkup() {
+    const chests = gameState.account.inventory.skinChoiceChest || 0;
+    const chosen = selectedSkinChoiceCount();
+    const rewardCards = Object.entries(SKIN_CHOICE_REWARDS).map(([rarity, amount]) => {
+        const info = SKIN_RARITY_INFO[rarity], count = skinChoiceSelection[rarity] || 0;
+        return `<div style="min-width:132px;flex:1;padding:12px 8px;text-align:center;border:2px solid ${info.color};border-radius:10px;background:linear-gradient(145deg,#152c5c,#0b1532);box-shadow:inset 0 0 18px ${info.color}55"><div style="font-size:38px;filter:drop-shadow(0 0 8px ${info.color})">🎁</div><div style="color:${info.color};font-weight:800">${info.label}奖励</div><div style="color:#fff;margin:6px 0">碎片 ×${amount}</div><div style="display:flex;justify-content:center;align-items:center;gap:8px"><button class="btn" type="button" ${count ? '' : 'disabled'} onclick="adjustSkinChoiceSelection('${rarity}',-1)">−</button><strong style="min-width:24px;color:#fff">${count}</strong><button class="btn btn-primary" type="button" ${chosen >= chests ? 'disabled' : ''} onclick="adjustSkinChoiceSelection('${rarity}',1)">＋</button></div></div>`;
+    }).join('');
+    return `<div class="skill-card" style="background:linear-gradient(160deg,#10224e,#1a3d78);border:1px solid #4f9cff"><div class="skill-name" style="color:#dbeeff">🎀 皮肤碎片自选宝箱</div><div class="skill-desc" style="color:#c8dcff">请从以下奖励中选择 ${chests} 份。可以全部选同一种，也可以分开选不同品质。</div><div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0">${rewardCards}</div><div style="text-align:center;color:#fff;font-weight:800;margin:10px 0">已选择 ${chosen}/${chests} 份</div><button class="btn btn-success" type="button" ${chests && chosen === chests ? '' : 'disabled'} onclick="confirmSkinChoiceSelection()">确认领取奖励</button></div>`;
+}
 window.claimDailyPlayReward = claimDailyPlayReward;
 window.claimWeeklyDailySign = claimWeeklyDailySign;
 window.claimSkinChoiceChest = claimSkinChoiceChest;
+window.adjustSkinChoiceSelection = adjustSkinChoiceSelection;
+window.confirmSkinChoiceSelection = confirmSkinChoiceSelection;
 const OUTSIDE_CHEST_TIERS = [
     { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
     { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
