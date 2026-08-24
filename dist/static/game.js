@@ -239,6 +239,11 @@ Object.assign(ANIMALS, {
     emperorPenguin:{name:'王企鹅',emoji:'🐧',baseAttack:10,baseDefense:8,baseSpeed:6,baseHp:70,color:'#202733',unlocked:false},
     reindeer:{name:'驯鹿',emoji:'🦌',baseAttack:9,baseDefense:5,baseSpeed:9,baseHp:56,color:'#8b6c52',unlocked:false}
 });
+ANIMALS.seasonStag = { name:'星角鹿', emoji:'🦌', baseAttack:10, baseDefense:6, baseSpeed:9, baseHp:58, color:'#6f73c8', unlocked:false, rewardOnly:true, seasonReward:true, rarityOverride:'mythic' };
+ABILITIES.seasonStag = {
+    passive:{ name:'群星引路', desc:'速度 +1、最大生命 +5', bonus:{ speed:1, hp:5 } },
+    active:{ name:'星角冲锋', desc:'沿面向冲锋 200 像素并撞击路径上的敌人', effect:'dash', distance:200, cooldown:9 }
+};
 const POLAR_HERO_KEYS=['polarBear','arcticFox','penguin','walrus','snowOwl','muskOx','arcticHare','arcticWolf','puffin','narwhal','emperorPenguin','reindeer'];
 // 极地奖励按强度逐步发放：先史诗，再神话，最后才是传说。
 const POLAR_REWARD_ORDER=['penguin','snowOwl','reindeer','arcticWolf','narwhal','emperorPenguin','polarBear','walrus','muskOx','arcticFox','arcticHare','puffin'];
@@ -374,6 +379,7 @@ function heroesByRarity(entries = Object.entries(ANIMALS)) {
     });
 }
 function heroIconMarkup(key, hero, skin = null) {
+    if (key === 'seasonStag' && skin?.id === 'starbloom') return '<span class="skin-hero-icon" role="img" aria-label="繁星花冠">🦌<i>✦</i></span>';
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'fox' && skin?.id === 'moon') return '<span class="skin-hero-icon moon-fox-icon" role="img" aria-label="月影灵狐">🦊<i>☾</i></span>';
     if (key === 'shark' && skin?.id === 'nebula') return '<span class="skin-hero-icon nebula-shark-icon" role="img" aria-label="星海巨鲨">🦈<i>✦</i><b>✦</b></span>';
@@ -397,13 +403,14 @@ const HERO_SKINS = {
     flamingo:[{id:'default',name:'粉羽火烈鸟',color:'#ef7fa8'},{id:'coral',name:'珊瑚火烈鸟',color:'#ff6a68',effectColor:'#ff3e73',price:4000}],
     hedgehog:[{id:'default',name:'森林刺猬',color:'#8B4513'},{id:'durian',name:'榴莲刺猬',color:'#c7a52c',effectColor:'#c7d84a',price:10000}],
     fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000},{id:'moon',name:'月影灵狐',color:'#7767d7',effectColor:'#b79cff',price:10000}],
-    eagle:[{id:'default',name:'苍穹猎鹰',color:'#DAA520'},{id:'aurora',name:'极光苍鹰',color:'#6bb7da',effectColor:'#61f0d1',price:6000,rarity:'rare'}]
+    eagle:[{id:'default',name:'苍穹猎鹰',color:'#DAA520'},{id:'aurora',name:'极光苍鹰',color:'#6bb7da',effectColor:'#61f0d1',price:6000,rarity:'rare'}],
+    seasonStag:[{id:'default',name:'启程星角鹿',color:'#6f73c8'},{id:'starbloom',name:'繁星花冠',color:'#7047b8',effectColor:'#b8a0ff',rarity:'epic',battlePassOnly:true}]
 };
 function ownedSkinKeys() {
     try { return new Set(JSON.parse(localStorage.getItem('ownedSkins') || '[]')); } catch { return new Set(); }
 }
 function skinKey(type, id) { return `${type}:${id}`; }
-function ownsSkin(type, skin) { return !skin.price || ownedSkinKeys().has(skinKey(type, skin.id)); }
+function ownsSkin(type, skin) { return skin?.id === 'default' || ownedSkinKeys().has(skinKey(type, skin.id)); }
 function getSelectedHeroSkin(type) {
     const skins = HERO_SKINS[type];
     if (!skins) return null;
@@ -451,6 +458,7 @@ function selectHeroSkin(type, skinId, returnPanel = 'hero') {
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId);
     if (!skin) return;
     if (!ownsSkin(type, skin)) {
+        if (skin.battlePassOnly) return window.alert('该皮肤需要通过 S1 进阶战令 Lv.50 获得。');
         if (!window.confirm(`确定花费 ${skin.price} 金币购买「${skin.name}」吗？`)) return;
         if (gameState.stats.coins < skin.price) return window.alert('您的金币不足！');
         gameState.stats.coins -= skin.price;
@@ -1634,7 +1642,7 @@ function build3DMesh(entity, kind) {
     if (type === 'rabbit') { ear(-0.18, 0.6, 0.1); ear(0.18, 0.6, 0.1); }
     if (type === 'bear' || type === 'panda' || type === 'polarBear') { const earMat = type === 'polarBear' ? material : dark; add(new Three.SphereGeometry(0.15, 8, 6), earMat, -0.27 * size, 0.96 * size, 0); add(new Three.SphereGeometry(0.15, 8, 6), earMat, 0.27 * size, 0.96 * size, 0); }
     if (type === 'panda') { add(new Three.SphereGeometry(0.16, 8, 6), dark, -0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); add(new Three.SphereGeometry(0.16, 8, 6), dark, 0.15 * size, 0.68 * size, -0.33 * size, 1.3, .8, .3); }
-    if (['deer','giraffe','zebra','llama','goat'].includes(type)) { ear(-0.22); ear(0.22); [-0.17, 0.17].forEach(x => { const horn = add(new Three.CylinderGeometry(.025 * size, .04 * size, .5 * size, 5), dark, x * size, 1.23 * size, 0); horn.rotation.z = x * .35; }); }
+    if (['deer','seasonStag','giraffe','zebra','llama','goat'].includes(type)) { ear(-0.22); ear(0.22); [-0.17, 0.17].forEach(x => { const horn = add(new Three.CylinderGeometry(.025 * size, .04 * size, .5 * size, 5), dark, x * size, 1.23 * size, 0); horn.rotation.z = x * .35; }); }
     if (['elephant','africanElephant'].includes(type)) {
         const earScale = type === 'africanElephant' ? 1.55 : 1.2;
         add(new Three.SphereGeometry(.26, 8, 6), material, -.38 * size, .63 * size, -.04 * size, earScale, .62, .17);
@@ -1676,7 +1684,7 @@ function build3DMesh(entity, kind) {
         ear(-.2, .5, .1); ear(.2, .5, .1);
     }
     if (type === 'squirrel') add(new Three.SphereGeometry(.3*size,9,7),material,0,.65*size,.58*size,.82,1.2,1.35);
-    if (['deer','giraffe','zebra','llama','goat','elephant','africanElephant','hippo'].includes(type)) {
+    if (['deer','seasonStag','giraffe','zebra','llama','goat','elephant','africanElephant','hippo'].includes(type)) {
         const tail=add(new Three.CylinderGeometry(.028*size,.045*size,.52*size,5),material,0,.48*size,.64*size); tail.rotation.x=Math.PI/2;
         add(new Three.SphereGeometry(.07*size,7,5),dark,0,.43*size,.92*size);
     }
@@ -3269,6 +3277,10 @@ function rewardText(rewards) {
     if (rewards.skinChoiceChest) items.push(`🎀 皮肤碎片自选宝箱 ×${rewards.skinChoiceChest}`);
     Object.entries(rewards.skinFragments || {}).forEach(([rarity, amount]) => items.push(`🧩 ${SKIN_RARITY_INFO[rarity]?.label || rarity}皮肤碎片 ×${amount}`));
     if (rewards.hero && ANIMALS[rewards.hero]) items.push(`${ANIMALS[rewards.hero].emoji} ${ANIMALS[rewards.hero].name}`);
+    if (rewards.skin) {
+        const skin = HERO_SKINS[rewards.skin.type]?.find(item => item.id === rewards.skin.id);
+        if (skin) items.push(`🎨 ${skin.name}`);
+    }
     return items.length ? items.join('\n') : '没有可领取的附件';
 }
 function showRewardToast(rewards) { window.alert(`领取成功！\n${rewardText(rewards)}`); }
@@ -3451,7 +3463,7 @@ function openAccountPanel(kind) {
         title.textContent = '🦸 英雄图鉴';
         content.innerHTML = cards(heroesByPower().map(([key, h]) => {
             const wardrobe = HERO_SKINS[key]?.length > 1 ? `<button class="hero-wardrobe" type="button" onclick="openHeroSkinGallery('${key}')">👕 查看皮肤</button>` : '';
-            return `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.rewardOnly ? `❄️ ${polarUnlockCondition(key)}` : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div>${wardrobe}</div>`;
+            return `<div class="animal-card" style="opacity:${h.unlocked ? 1 : .55}"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>${h.unlocked ? '已解锁' : h.seasonReward ? '📜 S1 免费战令 Lv.50 领取' : h.rewardOnly ? `❄️ ${polarUnlockCondition(key)}` : h.signOnly ? '签到专属' : `售价 ${h.price} 金币`}</div>${wardrobe}</div>`;
         }).join(''));
     } else if (kind === 'skinCodex') {
         title.textContent = '🎨 皮肤图鉴';
@@ -3460,32 +3472,28 @@ function openAccountPanel(kind) {
         const cardsMarkup = allSkins.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             const preview = heroIconMarkup(heroKey, hero, skin);
-            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>商城售价：🪙 ${skin.price}</div></div>`;
+            const how = skin.battlePassOnly ? 'S1 进阶战令 Lv.50' : `商城售价：🪙 ${skin.price}`;
+            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${how}</div></div>`;
         }).join('');
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'battlePass') {
         title.textContent = `📜 吞噬战令 · ${BATTLE_PASS_SEASON} ${BATTLE_PASS_THEME}`;
         const pass = battlePassState(), level = battlePassLevel(pass), levelExp = pass.exp % 100;
-        const taskDefs = [
-            { key:'match', group:'每日', name:'完成 1 局对战', progress:pass.dailyMatches, target:1, exp:60 },
-            { key:'dailyWin', group:'每日', name:'赢得 1 局对战', progress:pass.dailyWins, target:1, exp:80 },
-            { key:'kill', group:'每日', name:'击败 15 名敌人', progress:pass.dailyKills, target:15, exp:80 },
-            { key:'time', group:'每日', name:'游玩 10 分钟', progress:Math.floor(dailyPlaySeconds() / 60), target:10, exp:80 },
-            { key:'weeklyMatch', group:'每周', name:'完成 10 局对战', progress:pass.weeklyMatches, target:10, exp:300, weekly:true },
-            { key:'weeklyWin', group:'每周', name:'赢得 5 局对战', progress:pass.weeklyWins, target:5, exp:400, weekly:true },
-            { key:'weeklyKill', group:'每周', name:'击败 100 名敌人', progress:pass.weeklyKills, target:100, exp:450, weekly:true },
-            { key:'weeklyTime', group:'每周', name:'累计游玩 120 分钟', progress:Math.floor(pass.weeklyPlaySeconds / 60), target:120, exp:450, weekly:true }
-        ];
+        const taskDefs = battlePassTasks(pass);
         const taskCards = taskDefs.map(task => {
             const claimed = task.weekly ? pass.weeklyClaimed[task.key] : pass.dailyClaimed[task.key];
             const done = task.progress >= task.target;
             return `<div class="skill-card"><div class="skill-name">${task.group} · ${task.name}</div><div class="skill-desc">进度 ${Math.min(task.progress, task.target)}/${task.target} · 战令经验 +${task.exp}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !done ? 'disabled' : ''} onclick="claimBattlePassTask('${task.key}')">${claimed ? '已领取' : done ? '领取战令经验' : '进行中'}</button></div>`;
         }).join('');
         const rewards = Array.from({length:BATTLE_PASS_LEVELS}, (_, index) => {
-            const tier = index + 1, reward = battlePassReward(tier), claimed = !!pass.rewardClaims[tier], unlocked = tier <= level;
-            return `<div class="animal-card" style="opacity:${unlocked ? 1 : .55}"><div class="animal-emoji">${tier % 10 === 0 ? '🎀' : tier % 5 === 0 ? '🎁' : '⭐'}</div><div class="animal-name">战令 Lv.${tier}</div><div class="animal-stats">${rewardText(reward).replace(/\n/g, '<br>')}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !unlocked ? 'disabled' : ''} onclick="claimBattlePassReward(${tier})">${claimed ? '已领取' : unlocked ? '领取' : '未解锁'}</button></div>`;
+            const tier = index + 1, reward = battlePassReward(tier), premiumReward = battlePassPremiumReward(tier), claimed = !!pass.rewardClaims[tier], premiumClaimed = !!pass.premiumRewardClaims[tier], unlocked = tier <= level;
+            return `<div class="animal-card" style="opacity:${unlocked ? 1 : .55}"><div class="animal-emoji">${tier === 50 ? '🦌' : tier % 10 === 0 ? '🎀' : tier % 5 === 0 ? '🎁' : '⭐'}</div><div class="animal-name">战令 Lv.${tier}</div><div class="animal-stats"><strong>免费奖励</strong><br>${rewardText(reward).replace(/\n/g, '<br>')}</div><button class="btn ${claimed ? '' : 'btn-success'}" type="button" ${claimed || !unlocked ? 'disabled' : ''} onclick="claimBattlePassReward(${tier})">${claimed ? '免费已领取' : unlocked ? '领取免费奖励' : '未解锁'}</button><div class="animal-stats" style="margin-top:10px;color:#cdb4ff"><strong>进阶奖励</strong><br>${rewardText(premiumReward).replace(/\n/g, '<br>')}</div><button class="btn ${premiumClaimed ? '' : 'btn-primary'}" type="button" ${premiumClaimed || !unlocked || !pass.premium ? 'disabled' : ''} onclick="claimBattlePassReward(${tier},true)">${premiumClaimed ? '进阶已领取' : !pass.premium ? '未解锁进阶版' : unlocked ? '领取进阶奖励' : '未解锁'}</button></div>`;
         }).join('');
-        content.innerHTML = `<div class="feedback-box" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c);color:#fff"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>森林、草原、海洋、天空与极地的英雄共同踏上第一段赛季旅程。</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div></div><div class="tip">现在是 ${BATTLE_PASS_SEASON}「${BATTLE_PASS_THEME}」赛季。每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。战令共 ${BATTLE_PASS_LEVELS} 级，全部为免费路线，奖励可手动领取。</div><h3>每日与每周任务</h3>${taskCards}<h3>战令奖励</h3><div class="animals-grid">${rewards}</div>`;
+        const seasonStatus = battlePassSeasonActive() ? '进行中' : '已结束';
+        const premiumPanel = pass.premium
+            ? '<div class="tip" style="border-color:#9c72e8">💎 已解锁进阶战令：已达到的进阶奖励均可领取。</div>'
+            : `<div class="feedback-box"><div class="feedback-heading">💎 进阶战令</div><div>花费 🪙 ${BATTLE_PASS_PREMIUM_PRICE} 金币永久解锁本赛季进阶奖励。Lv.50 可获得星角鹿史诗皮肤「繁星花冠」。</div><button class="btn btn-primary" type="button" ${battlePassSeasonActive() ? '' : 'disabled'} onclick="purchasePremiumBattlePass()">解锁进阶战令</button></div>`;
+        content.innerHTML = `<div class="feedback-box" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c);color:#fff"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>森林、草原、海洋、天空与极地的英雄共同踏上第一段赛季旅程。</div><div>赛季时间：2026年8月24日—2026年10月24日 · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「星角鹿」。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'skinChoiceChest') {
         title.textContent = '🎀 开启皮肤碎片自选宝箱';
         content.innerHTML = availableSkinChoiceChestCount() ? skinChoicePickerMarkup() : '<div class="tip">背包里暂时没有皮肤碎片自选宝箱。</div>';
@@ -3545,7 +3553,7 @@ function openAccountPanel(kind) {
         const gameShop = cards(heroesByRarity()
             .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
-        const skinShopEntries = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price).map(skin => ({ heroKey, skin })))
+        const skinShopEntries = Object.entries(HERO_SKINS).flatMap(([heroKey, skins]) => skins.filter(skin => skin.price && !skin.battlePassOnly).map(skin => ({ heroKey, skin })))
             .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(b.skin)));
         const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
@@ -3561,7 +3569,7 @@ function openAccountPanel(kind) {
     } else if (kind === 'updates') {
         title.textContent = '📢 更新公告';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">v3.5.15 · 活动中心与超级星期五</div><div>最新活动内容</div></div><div class="skill-card"><div class="skill-name">🎉 活动中心</div><div class="skill-desc">• 大厅新增“活动”，分为日常活动和限时活动。<br>• 每日累计游玩 15、30、60、90、120 分钟可领取金币奖励，每天北京时间 00:00 刷新。<br>• 每日签到按星期发放金币、局外宝箱券、排位加星/保护卡或皮肤碎片自选宝箱，奖励通过邮件领取。</div></div><div class="skill-card"><div class="skill-name">🎀 皮肤碎片自选宝箱与稀有品质</div><div class="skill-desc">• 周六、周日签到可获得皮肤碎片自选宝箱，多个宝箱可累计并分别选择奖励。<br>• 每个宝箱可任选：普通碎片 ×20、稀有 ×10、史诗 ×5、神话 ×3 或传说 ×1。<br>• 新增稀有皮肤品质与稀有碎片兑换；苍鹰新增稀有皮肤「极光苍鹰」。</div></div><div class="skill-card"><div class="skill-name">🌟 超级星期五</div><div class="skill-desc">• 每周五免费体验全部普通、稀有皮肤。<br>• 当天第一局排位胜利额外 +1 星；失败仍正常结算，额外星数不会抵扣扣星。<br>• 周五的进化试炼账号经验与击败敌人金币奖励提升 50%。</div></div><div class="skill-card"><div class="skill-name">🏳️ 5v5 三据点争夺</div><div class="skill-desc">• 团队战新增 A、B、C 三据点，可反复抢占；率先占领全部据点的一方获胜。<br>• 阵亡后 3 秒复活，击败英雄不获得经验或生命回复。</div></div>`;
-        content.insertAdjacentHTML('afterbegin', `<div class="feedback-box"><div class="feedback-heading">v3.5.16 · S1 万兽启程</div><div>150 级免费赛季战令现已开放</div></div><div class="skill-card"><div class="skill-name">📜 S1「万兽启程」免费战令</div><div class="skill-desc">• S1 主题为“万兽启程”，代表森林、草原、海洋、天空与极地英雄共同开启第一段赛季旅程。<br>• 大厅新增“吞噬战令”，所有玩家都可免费参与，共 150 级，没有付费路线。<br>• 每天可完成对局、胜利、击败敌人和游玩时长任务；每周另有完成 10 局、赢得 5 局、击败 100 名敌人和累计游玩 120 分钟等高经验任务。<br>• 每日任务于北京时间 00:00 刷新，每周任务于周一刷新；升级后可手动领取各类奖励。</div></div>`);
+        content.insertAdjacentHTML('afterbegin', `<div class="feedback-box"><div class="feedback-heading">v3.5.17 · S1 万兽启程进阶战令</div><div>赛季时间：2026年8月24日—2026年10月24日</div></div><div class="skill-card"><div class="skill-name">📜 S1「万兽启程」战令升级</div><div class="skill-desc">• 战令共 150 级，新增一键领取；每周击败任务提高为 1000 名敌人并提升至 900 战令经验。<br>• 免费战令 Lv.50 可领取全新神话英雄「星角鹿」。<br>• 花费 15000 金币可解锁本赛季进阶战令，Lv.50 可领取星角鹿史诗皮肤「繁星花冠」。<br>• 每日任务于北京时间 00:00 刷新，每周任务于周一刷新。</div></div>`);
     } else if (kind === 'feedback') {
         title.textContent = '💬 游戏反馈';
         content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">帮助吞噬模拟器变得更好</div><div>你可以反馈 Bug、英雄平衡、皮肤想法、场景建议和新玩法。提交后会创建一条公开的项目反馈，开发者可以看到并回复。</div></div><div class="creator-note"><div class="creator-note-title">创作者的话</div><div>这款游戏还在不断成长。无论是一个小 Bug、一次“不好玩”的体验，还是一个天马行空的新想法，都欢迎告诉我。请不用担心自己的反馈不够专业——每一条认真留言，都是我继续优化《吞噬模拟器》的动力。谢谢你愿意和我一起把它做得更好。</div></div><div class="feedback-actions"><a class="btn btn-success feedback-submit" href="https://github.com/devour-simulator/devourer-simulator/issues/new?title=%5B%E6%B8%B8%E6%88%8F%E5%8F%8D%E9%A6%88%5D%20" target="_blank" rel="noopener">📝 前往提交反馈</a></div><div class="tip">需要登录 GitHub 才能提交；不要在反馈中填写密码或个人隐私信息。</div>`;
@@ -3581,12 +3589,12 @@ function openHeroSkinGallery(key) {
     if (!hero || !skins?.length) return;
     document.getElementById('subPageTitle').textContent = `👕 ${hero.name} · 皮肤展柜`;
     const cards = skins.map(skin => {
-        const how = skin.id === 'default' ? '英雄自带' : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
+        const how = skin.id === 'default' ? '英雄自带' : skin.battlePassOnly ? 'S1 进阶战令 Lv.50' : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
         const owned = ownsSkin(key, skin);
         const preview = heroIconMarkup(key, hero, skin);
         return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
     }).join('');
-    document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里只展示皮肤；购买与使用请前往商城 → 皮肤。</div><div class="animals-grid">${cards}</div>`;
+    document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里展示皮肤和获取方式；已拥有的皮肤可在选英雄界面切换，商城皮肤需前往商城购买。</div><div class="animals-grid">${cards}</div>`;
     document.getElementById('hallModal').classList.add('hidden');
     document.getElementById('subPageModal').classList.remove('hidden');
 }
@@ -3665,6 +3673,10 @@ let skinChoiceSelection = {};
 const BATTLE_PASS_SEASON = 'S1';
 const BATTLE_PASS_THEME = '万兽启程';
 const BATTLE_PASS_LEVELS = 150;
+const BATTLE_PASS_PREMIUM_PRICE = 15000;
+const BATTLE_PASS_START_AT = new Date('2026-08-24T00:00:00+08:00');
+const BATTLE_PASS_END_AT = new Date('2026-10-24T00:00:00+08:00');
+function battlePassSeasonActive() { return Date.now() >= BATTLE_PASS_START_AT.getTime() && Date.now() < BATTLE_PASS_END_AT.getTime(); }
 function battlePassWeekKey() {
     const now = new Date();
     const shanghai = new Date(now.toLocaleString('en-US', { timeZone:'Asia/Shanghai' }));
@@ -3690,32 +3702,41 @@ function battlePassState() {
     state.weeklyPlaySeconds = Math.max(0, state.weeklyPlaySeconds || 0);
     if (!state.weeklyClaimed || typeof state.weeklyClaimed !== 'object') state.weeklyClaimed = {};
     state.rewardClaims = state.rewardClaims || {};
+    state.premium = !!state.premium;
+    state.premiumRewardClaims = state.premiumRewardClaims || {};
+    // Lv.50 奖励从旧宝箱升级为赛季英雄后，让已领取旧奖励的玩家也能领取新英雄。
+    if (!state.seasonHeroRewardMigrated) {
+        if (state.rewardClaims[50] && !ANIMALS.seasonStag.unlocked) delete state.rewardClaims[50];
+        state.seasonHeroRewardMigrated = true;
+    }
     return state;
 }
 function saveBattlePassState(state) { localStorage.setItem('battlePassState', JSON.stringify(state)); }
 function battlePassLevel(state = battlePassState()) { return Math.min(BATTLE_PASS_LEVELS, Math.floor(state.exp / 100) + 1); }
-function trackBattlePassKill() { const state = battlePassState(); state.dailyKills++; state.weeklyKills++; saveBattlePassState(state); }
-function trackBattlePassMatch(won) { const state = battlePassState(); state.dailyMatches++; state.weeklyMatches++; if (won) { state.dailyWins++; state.weeklyWins++; } saveBattlePassState(state); }
+function trackBattlePassKill() { if (!battlePassSeasonActive()) return; const state = battlePassState(); state.dailyKills++; state.weeklyKills++; saveBattlePassState(state); }
+function trackBattlePassMatch(won) { if (!battlePassSeasonActive()) return; const state = battlePassState(); state.dailyMatches++; state.weeklyMatches++; if (won) { state.dailyWins++; state.weeklyWins++; } saveBattlePassState(state); }
 function trackBattlePassPlayTime(seconds) {
-    if (!seconds) return;
+    if (!seconds || !battlePassSeasonActive()) return;
     const state = battlePassState();
     state.weeklyPlaySeconds += seconds;
     saveBattlePassState(state);
 }
+function battlePassTasks(state = battlePassState()) {
+    return [
+        { key:'match', group:'每日', name:'完成 1 局对战', progress:state.dailyMatches, target:1, exp:60 },
+        { key:'dailyWin', group:'每日', name:'赢得 1 局对战', progress:state.dailyWins, target:1, exp:80 },
+        { key:'kill', group:'每日', name:'击败 15 名敌人', progress:state.dailyKills, target:15, exp:80 },
+        { key:'time', group:'每日', name:'游玩 10 分钟', progress:Math.floor(dailyPlaySeconds() / 60), target:10, exp:80 },
+        { key:'weeklyMatch', group:'每周', name:'完成 10 局对战', progress:state.weeklyMatches, target:10, exp:300, weekly:true },
+        { key:'weeklyWin', group:'每周', name:'赢得 5 局对战', progress:state.weeklyWins, target:5, exp:400, weekly:true },
+        { key:'weeklyKill', group:'每周', name:'击败 1000 名敌人', progress:state.weeklyKills, target:1000, exp:900, weekly:true },
+        { key:'weeklyTime', group:'每周', name:'累计游玩 120 分钟', progress:Math.floor(state.weeklyPlaySeconds / 60), target:120, exp:450, weekly:true }
+    ];
+}
 function claimBattlePassTask(key) {
     const state = battlePassState();
-    const tasks = {
-        match:{ label:'完成 1 局对战', done:state.dailyMatches >= 1, exp:60 },
-        dailyWin:{ label:'赢得 1 局对战', done:state.dailyWins >= 1, exp:80 },
-        kill:{ label:'击败 15 名敌人', done:state.dailyKills >= 15, exp:80 },
-        time:{ label:'游玩 10 分钟', done:dailyPlaySeconds() >= 600, exp:80 },
-        weeklyMatch:{ label:'每周完成 10 局对战', done:state.weeklyMatches >= 10, exp:300, weekly:true },
-        weeklyWin:{ label:'每周赢得 5 局对战', done:state.weeklyWins >= 5, exp:400, weekly:true },
-        weeklyKill:{ label:'每周击败 100 名敌人', done:state.weeklyKills >= 100, exp:450, weekly:true },
-        weeklyTime:{ label:'每周累计游玩 120 分钟', done:state.weeklyPlaySeconds >= 7200, exp:450, weekly:true }
-    };
-    const task = tasks[key];
-    if (!task || (task.weekly ? state.weeklyClaimed[key] : state.dailyClaimed[key]) || !task.done) return;
+    const task = battlePassTasks(state).find(item => item.key === key);
+    if (!task || !battlePassSeasonActive() || (task.weekly ? state.weeklyClaimed[key] : state.dailyClaimed[key]) || task.progress < task.target) return;
     state.exp += task.exp;
     if (task.weekly) state.weeklyClaimed[key] = true; else state.dailyClaimed[key] = true;
     saveBattlePassState(state);
@@ -3723,6 +3744,7 @@ function claimBattlePassTask(key) {
     openAccountPanel('battlePass');
 }
 function battlePassReward(level) {
+    if (level === 50) return { hero:'seasonStag' };
     if (level % 10 === 0) return { skinChoiceChest:1 };
     if (level % 5 === 0) return { outsideChestTicket:1, coins:500 };
     if (level % 4 === 0) return { rankStarCard:1, rankProtectCard:1 };
@@ -3730,20 +3752,82 @@ function battlePassReward(level) {
     if (level % 2 === 0) return { skinFragments:{ normal:10 } };
     return { coins:200 + level * 30 };
 }
-function claimBattlePassReward(level) {
-    const state = battlePassState(), current = battlePassLevel(state);
-    if (level < 1 || level > current || state.rewardClaims[level]) return;
-    const reward = battlePassReward(level);
-    state.rewardClaims[level] = true;
+function battlePassPremiumReward(level) {
+    if (level === 50) return { skin:{ type:'seasonStag', id:'starbloom' } };
+    if (level === 150) return { skinFragments:{ legendary:50 }, skinChoiceChest:2 };
+    if (level % 10 === 0) return { skinChoiceChest:1, coins:800 };
+    if (level % 5 === 0) return { skinFragments:{ epic:10 } };
+    if (level % 2 === 0) return { skinFragments:{ rare:10 } };
+    return { coins:300 };
+}
+function grantBattlePassReward(reward) {
     if (reward.coins) { gameState.stats.coins += reward.coins; localStorage.setItem('coins', gameState.stats.coins); }
     if (reward.rankStarCard) gameState.account.inventory.rankStarCard = (gameState.account.inventory.rankStarCard || 0) + reward.rankStarCard;
     if (reward.rankProtectCard) gameState.account.inventory.rankProtectCard = (gameState.account.inventory.rankProtectCard || 0) + reward.rankProtectCard;
     if (reward.outsideChestTicket) gameState.account.inventory.outsideChestTicket = (gameState.account.inventory.outsideChestTicket || 0) + reward.outsideChestTicket;
     if (reward.skinChoiceChest) gameState.account.inventory.skinChoiceChest = (gameState.account.inventory.skinChoiceChest || 0) + reward.skinChoiceChest;
-    addSkinFragments(reward); saveBattlePassState(state); saveAccount();
+    if (reward.hero && ANIMALS[reward.hero]) { ANIMALS[reward.hero].unlocked = true; saveUnlockedHeroes(); }
+    if (reward.skin) {
+        const skin = HERO_SKINS[reward.skin.type]?.find(item => item.id === reward.skin.id);
+        if (skin) { const owned = ownedSkinKeys(); owned.add(skinKey(reward.skin.type, reward.skin.id)); localStorage.setItem('ownedSkins', JSON.stringify([...owned])); }
+    }
+    addSkinFragments(reward);
+}
+function mergeBattlePassReward(total, reward) {
+    ['coins','rankStarCard','rankProtectCard','outsideChestTicket','skinChoiceChest'].forEach(key => { if (reward[key]) total[key] = (total[key] || 0) + reward[key]; });
+    Object.entries(reward.skinFragments || {}).forEach(([rarity, amount]) => total.skinFragments[rarity] = (total.skinFragments[rarity] || 0) + amount);
+    if (reward.hero && ANIMALS[reward.hero]) total.special.push(`${ANIMALS[reward.hero].emoji} ${ANIMALS[reward.hero].name}`);
+    if (reward.skin) { const skin = HERO_SKINS[reward.skin.type]?.find(item => item.id === reward.skin.id); if (skin) total.special.push(`🎨 ${skin.name}`); }
+}
+function claimBattlePassReward(level, premium = false) {
+    const state = battlePassState(), current = battlePassLevel(state);
+    const claims = premium ? state.premiumRewardClaims : state.rewardClaims;
+    if (level < 1 || level > current || claims[level] || (premium && !state.premium)) return;
+    const reward = premium ? battlePassPremiumReward(level) : battlePassReward(level);
+    claims[level] = true;
+    grantBattlePassReward(reward);
+    saveBattlePassState(state); saveAccount();
     window.alert(`战令奖励已领取！\n${rewardText(reward)}`);
     openAccountPanel('battlePass');
     if (reward.skinChoiceChest) showSkinChoiceChestPrompt(reward.skinChoiceChest);
+}
+function purchasePremiumBattlePass() {
+    const state = battlePassState();
+    if (state.premium) return window.alert('你已经解锁本赛季进阶战令。');
+    if (!battlePassSeasonActive()) return window.alert('S1 赛季已经结束，无法再解锁进阶战令。');
+    if (!window.confirm(`确定花费 ${BATTLE_PASS_PREMIUM_PRICE} 金币解锁 S1 进阶战令吗？`)) return;
+    if (gameState.stats.coins < BATTLE_PASS_PREMIUM_PRICE) return window.alert('您的金币不足！');
+    gameState.stats.coins -= BATTLE_PASS_PREMIUM_PRICE;
+    localStorage.setItem('coins', gameState.stats.coins);
+    state.premium = true;
+    saveBattlePassState(state); saveAccount();
+    window.alert('进阶战令解锁成功！已经达到等级的进阶奖励现在可以领取。');
+    openAccountPanel('battlePass');
+}
+function claimAllBattlePass() {
+    const state = battlePassState();
+    let taskCount = 0, taskExp = 0;
+    if (battlePassSeasonActive()) {
+        battlePassTasks(state).forEach(task => {
+            const claimed = task.weekly ? state.weeklyClaimed[task.key] : state.dailyClaimed[task.key];
+            if (claimed || task.progress < task.target) return;
+            if (task.weekly) state.weeklyClaimed[task.key] = true; else state.dailyClaimed[task.key] = true;
+            state.exp += task.exp; taskExp += task.exp; taskCount++;
+        });
+    }
+    const current = battlePassLevel(state);
+    const total = { skinFragments:{}, special:[] };
+    let rewardCount = 0;
+    for (let level = 1; level <= current; level++) {
+        if (!state.rewardClaims[level]) { const reward = battlePassReward(level); state.rewardClaims[level] = true; grantBattlePassReward(reward); mergeBattlePassReward(total, reward); rewardCount++; }
+        if (state.premium && !state.premiumRewardClaims[level]) { const reward = battlePassPremiumReward(level); state.premiumRewardClaims[level] = true; grantBattlePassReward(reward); mergeBattlePassReward(total, reward); rewardCount++; }
+    }
+    if (!taskCount && !rewardCount) return window.alert('当前没有可以一键领取的战令任务或奖励。');
+    saveBattlePassState(state); saveAccount();
+    const details = rewardText(total);
+    window.alert(`一键领取成功！${taskCount ? `\n任务 ${taskCount} 个 · 战令经验 +${taskExp}` : ''}${rewardCount ? `\n奖励 ${rewardCount} 份\n${details}${total.special.length ? `\n${total.special.join('\n')}` : ''}` : ''}`);
+    openAccountPanel('battlePass');
+    if (total.skinChoiceChest) showSkinChoiceChestPrompt(total.skinChoiceChest);
 }
 function pendingSkinChoiceChestCount() { return Math.max(0, parseInt(localStorage.getItem('pendingSkinChoiceChest')) || 0); }
 function availableSkinChoiceChestCount() { return pendingSkinChoiceChestCount() + (gameState.account.inventory.skinChoiceChest || 0); }
@@ -3867,6 +3951,8 @@ window.openSkinChoiceChestFromBag = openSkinChoiceChestFromBag;
 window.openSkinChoiceChestNow = openSkinChoiceChestNow;
 window.claimBattlePassTask = claimBattlePassTask;
 window.claimBattlePassReward = claimBattlePassReward;
+window.purchasePremiumBattlePass = purchasePremiumBattlePass;
+window.claimAllBattlePass = claimAllBattlePass;
 const OUTSIDE_CHEST_TIERS = [
     { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
     { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
@@ -4094,7 +4180,9 @@ function showAnimalSelection() {
         
         let lockedHint = '';
         if (animal.unlocked === false && gameState.mode !== 'evolution') {
-            lockedHint = animal.rewardOnly
+            lockedHint = animal.seasonReward
+                ? '📜 S1 免费战令 Lv.50 领取'
+                : animal.rewardOnly
                 ? `❄️ ${polarUnlockCondition(key)}`
                 : animal.signOnly
                 ? `📅 签到专属：第 ${key === 'fox' ? 2 : 7} 天领取`
