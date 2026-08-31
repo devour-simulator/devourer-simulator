@@ -589,7 +589,7 @@ const MAX_COMBO_CHANCE = 1;
 
 const SHOP_ITEMS = {
     renameCard: { name:'改名卡', emoji:'🪪', price:10000, desc:'在背包中使用，用于修改玩家名字。' },
-    rankStarCard: { name:'排位加星卡', emoji:'⭐', price:3500, desc:'排位获胜时自动使用，在原有奖励基础上额外 +1 星。' },
+    rankStarCard: { name:'排位加星卡', emoji:'⭐', price:3500, desc:'排位结算获得星星时自动使用，在原有奖励基础上额外 +1 星。' },
     rankProtectCard: { name:'排位保护卡', emoji:'🛡️', price:3500, desc:'排位失败需要扣星时自动使用，本局不扣星。' }
 };
 // 宝箱会掉落以下战斗道具；拾取后立即生效，不占背包格子。
@@ -3672,7 +3672,7 @@ function openAccountPanel(kind) {
     } else if (kind === 'bag') {
         title.textContent = '🎒 背包';
         const fragmentCards = ['normal','rare','epic','mythic','legendary'].map(rarity => `<div class="animal-card"><div class="animal-emoji">🧩</div><div>${skinRarityMarkup({id:'fragment',rarity})}</div><div class="animal-name">${SKIN_RARITY_INFO[rarity].label}皮肤碎片</div><div class="animal-stats">数量 ×${gameState.account.inventory[`fragment_${rarity}`] || 0}<br>可在商城 → 碎片兑换中使用。</div></div>`).join('');
-        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div><div class="animal-card"><div class="animal-emoji">⭐</div><div class="animal-name">排位加星卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankStarCard || 0}<br>排位胜利时自动使用，额外 +1 星。</div></div><div class="animal-card"><div class="animal-emoji">🛡️</div><div class="animal-name">排位保护卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankProtectCard || 0}<br>排位失败扣星时自动使用。</div></div><div class="animal-card"><div class="animal-emoji">🎁</div><div class="animal-name">局外宝箱券</div><div class="animal-stats">数量 ×${gameState.account.inventory.outsideChestTicket || 0}<br>每日宝箱已开后，可额外开启一局宝箱挑战。</div></div><div class="animal-card"><div class="animal-emoji">🎀</div><div class="animal-name">皮肤碎片自选宝箱</div><div class="animal-stats">数量 ×${gameState.account.inventory.skinChoiceChest || 0}<br>前往活动页，可自选一份皮肤碎片。</div></div>${fragmentCards}`);
+        content.innerHTML = cards(`<div class="animal-card"><div class="animal-emoji">🪙</div><div class="animal-name">金币</div><div class="animal-stats">${gameState.stats.coins}</div></div><div class="animal-card"><div class="animal-emoji">🪪</div><div class="animal-name">改名卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.renameCard || 0}</div><button class="btn btn-success" type="button" ${gameState.account.inventory.renameCard ? '' : 'disabled'} onclick="useRenameCard()">使用改名卡</button></div><div class="animal-card"><div class="animal-emoji">⭐</div><div class="animal-name">排位加星卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankStarCard || 0}<br>排位结算获得星星时自动使用，额外 +1 星。</div></div><div class="animal-card"><div class="animal-emoji">🛡️</div><div class="animal-name">排位保护卡</div><div class="animal-stats">数量 ×${gameState.account.inventory.rankProtectCard || 0}<br>排位失败扣星时自动使用。</div></div><div class="animal-card"><div class="animal-emoji">🎁</div><div class="animal-name">局外宝箱券</div><div class="animal-stats">数量 ×${gameState.account.inventory.outsideChestTicket || 0}<br>每日宝箱已开后，可额外开启一局宝箱挑战。</div></div><div class="animal-card"><div class="animal-emoji">🎀</div><div class="animal-name">皮肤碎片自选宝箱</div><div class="animal-stats">数量 ×${gameState.account.inventory.skinChoiceChest || 0}<br>前往活动页，可自选一份皮肤碎片。</div></div>${fragmentCards}`);
         const choiceChestCard = [...content.querySelectorAll('.animal-card')].find(card => card.textContent.includes('皮肤碎片自选宝箱'));
         if (choiceChestCard) choiceChestCard.innerHTML = `<div class="animal-emoji">🎀</div><div class="animal-name">皮肤碎片自选宝箱</div><div class="animal-stats">数量 ×${availableSkinChoiceChestCount()}<br>打开后可自由选择不同品质的皮肤碎片。</div><button class="btn btn-success" type="button" ${availableSkinChoiceChestCount() ? '' : 'disabled'} onclick="openSkinChoiceChestFromBag()">打开宝箱</button>`;
         const coinCard = content.querySelector('.animal-card');
@@ -4723,7 +4723,8 @@ function finishRankedMatch(won, rankRewardOverride = null) {
                 gameState.rankItemNotice = '🎉 超级星期五首局已完成；本局失败仍按正常规则结算，不会抵扣扣星。';
             }
         }
-        if (won && inventory.rankStarCard > 0) {
+        // 只要本局基础结算会增加星数，就自动使用加星卡；不要求必须登顶或以“胜利”状态结束。
+        if (rankReward > 0 && inventory.rankStarCard > 0) {
             inventory.rankStarCard--;
             rankReward += 1;
             gameState.rankItemNotice += `${gameState.rankItemNotice ? '<br>' : ''}⭐ 已自动使用排位加星卡：额外 +1 星。`;
