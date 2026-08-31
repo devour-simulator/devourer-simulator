@@ -140,7 +140,7 @@
         .device-choice { display:flex; gap:8px; margin-top:10px; }
         .device-choice .btn { flex:1; }
         .device-choice .selected { outline:3px solid #ffd84d; background:#3fa66d; }
-        .mail-button { position:relative; }
+        .mail-button, .notification-entry { position:relative; }
         .mail-badge { position:absolute; top:-9px; right:-10px; min-width:19px; height:19px; padding:0 5px; border-radius:12px; background:#e73b3b; color:#fff; font-size:11px; line-height:19px; font-weight:bold; box-shadow:0 1px 4px rgba(0,0,0,.35); }
         @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100vh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:128px; left:10px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } .skill-info-hold { right:14px; top:calc(59% + 54px); font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
 
@@ -509,8 +509,8 @@
             <div class="tip" id="hallHeroes"></div>
             <div class="mode-grid" style="margin-top:12px; grid-template-columns:repeat(3,1fr);"><button class="mode-card" type="button" onclick="openAccountPanel('hero')"><strong>🦸 英雄</strong>图鉴与解锁</button><button class="mode-card" type="button" onclick="openAccountPanel('bag')"><strong>🎒 背包</strong>货币与道具</button><button class="mode-card" type="button" onclick="openAccountPanel('shop')"><strong>🛒 商城</strong>金币购买</button></div>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('road')"><strong>🧭 英雄之路</strong>查看账号等级与段位奖励，了解每位极地英雄的获得条件</button>
-            <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('battlePass')"><strong>📜 吞噬战令</strong>完成每日、每周任务，升级领取免费奖励</button>
-            <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('activity')"><strong>🎉 活动</strong>日常游玩奖励、每日签到与限时皮肤碎片自选宝箱</button>
+            <button class="mode-card notification-entry" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('battlePass')"><strong>📜 吞噬战令</strong>完成每日、每周任务，升级领取免费奖励<span id="battlePassBadge" class="mail-badge" hidden>0</span></button>
+            <button class="mode-card notification-entry" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('activity')"><strong>🎉 活动</strong>日常游玩奖励、每日签到与限时皮肤碎片自选宝箱<span id="activityBadge" class="mail-badge" hidden>0</span></button>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('feedback')"><strong>💬 游戏反馈</strong>反馈 Bug、英雄平衡、皮肤或玩法建议</button>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('skinCodex')"><strong>🎨 皮肤图鉴</strong>查看全部皮肤品质与收藏进度</button>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('updates')"><strong>📢 更新公告</strong>查看最新版本新增内容与问题修复</button>
@@ -678,6 +678,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.5.95"></script>
+    <script src="game.js?v=3.5.96"></script>
 </body>
 </html>

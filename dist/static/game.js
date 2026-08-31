@@ -3575,10 +3575,9 @@ function showHall() {
     document.getElementById('deviceModeText').textContent = `当前：${controlMode === 'mobile' ? '手机摇杆' : '电脑键盘'}`;
     document.getElementById('desktopModeButton').classList.toggle('selected', controlMode === 'desktop');
     document.getElementById('mobileModeButton').classList.toggle('selected', controlMode === 'mobile');
-    const unclaimedMailCount = getMails().filter(mail => !mail.claimed).length;
-    const mailBadge = document.getElementById('mailBadge');
-    mailBadge.hidden = unclaimedMailCount === 0;
-    mailBadge.textContent = unclaimedMailCount > 99 ? '99+' : unclaimedMailCount;
+    updateHallBadge('mailBadge', getMails().filter(mail => !mail.claimed).length);
+    updateHallBadge('battlePassBadge', battlePassClaimableCount());
+    updateHallBadge('activityBadge', activityClaimableCount());
     updateControlLayout();
     document.getElementById('hallModal').classList.remove('hidden');
 }
@@ -3623,7 +3622,7 @@ function openAccountPanel(kind) {
         const premiumPanel = pass.premium
             ? '<div class="tip" style="border-color:#9c72e8">💎 已解锁进阶战令：已达到的进阶奖励均可领取。</div>'
             : `<div class="feedback-box"><div class="feedback-heading">💎 进阶战令</div><div>花费 🪙 ${BATTLE_PASS_PREMIUM_PRICE} 金币解锁本赛季进阶奖励。Lv.50 可获得${seasonHero.name}史诗皮肤「${seasonSkin.name}」${seasonSkin.themeText ? `，专属主题为“${seasonSkin.themeText}”` : ''}。新赛季开启后需重新解锁。</div><button class="btn btn-primary" type="button" ${battlePassSeasonActive() ? '' : 'disabled'} onclick="purchasePremiumBattlePass()">解锁进阶战令</button></div>`;
-        content.innerHTML = `<div class="feedback-box battle-pass-banner" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c)"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>${BATTLE_PASS_CONFIG.description}</div><div>赛季时间：${battlePassDateLabel(BATTLE_PASS_START_AT)}—${battlePassDateLabel(BATTLE_PASS_END_AT)} · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日任务每天北京时间 00:00 刷新；每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「${seasonHero.name}」。赛季切换后战令等级、任务和领取记录重置，进阶版恢复为未解锁。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
+        content.innerHTML = `<div class="feedback-box battle-pass-banner" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c)"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>${BATTLE_PASS_CONFIG.description}</div><div>赛季时间：${battlePassDateLabel(BATTLE_PASS_START_AT)}—${battlePassDateLabel(BATTLE_PASS_END_AT)} · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div>✅ 今日首次登录战令经验 +${BATTLE_PASS_DAILY_LOGIN_EXP} 已自动领取</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日首次登录会自动获得 ${BATTLE_PASS_DAILY_LOGIN_EXP} 战令经验；每日任务每天北京时间 00:00 刷新，每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「${seasonHero.name}」。赛季切换后战令等级、任务和领取记录重置，进阶版恢复为未解锁。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'skinChoiceChest') {
         title.textContent = '🎀 开启皮肤碎片自选宝箱';
         content.innerHTML = availableSkinChoiceChestCount() ? skinChoicePickerMarkup() : '<div class="tip">背包里暂时没有皮肤碎片自选宝箱。</div>';
@@ -3823,6 +3822,7 @@ const BATTLE_PASS_SEASON = BATTLE_PASS_CONFIG.id;
 const BATTLE_PASS_THEME = BATTLE_PASS_CONFIG.theme;
 const BATTLE_PASS_LEVELS = 150;
 const BATTLE_PASS_PREMIUM_PRICE = 15000;
+const BATTLE_PASS_DAILY_LOGIN_EXP = 30;
 const BATTLE_PASS_START_AT = BATTLE_PASS_CONFIG.start;
 const BATTLE_PASS_END_AT = BATTLE_PASS_CONFIG.end;
 function battlePassSeasonActive() { return Date.now() >= BATTLE_PASS_START_AT.getTime() && Date.now() < BATTLE_PASS_END_AT.getTime(); }
@@ -3862,6 +3862,10 @@ function battlePassState() {
     state.rewardClaims = state.rewardClaims || {};
     state.premium = !!state.premium;
     state.premiumRewardClaims = state.premiumRewardClaims || {};
+    if (battlePassSeasonActive() && state.dailyLoginExpDate !== today) {
+        state.dailyLoginExpDate = today;
+        state.exp += BATTLE_PASS_DAILY_LOGIN_EXP;
+    }
     // Lv.50 奖励从旧宝箱升级为赛季英雄后，让已领取旧奖励的玩家也能领取新英雄。
     if (BATTLE_PASS_SEASON === 'S1' && !state.seasonHeroRewardMigrated) {
         if (state.rewardClaims[50] && !ANIMALS.seasonStag.unlocked) delete state.rewardClaims[50];
@@ -3891,6 +3895,34 @@ function battlePassTasks(state = battlePassState()) {
         { key:'weeklyKill', group:'每周', name:'击败 1000 名敌人', progress:state.weeklyKills, target:1000, exp:900, weekly:true },
         { key:'weeklyTime', group:'每周', name:'累计游玩 120 分钟', progress:Math.floor(state.weeklyPlaySeconds / 60), target:120, exp:450, weekly:true }
     ];
+}
+function battlePassClaimableCount(state = battlePassState()) {
+    let count = 0;
+    if (battlePassSeasonActive()) {
+        battlePassTasks(state).forEach(task => {
+            const claimed = task.weekly ? state.weeklyClaimed[task.key] : state.dailyClaimed[task.key];
+            if (!claimed && task.progress >= task.target) count++;
+        });
+    }
+    const level = battlePassLevel(state);
+    for (let tier = 1; tier <= level; tier++) {
+        if (!state.rewardClaims[tier]) count++;
+        if (state.premium && !state.premiumRewardClaims[tier]) count++;
+    }
+    return count;
+}
+function activityClaimableCount() {
+    const claims = dailyPlayClaims();
+    const played = dailyPlaySeconds();
+    const playRewards = DAILY_PLAY_REWARDS.reduce((count, reward, index) => count + (!claims.includes(index) && played >= reward.minutes * 60 ? 1 : 0), 0);
+    const dailySign = localStorage.getItem('weeklyDailySignDate') === dailyActivityDate() ? 0 : 1;
+    return playRewards + dailySign;
+}
+function updateHallBadge(id, count) {
+    const badge = document.getElementById(id);
+    if (!badge) return;
+    badge.hidden = count <= 0;
+    badge.textContent = count > 99 ? '99+' : String(count);
 }
 function claimBattlePassTask(key) {
     const state = battlePassState();
