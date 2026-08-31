@@ -3641,7 +3641,7 @@ function openAccountPanel(kind) {
         const fridaySkins = Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => isSkinReleased(skin) && skin.price && ['normal','rare'].includes(skinRarity(skin))).map(skin => ({ heroKey, skin })));
         const fridayTrials = isSuperFriday() ? `<div class="animals-grid">${fridaySkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey], skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} · 周五免费体验</div><button class="btn btn-success" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 免费试玩</button></div>`).join('')}</div>` : '<div class="tip">超级星期五将于下一个周五 00:00 开启：届时可免费体验全部普通、稀有皮肤。</div>';
         const fridayStatus = isSuperFriday() ? (localStorage.getItem('superFridayFirstRankDate') === dailyActivityDate() ? '今日首局排位已结算。' : '今天第一局排位胜利可额外 +1 星。') : '每周五 00:00 至 23:59 开启。';
-        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchActivityTab('daily')">📅 日常活动</button><button class="btn" type="button" onclick="switchActivityTab('limited')">⏳ 限时活动</button></div><div id="activityDaily"><div class="feedback-box"><div class="feedback-heading">每日游玩时长</div><div>每天北京时间 00:00 刷新。进入对局后的有效游玩时间会自动累计，奖励会通过邮件发放。</div></div>${playCards}<div class="feedback-box"><div class="feedback-heading">🗓️ 日常签到</div><div>每天 00:00 刷新。今日签到奖励将通过邮件发放。</div></div><div class="animals-grid">${weekly}</div><button class="btn ${signed ? '' : 'btn-success'}" type="button" ${signed ? 'disabled' : ''} onclick="claimWeeklyDailySign()">${signed ? '今日已签到' : '领取今日签到奖励'}</button></div><div id="activityLimited" style="display:none"><div class="feedback-box"><div class="feedback-heading">🌟 超级星期五 ${isSuperFriday() ? '· 正在进行' : ''}</div><div>周五免费体验全部普通、稀有皮肤；当天第一局<strong>排位模式</strong>胜利额外 +1 星。失败不会抵扣扣星，也不会变成保护卡。进化试炼的账号经验与金币奖励提升 50%。<br>${fridayStatus}</div></div>${fridayTrials}<div class="feedback-box"><div class="feedback-heading">🎀 皮肤碎片自选宝箱</div><div>当前拥有：${gameState.account.inventory.skinChoiceChest || 0} 个。每个宝箱可任选一份奖励；有多个宝箱时可分开选择不同品质。</div></div><div class="skill-card"><div class="skill-name">自选一份皮肤碎片</div><div class="skill-desc">普通 ×20 · 稀有 ×10 · 史诗 ×5 · 神话 ×3 · 传说 ×1</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${choices}</div></div><div class="tip">周六、周日的日常签到可获得皮肤碎片自选宝箱。</div></div>`;
+        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" type="button" onclick="switchActivityTab('daily')">📅 日常活动</button><button class="btn" type="button" onclick="switchActivityTab('limited')">⏳ 限时活动</button></div><div id="activityDaily"><div class="feedback-box"><div class="feedback-heading">每日游玩时长</div><div>每天北京时间 00:00 刷新。进入对局后的有效游玩时间会自动累计，奖励会通过邮件发放。</div></div>${playCards}<div class="feedback-box"><div class="feedback-heading">🗓️ 日常签到</div><div>每天 00:00 刷新。今日签到奖励将通过邮件发放。</div></div><div class="animals-grid">${weekly}</div><button class="btn ${signed ? '' : 'btn-success'}" type="button" ${signed ? 'disabled' : ''} onclick="claimWeeklyDailySign()">${signed ? '今日已签到' : '领取今日签到奖励'}</button><div class="feedback-box"><div class="feedback-heading">🎁 礼包码兑换</div><div>输入有效礼包码即可兑换；每个礼包码每个存档只能使用一次，奖励会发送到系统邮件。</div><form class="gift-code-row" onsubmit="redeemGiftCode(event)"><input id="giftCodeInput" class="gift-code-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="请输入礼包码" aria-label="礼包码"><button class="btn btn-success" type="submit">立即兑换</button></form><div id="giftCodeStatus" class="gift-code-status" aria-live="polite"></div></div></div><div id="activityLimited" style="display:none"><div class="feedback-box"><div class="feedback-heading">🌟 超级星期五 ${isSuperFriday() ? '· 正在进行' : ''}</div><div>周五免费体验全部普通、稀有皮肤；当天第一局<strong>排位模式</strong>胜利额外 +1 星。失败不会抵扣扣星，也不会变成保护卡。进化试炼的账号经验与金币奖励提升 50%。<br>${fridayStatus}</div></div>${fridayTrials}<div class="feedback-box"><div class="feedback-heading">🎀 皮肤碎片自选宝箱</div><div>当前拥有：${gameState.account.inventory.skinChoiceChest || 0} 个。每个宝箱可任选一份奖励；有多个宝箱时可分开选择不同品质。</div></div><div class="skill-card"><div class="skill-name">自选一份皮肤碎片</div><div class="skill-desc">普通 ×20 · 稀有 ×10 · 史诗 ×5 · 神话 ×3 · 传说 ×1</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${choices}</div></div><div class="tip">周六、周日的日常签到可获得皮肤碎片自选宝箱。</div></div>`;
         // 限时活动优先展示：把它放到日常活动前面，并作为进入活动中心时的默认页。
         const activityTabs = content.firstElementChild;
         const activityDaily = document.getElementById('activityDaily');
@@ -3797,6 +3797,8 @@ const DAILY_WEEKLY_REWARDS = [
     { day:6, label:'周六', rewards:{ skinChoiceChest:1 } },
     { day:0, label:'周日', rewards:{ skinChoiceChest:1 } }
 ];
+// 礼包码与奖励会在活动确定后加入这里；礼包码不区分英文字母大小写。
+const GIFT_CODES = Object.freeze({});
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
 const BATTLE_PASS_SEASONS = [
@@ -4072,6 +4074,36 @@ function claimWeeklyDailySign() {
     sendRewardMail(`日常签到 · ${reward.label}`, `${reward.label}签到奖励已送达，请在邮件中手动领取。`, reward.rewards);
     openAccountPanel('activity');
 }
+function redeemedGiftCodes() {
+    try {
+        const codes = JSON.parse(localStorage.getItem('redeemedGiftCodes') || '[]');
+        return new Set(Array.isArray(codes) ? codes.map(code => String(code).toUpperCase()) : []);
+    } catch (_) { return new Set(); }
+}
+function setGiftCodeStatus(message, success = false) {
+    const status = document.getElementById('giftCodeStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = success ? '#16864b' : '#c53f3f';
+}
+function redeemGiftCode(event) {
+    event?.preventDefault();
+    const input = document.getElementById('giftCodeInput');
+    const code = String(input?.value || '').trim().toUpperCase();
+    if (!code) return setGiftCodeStatus('请先输入礼包码。');
+    const redeemed = redeemedGiftCodes();
+    if (redeemed.has(code)) return setGiftCodeStatus('这个礼包码已经兑换过了，无法再次兑换。');
+    const gift = GIFT_CODES[code];
+    if (!gift) return setGiftCodeStatus('礼包码不存在或已经失效。');
+    const now = Date.now();
+    if ((gift.startsAt && now < new Date(gift.startsAt).getTime()) || (gift.endsAt && now >= new Date(gift.endsAt).getTime())) return setGiftCodeStatus('礼包码不在可兑换时间内。');
+    redeemed.add(code);
+    localStorage.setItem('redeemedGiftCodes', JSON.stringify([...redeemed]));
+    sendRewardMail(gift.title || `礼包码奖励 · ${code}`, gift.content || '礼包码兑换成功！附件奖励请手动领取。', gift.rewards || {});
+    if (input) input.value = '';
+    setGiftCodeStatus('兑换成功！奖励已经发送到邮件。', true);
+}
+window.redeemGiftCode = redeemGiftCode;
 function selectedSkinChoiceCount() { return Object.values(skinChoiceSelection).reduce((sum, count) => sum + (count || 0), 0); }
 function adjustSkinChoiceSelection(rarity, delta) {
     const chests = availableSkinChoiceChestCount();
