@@ -354,7 +354,7 @@ const POLAR_TYPES=[...POLAR_HERO_KEYS.filter(type => type !== 'narwhal'),'wolf']
 const POND_TYPES=['crocodile','otter','hippo','flamingo','turtle','elephant'].filter(type => isHeroReleased(ANIMALS[type]));
 const SAVANNA_TYPES=['lion','africanElephant','giraffe','zebra','rhino'].filter(type => isHeroReleased(ANIMALS[type]));
 const LAND_TYPES=Object.keys(ANIMALS).filter(type => isHeroReleased(ANIMALS[type]) && !OCEAN_TYPES.includes(type) && !SKY_TYPES.includes(type) && !POLAR_TYPES.includes(type) && !POND_TYPES.includes(type) && !SAVANNA_TYPES.includes(type));
-function environmentFor(type){ return OCEAN_TYPES.includes(type)?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':SAVANNA_TYPES.includes(type)?'savanna':'land'; }
+function environmentFor(type){ return (OCEAN_TYPES.includes(type) || type === 'abyssSwordfish')?'ocean':SKY_TYPES.includes(type)?'sky':POLAR_TYPES.includes(type)?'polar':POND_TYPES.includes(type)?'pond':SAVANNA_TYPES.includes(type)?'savanna':'land'; }
 
 // 商城价格由英雄强度决定，不再受加入游戏的先后顺序影响。
 function calculateHeroPrice(hero) {
@@ -426,9 +426,9 @@ function ownedSkinKeys() {
 function skinKey(type, id) { return `${type}:${id}`; }
 function ownsSkin(type, skin) { return skin?.id === 'default' || ownedSkinKeys().has(skinKey(type, skin.id)); }
 function getSelectedHeroSkin(type) {
-    const skins = HERO_SKINS[type]?.filter(isSkinReleased);
-    if (!skins?.length) return null;
     const trial = gameState?.skinTrial;
+    const skins = HERO_SKINS[type]?.filter(skin => isSkinReleased(skin) || (trial?.allowPreview && trial.type === type && trial.skinId === skin.id));
+    if (!skins?.length) return null;
     if (trial?.type === type) return skins.find(skin => skin.id === trial.skinId) || skins[0];
     const saved = localStorage.getItem(`heroSkin:${type}`) || 'default';
     const selected = skins.find(skin => skin.id === saved) || skins[0];
@@ -488,16 +488,17 @@ function selectHeroSkin(type, skinId, returnPanel = 'hero') {
     openAccountPanel(returnPanel);
 }
 window.selectHeroSkin = selectHeroSkin;
-function startSkinTrial(type, skinId) {
-    const skin = HERO_SKINS[type]?.find(item => item.id === skinId && isSkinReleased(item));
+function startSkinTrial(type, skinId, allowPreview = false) {
+    const skin = HERO_SKINS[type]?.find(item => item.id === skinId && (isSkinReleased(item) || allowPreview));
     if (!skin) return;
-    gameState.skinTrial = { type, skinId, respawnPending: false, playerRespawnPending: false };
+    gameState.skinTrial = { type, skinId, allowPreview:!!allowPreview, respawnPending: false, playerRespawnPending: false };
     gameState.mode = 'skinTrial';
     document.getElementById('subPageModal').classList.add('hidden');
     startGame(type);
     // 试玩只安排一名训练对手，不产生宝箱、金币、段位或账号经验奖励。
-    const foe = new Enemy('rabbit', Math.min(GAME_WIDTH - 100, gameState.player.x + 270), gameState.player.y);
-    foe.name = '试玩训练兔'; foe.maxHp = 45; foe.hp = 45; foe.attack = 3; foe.defense = 1;
+    const foeType = environmentFor(type) === 'ocean' ? 'shark' : 'rabbit';
+    const foe = new Enemy(foeType, Math.min(GAME_WIDTH - 100, gameState.player.x + 270), gameState.player.y);
+    foe.name = foeType === 'shark' ? '试玩训练鲨' : '试玩训练兔'; foe.maxHp = 45; foe.hp = 45; foe.attack = 3; foe.defense = 1;
     gameState.enemies = [foe]; gameState.particles = []; gameState.chests = [];
 }
 window.startSkinTrial = startSkinTrial;
@@ -517,8 +518,9 @@ function queueSkinTrialOpponent() {
         const x = Math.max(70, Math.min(GAME_WIDTH - 70, gameState.player.x + Math.cos(angle) * distance));
         const y = Math.max(70, Math.min(GAME_HEIGHT - 70, gameState.player.y + Math.sin(angle) * distance));
         // 试玩固定刷新训练兔，目标明确，也不会因为场景动物配置缺失而卡住。
-        const foe = new Enemy('rabbit', x, y);
-        foe.name = '试玩训练兔';
+        const foeType = environmentFor(activeTrial.type) === 'ocean' ? 'shark' : 'rabbit';
+        const foe = new Enemy(foeType, x, y);
+        foe.name = foeType === 'shark' ? '试玩训练鲨' : '试玩训练兔';
         foe.maxHp = 50; foe.hp = 50; foe.attack = 4; foe.defense = 1;
         gameState.enemies = [foe];
     }, 1400);
@@ -1561,7 +1563,7 @@ function build3DMesh(entity, kind) {
         group.userData={flying:false,swimming:true,wings:[],legs:[],body}; threeScene.add(group); return group;
     }
 
-    if (kind !== 'particle' && OCEAN_TYPES.includes(entity.type)) {
+    if (kind !== 'particle' && (OCEAN_TYPES.includes(entity.type) || entity.type === 'abyssSwordfish')) {
         const sharkBody = add(new Three.SphereGeometry(.42, 12, 8), material, 0, .53, .05, 1.5, .7, 2.25);
         add(new Three.SphereGeometry(.055, 7, 6), dark, -.16, .64, -.7);
         add(new Three.SphereGeometry(.055, 7, 6), dark, .16, .64, -.7);
@@ -4207,6 +4209,12 @@ function limitedGiftMetricLabel(task, value) {
 function limitedGiftEventMarkup() {
     const state = limitedGiftEventState();
     const active = limitedGiftEventActive();
+    const nextSeason = BATTLE_PASS_SEASONS.find(season => season.id === 'S2');
+    const previewHero = ANIMALS[nextSeason.hero];
+    const previewDefaultSkin = HERO_SKINS[nextSeason.hero].find(skin => skin.id === 'default');
+    const previewSkin = HERO_SKINS[nextSeason.skin.type].find(skin => skin.id === nextSeason.skin.id);
+    const previewStatus = Date.now() < nextSeason.start.getTime() ? '即将开启' : Date.now() < nextSeason.end.getTime() ? '正在进行' : '已结束';
+    const seasonPreview = `<div class="feedback-box" style="background:linear-gradient(135deg,rgba(10,48,91,.96),rgba(39,27,103,.96));border-color:#52c8ff;box-shadow:0 0 24px rgba(63,174,255,.24)"><div class="feedback-heading" style="color:#aeeaff">🌊 S2 新赛季预告 · ${nextSeason.theme}</div><div>${nextSeason.description}</div><div>赛季时间：${battlePassDateLabel(nextSeason.start)}—${battlePassDateLabel(nextSeason.end)} · ${previewStatus}</div><div class="tip">预告试玩只用于体验新英雄和皮肤，不会提前解锁英雄、皮肤或战令奖励，也不会影响段位和存档。</div></div><div class="animals-grid"><div class="animal-card" style="border-color:#d64b51;background:linear-gradient(160deg,rgba(21,55,91,.96),rgba(21,28,68,.96))"><div class="animal-emoji">${heroIconMarkup(nextSeason.hero, previewHero, previewDefaultSkin)}</div><h3>${previewHero.name} ${heroRarityMarkup(previewHero)}</h3><p>免费战令 Lv.50 英雄<br>提前体验深海冲刺与潮汐力量</p><button class="btn btn-primary" type="button" onclick="startSkinTrial('${nextSeason.hero}','default',true)">试玩新英雄</button></div><div class="animal-card" style="border-color:${SKIN_RARITY_INFO[skinRarity(previewSkin)].color};background:linear-gradient(160deg,rgba(31,34,102,.96),rgba(12,59,105,.96));box-shadow:0 0 20px rgba(80,191,255,.2)"><div class="animal-emoji">${heroIconMarkup(nextSeason.skin.type, previewHero, previewSkin)}</div><h3>${previewSkin.name} ${skinRarityMarkup(previewSkin)}</h3><p>进阶战令 Lv.50 史诗皮肤<br>体验雷光配色与专属技能特效</p><button class="btn btn-primary" type="button" onclick="startSkinTrial('${nextSeason.skin.type}','${nextSeason.skin.id}',true)">试玩赛季皮肤</button></div></div>`;
     const taskCards = LIMITED_GIFT_EVENT.tasks.map(task => {
         const hero = ANIMALS[task.hero], progress = Math.min(task.target, Math.max(0, Number(state.progress[task.id]) || 0));
         const complete = progress >= task.target, code = state.codes[task.id];
@@ -4214,7 +4222,7 @@ function limitedGiftEventMarkup() {
         return `<div class="skill-card"><div class="skill-name">${hero.emoji} ${task.desc}</div><div class="skill-desc">进度：${limitedGiftMetricLabel(task, progress)}<br>兑换码由大小写英文字母和数字随机组成，共 8 位。</div>${codePanel}</div>`;
     }).join('');
     const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', year:'numeric', month:'long', day:'numeric' });
-    return `<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；当前礼包奖励内容待公布，兑换码可以先领取并保存在存档中。</div></div>${taskCards}`;
+    return `${seasonPreview}<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；当前礼包奖励内容待公布，兑换码可以先领取并保存在存档中。</div></div>${taskCards}`;
 }
 function limitedGiftClaimableCount() {
     if (!limitedGiftEventActive()) return 0;
