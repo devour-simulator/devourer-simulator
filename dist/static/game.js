@@ -3816,10 +3816,10 @@ const LIMITED_GIFT_EVENT = Object.freeze({
     start:new Date('2026-08-31T00:00:00+08:00'),
     end:new Date('2026-10-24T00:00:00+08:00'),
     tasks:[
-        { id:'catKills', hero:'cat', metric:'kills', target:50, desc:'使用小猫击败 50 名敌方英雄', rewards:null },
-        { id:'rabbitDamage', hero:'rabbit', metric:'damage', target:5000, desc:'使用小兔累计造成 5000 点伤害', rewards:null },
-        { id:'catMatches', hero:'cat', metric:'matches', target:5, desc:'使用小猫完成 5 局对局', rewards:null },
-        { id:'rabbitSummits', hero:'rabbit', metric:'summits', target:1, desc:'使用小兔在排位或进化试炼登顶 1 次', rewards:null }
+        { id:'foxKills', hero:'fox', metric:'kills', target:60, desc:'使用狐狸击败 60 名敌方英雄', rewards:null },
+        { id:'sharkDamage', hero:'shark', metric:'damage', target:8000, desc:'使用鲨鱼累计造成 8000 点伤害', rewards:null },
+        { id:'eagleMatches', hero:'eagle', metric:'matches', target:5, desc:'使用苍鹰完成 5 局对局', rewards:null },
+        { id:'lionSummits', hero:'lion', metric:'summits', target:1, desc:'使用非洲狮在排位或进化试炼登顶 1 次', rewards:null }
     ]
 });
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
