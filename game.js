@@ -3879,7 +3879,7 @@ const DAILY_WEEKLY_REWARDS = [
     { day:6, label:'周六', rewards:{ skinChoiceChest:1 } },
     { day:0, label:'周日', rewards:{ skinChoiceChest:1 } }
 ];
-// 固定礼包码与奖励会在活动确定后加入这里。
+// 固定礼包码可继续在这里追加；限时挑战码的奖励在生成时固定并保存在活动存档中。
 const GIFT_CODES = Object.freeze({});
 const LIMITED_GIFT_EVENT = Object.freeze({
     id:'s1-beast-secret-2026',
@@ -3893,6 +3893,13 @@ const LIMITED_GIFT_EVENT = Object.freeze({
         { id:'lionSummits', hero:'lion', metric:'summits', target:1, desc:'使用非洲狮在排位或进化试炼登顶 1 次', rewards:null }
     ]
 });
+const LIMITED_GIFT_BASE_REWARD = Object.freeze({ coins:300, skinFragments:{ normal:10 } });
+const LIMITED_GIFT_REWARD_TIERS = Object.freeze([
+    { key:'normal', label:'普通礼包', limit:50, rewards:{ coins:200, skinFragments:{ normal:10 } } },
+    { key:'rare', label:'稀有礼包', limit:80, rewards:{ coins:500, skinFragments:{ rare:10 } } },
+    { key:'epic', label:'史诗礼包', limit:95, rewards:{ coins:1000, outsideChestTicket:1, skinFragments:{ epic:10 } } },
+    { key:'lucky', label:'幸运大奖', limit:100, rewards:{ coins:2000, rankStarCard:1, rankProtectCard:1, skinFragments:{ mythic:10 } } }
+]);
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
 const BATTLE_PASS_SEASONS = [
@@ -4197,12 +4204,31 @@ function redeemGiftCode(event) {
     localStorage.setItem('redeemedGiftCodes', JSON.stringify([...redeemed]));
     sendRewardMail(gift.title || `礼包码奖励 · ${code}`, gift.content || '礼包码兑换成功！附件奖励请手动领取。', gift.rewards || {});
     if (input) input.value = '';
-    setGiftCodeStatus('兑换成功！奖励已经发送到邮件。', true);
+    setGiftCodeStatus(`兑换成功！${gift.tierLabel ? `抽中了「${gift.tierLabel}」，` : ''}奖励已经发送到邮件。`, true);
 }
 window.redeemGiftCode = redeemGiftCode;
 function limitedGiftEventActive() {
     const now = Date.now();
     return now >= LIMITED_GIFT_EVENT.start.getTime() && now < LIMITED_GIFT_EVENT.end.getTime();
+}
+function limitedGiftRollForCode(code) {
+    // 同一个兑换码始终得到相同档位，刷新页面或重新登录都不能重抽。
+    let hash = 2166136261;
+    for (const char of String(code)) {
+        hash ^= char.charCodeAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % 100;
+}
+function createLimitedGiftBundle(code) {
+    const roll = limitedGiftRollForCode(code);
+    const tier = LIMITED_GIFT_REWARD_TIERS.find(item => roll < item.limit) || LIMITED_GIFT_REWARD_TIERS[LIMITED_GIFT_REWARD_TIERS.length - 1];
+    const rewards = { coins:LIMITED_GIFT_BASE_REWARD.coins, skinFragments:{ ...LIMITED_GIFT_BASE_REWARD.skinFragments } };
+    Object.entries(tier.rewards).forEach(([key, value]) => {
+        if (key === 'skinFragments') Object.entries(value).forEach(([rarity, amount]) => rewards.skinFragments[rarity] = (rewards.skinFragments[rarity] || 0) + amount);
+        else rewards[key] = (rewards[key] || 0) + value;
+    });
+    return { tier:tier.key, label:tier.label, rewards };
 }
 function limitedGiftEventState() {
     let state;
@@ -4210,6 +4236,15 @@ function limitedGiftEventState() {
     if (state.eventId !== LIMITED_GIFT_EVENT.id) state = { eventId:LIMITED_GIFT_EVENT.id, progress:{}, codes:{} };
     state.progress = state.progress && typeof state.progress === 'object' ? state.progress : {};
     state.codes = state.codes && typeof state.codes === 'object' ? state.codes : {};
+    state.rewards = state.rewards && typeof state.rewards === 'object' ? state.rewards : {};
+    let migrated = false;
+    Object.entries(state.codes).forEach(([taskId, code]) => {
+        if (!state.rewards[taskId] && LIMITED_GIFT_EVENT.tasks.some(task => task.id === taskId)) {
+            state.rewards[taskId] = createLimitedGiftBundle(code);
+            migrated = true;
+        }
+    });
+    if (migrated) localStorage.setItem('limitedGiftEventState', JSON.stringify(state));
     return state;
 }
 function saveLimitedGiftEventState(state) { localStorage.setItem('limitedGiftEventState', JSON.stringify(state)); }
@@ -4258,6 +4293,10 @@ function claimLimitedGiftCode(taskId) {
         const code = generateLimitedGiftCode(state);
         if (!code) return window.alert('兑换码生成失败，请稍后再试。');
         state.codes[taskId] = code;
+        state.rewards[taskId] = createLimitedGiftBundle(code);
+        saveLimitedGiftEventState(state);
+    } else if (!state.rewards[taskId]) {
+        state.rewards[taskId] = createLimitedGiftBundle(state.codes[taskId]);
         saveLimitedGiftEventState(state);
     }
     window.alert(`兑换码领取成功！\n${state.codes[taskId]}\n请注意区分英文字母大小写。`);
@@ -4268,11 +4307,12 @@ function limitedGiftForCode(code) {
     const taskId = Object.keys(state.codes).find(id => state.codes[id] === code);
     const task = LIMITED_GIFT_EVENT.tasks.find(item => item.id === taskId);
     if (!task) return null;
+    const bundle = state.rewards[taskId] || createLimitedGiftBundle(code);
     return {
-        title:`限时活动礼包 · ${LIMITED_GIFT_EVENT.name}`,
-        content:`完成任务“${task.desc}”获得的礼包码奖励，请手动领取附件。`,
-        rewards:task.rewards || {},
-        pending:task.rewards === null
+        title:`限时活动礼包 · ${bundle.label}`,
+        content:`完成任务“${task.desc}”获得的兑换码抽中了「${bundle.label}」。保底与额外奖励均已放入附件，请手动领取。`,
+        rewards:bundle.rewards,
+        tierLabel:bundle.label
     };
 }
 function limitedGiftMetricLabel(task, value) {
@@ -4294,10 +4334,11 @@ function limitedGiftEventMarkup() {
         const hero = ANIMALS[task.hero], progress = Math.min(task.target, Math.max(0, Number(state.progress[task.id]) || 0));
         const complete = progress >= task.target, code = state.codes[task.id];
         const codePanel = code ? `<div class="earned-gift-code">${code}</div><button class="btn" type="button" onclick="copyLimitedGiftCode('${code}')">📋 复制兑换码</button>` : `<button class="btn ${complete ? 'btn-success' : ''}" type="button" ${!active || !complete ? 'disabled' : ''} onclick="claimLimitedGiftCode('${task.id}')">${complete ? '领取随机兑换码' : '任务进行中'}</button>`;
-        return `<div class="skill-card"><div class="skill-name">${hero.emoji} ${task.desc}</div><div class="skill-desc">进度：${limitedGiftMetricLabel(task, progress)}<br>兑换码由大小写英文字母和数字随机组成，共 8 位。</div>${codePanel}</div>`;
+        return `<div class="skill-card"><div class="skill-name">${hero.emoji} ${task.desc}</div><div class="skill-desc">进度：${limitedGiftMetricLabel(task, progress)}<br>兑换码由大小写英文字母和数字随机组成，共 8 位；奖励档位在生成时固定。</div>${codePanel}</div>`;
     }).join('');
     const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', year:'numeric', month:'long', day:'numeric' });
-    return `${seasonPreview}<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；当前礼包奖励内容待公布，兑换码可以先领取并保存在存档中。</div></div>${taskCards}`;
+    const rewardPool = `<div class="skill-card"><div class="skill-name">🎁 兑换码随机奖励池</div><div class="skill-desc">所有档位都有保底：金币 ×300、普通皮肤碎片 ×10。<br>普通礼包 50%：额外金币 ×200、普通碎片 ×10<br>稀有礼包 30%：额外金币 ×500、稀有碎片 ×10<br>史诗礼包 15%：额外金币 ×1000、史诗碎片 ×10、局外宝箱券 ×1<br>幸运大奖 5%：额外金币 ×2000、神话碎片 ×10、排位加星卡和保护卡各 ×1</div></div>`;
+    return `${seasonPreview}<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；奖励档位在兑换码生成时固定，刷新页面或重新登录都不能重抽。</div></div>${rewardPool}${taskCards}`;
 }
 function limitedGiftClaimableCount() {
     if (!limitedGiftEventActive()) return 0;
