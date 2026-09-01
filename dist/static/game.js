@@ -439,6 +439,7 @@ function skillEffectColor(owner) { return owner?.skin?.effectColor || owner?.ski
 const SKIN_RARITY_INFO = {
     normal:{ label:'普通', color:'#8b97a5' }, rare:{ label:'稀有', color:'#3989e8' }, epic:{ label:'史诗', color:'#8f55d4' }, mythic:{ label:'神话', color:'#d64b51' }, legendary:{ label:'传说', color:'#e59a20' }
 };
+const SKIN_RARITY_ORDER = ['normal','rare','epic','mythic','legendary'];
 function skinRarity(skin) {
     // 默认外观不计入皮肤图鉴；商城的换色皮肤为普通，榴莲刺猬是史诗。
     if (skin.rarity) return skin.rarity;
@@ -467,6 +468,9 @@ function skinRarityMarkup(skin) {
     const rarity = skinRarity(skin), info = SKIN_RARITY_INFO[rarity];
     return `<span class="hero-rarity hero-rarity-${rarity}"${rarity === 'legendary' ? '' : ` style="background:${info.color}"`}>${info.label}皮肤</span>`;
 }
+function sortSkinEntriesByRarity(entries) {
+    return [...entries].sort((a, b) => SKIN_RARITY_ORDER.indexOf(skinRarity(a.skin)) - SKIN_RARITY_ORDER.indexOf(skinRarity(b.skin)) || (a.skin.price || 0) - (b.skin.price || 0) || a.skin.name.localeCompare(b.skin.name));
+}
 function selectHeroSkin(type, skinId, returnPanel = 'hero') {
     if (!ANIMALS[type]?.unlocked) return window.alert('请先解锁该英雄。');
     const skin = HERO_SKINS[type]?.find(item => item.id === skinId && isSkinReleased(item));
@@ -482,6 +486,7 @@ function selectHeroSkin(type, skinId, returnPanel = 'hero') {
         window.alert(`购买成功！已获得「${skin.name}」。`);
         // 购买只加入皮肤库，不会悄悄替换玩家正在使用的外观；要穿戴需再次点击“使用皮肤”。
         openAccountPanel(returnPanel);
+        if (returnPanel === 'shop') switchShopTab('skin');
         return;
     }
     localStorage.setItem(`heroSkin:${type}`, skin.id);
@@ -3601,7 +3606,7 @@ function openAccountPanel(kind) {
         }).join(''));
     } else if (kind === 'skinCodex') {
         title.textContent = '🎨 皮肤图鉴';
-        const allSkins = Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => skin.id !== 'default' && isSkinReleased(skin)).map(skin => ({ heroKey, skin })));
+        const allSkins = sortSkinEntriesByRarity(Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => skin.id !== 'default' && isSkinReleased(skin)).map(skin => ({ heroKey, skin }))));
         const ownedCount = allSkins.filter(({ heroKey, skin }) => ownsSkin(heroKey, skin)).length;
         const cardsMarkup = allSkins.map(({ heroKey, skin }) => {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
@@ -3689,12 +3694,11 @@ function openAccountPanel(kind) {
         const gameShop = cards(heroesByRarity()
             .filter(([, h]) => !h.unlocked && !h.signOnly && !h.rewardOnly)
             .map(([key,h]) => `<button class="animal-card" type="button" onclick="confirmPurchase('${key}')"><div class="animal-emoji">${heroIconMarkup(key, h)}</div><div>${heroRarityMarkup(h)}</div><div class="animal-name">${h.name}</div><div class="animal-stats">战力 ${calculateHeroPower(h)}<br>🪙 ${h.price} 金币</div></button>`).join('') || '<div class="tip">当前可购买英雄已全部拥有。</div>');
-        const skinShopEntries = Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => isSkinReleased(skin) && skin.price && !skin.battlePassOnly).map(skin => ({ heroKey, skin })))
-            .sort((a, b) => SKIN_RARITY_INFO[skinRarity(a.skin)].label === SKIN_RARITY_INFO[skinRarity(b.skin)].label ? a.skin.price - b.skin.price : ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(a.skin)) - ['normal','rare','epic','mythic','legendary'].indexOf(skinRarity(b.skin)));
+        const skinShopEntries = sortSkinEntriesByRarity(Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => isSkinReleased(skin) && skin.price && !skin.battlePassOnly && !ownsSkin(heroKey, skin)).map(skin => ({ heroKey, skin }))));
         const skinShop = cards(skinShopEntries.map(({ heroKey, skin }) => {
-            const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
-            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero, skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤${skin.themeText ? `<br>主题：${skin.themeText}` : ''}<br>${owned ? '✅ 已拥有' : `🪙 ${skin.price} 金币`}</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">${owned ? '使用皮肤' : '购买皮肤'}</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
-        }).join('') || '<div class="tip">皮肤正在制作中。</div>');
+            const hero = ANIMALS[heroKey];
+            return `<div class="animal-card"><div class="animal-emoji" style="color:${skin.color}">${heroIconMarkup(heroKey, hero, skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} 专属皮肤${skin.themeText ? `<br>主题：${skin.themeText}` : ''}<br>🪙 ${skin.price} 金币</div><button class="btn btn-success" type="button" onclick="selectHeroSkin('${heroKey}','${skin.id}','shop')">购买皮肤</button><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩</button></div>`;
+        }).join('') || '<div class="tip">当前可购买皮肤已全部拥有。</div>');
         const itemShop = cards(Object.entries(SHOP_ITEMS).map(([key, item]) => `<div class="animal-card"><div class="animal-emoji">${item.emoji}</div><div class="animal-name">${item.name}</div><div class="animal-stats">${item.desc}<br>🪙 ${item.price} 金币</div><button class="btn btn-success" type="button" onclick="confirmItemPurchase('${key}')">购买道具</button></div>`).join(''));
         const fragmentGroups = ['normal','rare','epic','mythic','legendary'].map(rarity => {
             const exchangeSkins = skinShopEntries.filter(({ skin }) => skinRarity(skin) === rarity);
