@@ -2399,7 +2399,12 @@ class Character {
             actualDamage = Math.max(1, Math.ceil(actualDamage * (1 - this.shieldReduction)));
             this.shieldHits--;
         }
+        const hpBefore = this.hp;
         this.hp -= actualDamage;
+        if (source === gameState.player && this !== gameState.player) {
+            trackLimitedGiftProgress('damage', Math.min(actualDamage, Math.max(0, hpBefore)));
+            if (hpBefore > 0 && this.hp <= 0) trackLimitedGiftProgress('kills', 1);
+        }
         if (source && this.reflectHits > 0 && source.hp > 0) {
             this.reflectHits--;
             const reflected = Math.max(1, Math.ceil(actualDamage * this.reflectRatio));
@@ -2875,7 +2880,7 @@ function updateSkillEffects(frameScale = 1) {
             for (const enemy of gameState.enemies) {
                 if (effect.hitEnemies.has(enemy)) continue;
                 if (Math.hypot(effect.x - enemy.x, effect.y - enemy.y) < effect.radius + enemy.radius) {
-                    const actualDamage = enemy.takeDamage(effect.damage);
+                    const actualDamage = enemy.takeDamage(effect.damage, effect.owner);
                     spawnDamageNumber(enemy, actualDamage, false, '技能');
                     enemy.attackFlash = 8;
                     effect.hitEnemies.add(enemy);
@@ -3653,7 +3658,7 @@ function openAccountPanel(kind) {
             activityDaily.insertBefore(fridayInfo, activityDaily.firstChild);
             if (fridayTrialsNode) activityDaily.insertBefore(fridayTrialsNode, fridayInfo.nextElementSibling);
         }
-        if (activityLimited) activityLimited.innerHTML = '<div class="feedback-box"><div class="feedback-heading">⏳ 限时活动</div><div>当前暂无限时活动，新的限时玩法开放后会显示在这里。</div></div>';
+        if (activityLimited) activityLimited.innerHTML = limitedGiftEventMarkup();
         if (activityTabs && activityDaily && activityLimited) {
             const [dailyButton, limitedButton] = activityTabs.querySelectorAll('button');
             if (dailyButton && limitedButton) {
@@ -3797,8 +3802,20 @@ const DAILY_WEEKLY_REWARDS = [
     { day:6, label:'周六', rewards:{ skinChoiceChest:1 } },
     { day:0, label:'周日', rewards:{ skinChoiceChest:1 } }
 ];
-// 礼包码与奖励会在活动确定后加入这里；礼包码不区分英文字母大小写。
+// 固定礼包码与奖励会在活动确定后加入这里。
 const GIFT_CODES = Object.freeze({});
+const LIMITED_GIFT_EVENT = Object.freeze({
+    id:'s1-beast-secret-2026',
+    name:'万兽密令',
+    start:new Date('2026-08-31T00:00:00+08:00'),
+    end:new Date('2026-10-24T00:00:00+08:00'),
+    tasks:[
+        { id:'catKills', hero:'cat', metric:'kills', target:50, desc:'使用小猫击败 50 名敌方英雄', rewards:null },
+        { id:'rabbitDamage', hero:'rabbit', metric:'damage', target:5000, desc:'使用小兔累计造成 5000 点伤害', rewards:null },
+        { id:'catMatches', hero:'cat', metric:'matches', target:5, desc:'使用小猫完成 5 局对局', rewards:null },
+        { id:'rabbitSummits', hero:'rabbit', metric:'summits', target:1, desc:'使用小兔在排位或进化试炼登顶 1 次', rewards:null }
+    ]
+});
 const SKIN_CHOICE_REWARDS = { normal:20, rare:10, epic:5, mythic:3, legendary:1 };
 let skinChoiceSelection = {};
 const BATTLE_PASS_SEASONS = [
@@ -3918,7 +3935,8 @@ function activityClaimableCount() {
     const played = dailyPlaySeconds();
     const playRewards = DAILY_PLAY_REWARDS.reduce((count, reward, index) => count + (!claims.includes(index) && played >= reward.minutes * 60 ? 1 : 0), 0);
     const dailySign = localStorage.getItem('weeklyDailySignDate') === dailyActivityDate() ? 0 : 1;
-    return playRewards + dailySign;
+    const limitedCodes = limitedGiftClaimableCount();
+    return playRewards + dailySign + limitedCodes;
 }
 function updateHallBadge(id, count) {
     const badge = document.getElementById(id);
@@ -4077,7 +4095,7 @@ function claimWeeklyDailySign() {
 function redeemedGiftCodes() {
     try {
         const codes = JSON.parse(localStorage.getItem('redeemedGiftCodes') || '[]');
-        return new Set(Array.isArray(codes) ? codes.map(code => String(code).toUpperCase()) : []);
+        return new Set(Array.isArray(codes) ? codes.map(code => String(code)) : []);
     } catch (_) { return new Set(); }
 }
 function setGiftCodeStatus(message, success = false) {
@@ -4089,12 +4107,13 @@ function setGiftCodeStatus(message, success = false) {
 function redeemGiftCode(event) {
     event?.preventDefault();
     const input = document.getElementById('giftCodeInput');
-    const code = String(input?.value || '').trim().toUpperCase();
+    const code = String(input?.value || '').trim();
     if (!code) return setGiftCodeStatus('请先输入礼包码。');
     const redeemed = redeemedGiftCodes();
     if (redeemed.has(code)) return setGiftCodeStatus('这个礼包码已经兑换过了，无法再次兑换。');
-    const gift = GIFT_CODES[code];
+    const gift = GIFT_CODES[code] || limitedGiftForCode(code);
     if (!gift) return setGiftCodeStatus('礼包码不存在或已经失效。');
+    if (gift.pending) return setGiftCodeStatus('这个活动礼包码有效，奖励内容尚未公布，请稍后再来兑换。');
     const now = Date.now();
     if ((gift.startsAt && now < new Date(gift.startsAt).getTime()) || (gift.endsAt && now >= new Date(gift.endsAt).getTime())) return setGiftCodeStatus('礼包码不在可兑换时间内。');
     redeemed.add(code);
@@ -4104,6 +4123,110 @@ function redeemGiftCode(event) {
     setGiftCodeStatus('兑换成功！奖励已经发送到邮件。', true);
 }
 window.redeemGiftCode = redeemGiftCode;
+function limitedGiftEventActive() {
+    const now = Date.now();
+    return now >= LIMITED_GIFT_EVENT.start.getTime() && now < LIMITED_GIFT_EVENT.end.getTime();
+}
+function limitedGiftEventState() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem('limitedGiftEventState') || '{}'); } catch (_) { state = {}; }
+    if (state.eventId !== LIMITED_GIFT_EVENT.id) state = { eventId:LIMITED_GIFT_EVENT.id, progress:{}, codes:{} };
+    state.progress = state.progress && typeof state.progress === 'object' ? state.progress : {};
+    state.codes = state.codes && typeof state.codes === 'object' ? state.codes : {};
+    return state;
+}
+function saveLimitedGiftEventState(state) { localStorage.setItem('limitedGiftEventState', JSON.stringify(state)); }
+function trackLimitedGiftProgress(metric, amount = 1) {
+    if (!limitedGiftEventActive() || !gameState.player || ['tutorial','skinTrial'].includes(gameState.mode) || amount <= 0) return;
+    const state = limitedGiftEventState();
+    let changed = false;
+    LIMITED_GIFT_EVENT.tasks.forEach(task => {
+        if (task.metric !== metric || task.hero !== gameState.player.type) return;
+        const current = Math.max(0, Number(state.progress[task.id]) || 0);
+        const next = Math.min(task.target, current + amount);
+        if (next !== current) { state.progress[task.id] = next; changed = true; }
+    });
+    if (changed) saveLimitedGiftEventState(state);
+}
+function limitedGiftRandomIndex(max) {
+    if (globalThis.crypto?.getRandomValues) {
+        const value = new Uint32Array(1);
+        globalThis.crypto.getRandomValues(value);
+        return value[0] % max;
+    }
+    return Math.floor(Math.random() * max);
+}
+function generateLimitedGiftCode(state) {
+    const lower = 'abcdefghijklmnopqrstuvwxyz', upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', digits = '0123456789';
+    const all = lower + upper + digits;
+    const existing = new Set([...Object.keys(GIFT_CODES), ...Object.values(state.codes), ...redeemedGiftCodes()]);
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const chars = [lower[limitedGiftRandomIndex(lower.length)], upper[limitedGiftRandomIndex(upper.length)], digits[limitedGiftRandomIndex(digits.length)]];
+        while (chars.length < 8) chars.push(all[limitedGiftRandomIndex(all.length)]);
+        for (let index = chars.length - 1; index > 0; index--) {
+            const swap = limitedGiftRandomIndex(index + 1);
+            [chars[index], chars[swap]] = [chars[swap], chars[index]];
+        }
+        const code = chars.join('');
+        if (!existing.has(code)) return code;
+    }
+    return null;
+}
+function claimLimitedGiftCode(taskId) {
+    if (!limitedGiftEventActive()) return window.alert('本期限时活动已经结束。');
+    const task = LIMITED_GIFT_EVENT.tasks.find(item => item.id === taskId);
+    const state = limitedGiftEventState();
+    if (!task || (Number(state.progress[taskId]) || 0) < task.target) return window.alert('任务还没有完成。');
+    if (!state.codes[taskId]) {
+        const code = generateLimitedGiftCode(state);
+        if (!code) return window.alert('兑换码生成失败，请稍后再试。');
+        state.codes[taskId] = code;
+        saveLimitedGiftEventState(state);
+    }
+    window.alert(`兑换码领取成功！\n${state.codes[taskId]}\n请注意区分英文字母大小写。`);
+    openAccountPanel('activity');
+}
+function limitedGiftForCode(code) {
+    const state = limitedGiftEventState();
+    const taskId = Object.keys(state.codes).find(id => state.codes[id] === code);
+    const task = LIMITED_GIFT_EVENT.tasks.find(item => item.id === taskId);
+    if (!task) return null;
+    return {
+        title:`限时活动礼包 · ${LIMITED_GIFT_EVENT.name}`,
+        content:`完成任务“${task.desc}”获得的礼包码奖励，请手动领取附件。`,
+        rewards:task.rewards || {},
+        pending:task.rewards === null
+    };
+}
+function limitedGiftMetricLabel(task, value) {
+    if (task.metric === 'damage') return `${Math.floor(value)}/${task.target} 点`;
+    if (task.metric === 'kills') return `${Math.floor(value)}/${task.target} 名`;
+    if (task.metric === 'matches') return `${Math.floor(value)}/${task.target} 局`;
+    return `${Math.floor(value)}/${task.target} 次`;
+}
+function limitedGiftEventMarkup() {
+    const state = limitedGiftEventState();
+    const active = limitedGiftEventActive();
+    const taskCards = LIMITED_GIFT_EVENT.tasks.map(task => {
+        const hero = ANIMALS[task.hero], progress = Math.min(task.target, Math.max(0, Number(state.progress[task.id]) || 0));
+        const complete = progress >= task.target, code = state.codes[task.id];
+        const codePanel = code ? `<div class="earned-gift-code">${code}</div><button class="btn" type="button" onclick="copyLimitedGiftCode('${code}')">📋 复制兑换码</button>` : `<button class="btn ${complete ? 'btn-success' : ''}" type="button" ${!active || !complete ? 'disabled' : ''} onclick="claimLimitedGiftCode('${task.id}')">${complete ? '领取随机兑换码' : '任务进行中'}</button>`;
+        return `<div class="skill-card"><div class="skill-name">${hero.emoji} ${task.desc}</div><div class="skill-desc">进度：${limitedGiftMetricLabel(task, progress)}<br>兑换码由大小写英文字母和数字随机组成，共 8 位。</div>${codePanel}</div>`;
+    }).join('');
+    const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', year:'numeric', month:'long', day:'numeric' });
+    return `<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；当前礼包奖励内容待公布，兑换码可以先领取并保存在存档中。</div></div>${taskCards}`;
+}
+function limitedGiftClaimableCount() {
+    if (!limitedGiftEventActive()) return 0;
+    const state = limitedGiftEventState();
+    return LIMITED_GIFT_EVENT.tasks.reduce((count, task) => count + ((Number(state.progress[task.id]) || 0) >= task.target && !state.codes[task.id] ? 1 : 0), 0);
+}
+async function copyLimitedGiftCode(code) {
+    try { await navigator.clipboard.writeText(code); window.alert(`已复制兑换码：${code}`); }
+    catch (_) { window.prompt('请复制这个兑换码：', code); }
+}
+window.claimLimitedGiftCode = claimLimitedGiftCode;
+window.copyLimitedGiftCode = copyLimitedGiftCode;
 function selectedSkinChoiceCount() { return Object.values(skinChoiceSelection).reduce((sum, count) => sum + (count || 0), 0); }
 function adjustSkinChoiceSelection(rarity, delta) {
     const chests = availableSkinChoiceChestCount();
@@ -4724,6 +4847,8 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     gameState.screen = 'gameover';
     exitGameFullscreen();
     trackBattlePassMatch(won);
+    trackLimitedGiftProgress('matches', 1);
+    if (won && rankRewardOverride !== null && isRankProgressMode()) trackLimitedGiftProgress('summits', 1);
     const rankProgress = isRankProgressMode();
     if (rankProgress) clearRankedRun();
     if (rankProgress && won) { gameState.stats.rankWins++; localStorage.setItem('rankWins', gameState.stats.rankWins); }
@@ -5104,6 +5229,7 @@ function endGame() {
         finishRankedMatch(false);
         return;
     }
+    trackLimitedGiftProgress('matches', 1);
     trackBattlePassMatch(false);
     gameState.screen = 'gameover';
     accountExp(15 + gameState.stats.killCount * 2);
