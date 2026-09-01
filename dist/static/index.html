@@ -123,8 +123,8 @@
         .damage-number.heal-hit { color:#126b3a; text-shadow:0 1px 2px #d7ffe3,0 0 7px #71d99b; }
         .player-focus-marker { position:absolute; z-index:5; transform:translate(-50%,-115%); color:#ffe34d; font-size:34px; font-weight:900; line-height:1; text-shadow:0 2px 3px #5c4600,0 0 10px #fff1a2; pointer-events:none; animation:player-focus-bob .65s ease-in-out infinite alternate; }
         .kill-flash { position:absolute; z-index:18; width:0; height:0; pointer-events:none; transform:translate(-50%,-50%); }
-        .kill-flash b { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:52px; line-height:1; text-shadow:0 0 8px #65e5ff,0 0 20px #a878ff,0 0 34px #ff9ee9; }
-        .kill-flash i { position:absolute; left:50%; bottom:50%; width:7px; border-radius:999px; transform-origin:50% 100%; background:linear-gradient(to top,rgba(255,255,255,.98),rgba(111,224,255,.78),rgba(180,120,255,0)); box-shadow:0 0 7px #78eaff; }
+        .kill-flash b { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#fff; font-size:52px; line-height:1; text-shadow:0 0 8px var(--kill-color,#65e5ff),0 0 20px #737cff,0 0 34px #8d5fff; }
+        .kill-flash i { position:absolute; left:50%; bottom:50%; width:7px; border-radius:999px; transform-origin:50% 100%; background:linear-gradient(to top,rgba(255,255,255,.98),var(--kill-color,#6fe0ff),rgba(91,76,255,0)); box-shadow:0 0 9px var(--kill-color,#78eaff); }
         .player-world-hp { position:absolute; z-index:4; transform:translate(-50%,-100%); min-width:72px; color:#fff; font-size:11px; font-weight:800; text-align:center; text-shadow:0 1px 3px #000; pointer-events:none; }
         .player-world-hp > div { height:7px; margin-top:2px; background:#38191d; border:1px solid rgba(255,255,255,.85); border-radius:5px; overflow:hidden; }
         .player-world-hp i { display:block; height:100%; background:linear-gradient(90deg,#5cf08c,#21b85d); }
@@ -260,6 +260,9 @@
         .starbloom-stag-icon { background:radial-gradient(circle at 30% 24%,#fff7c7 0 4%,transparent 5%),linear-gradient(145deg,#174c4a,#6d4b9e 58%,#d6a95d); border:3px solid #9ff3cf; box-shadow:0 0 15px #83e8c2,inset 0 0 12px rgba(207,178,255,.78); }
         .starbloom-stag-icon i { left:1px; bottom:1px; color:#d7ffe9; font-size:17px; }
         .starbloom-stag-icon b { right:2px; top:1px; color:#fff5ae; font-size:23px; }
+        .thunder-tide-icon { background:radial-gradient(circle at 30% 24%,#d8fbff 0 3%,transparent 4%),linear-gradient(145deg,#07184e,#2939a2 52%,#612b9a); border:3px solid #65e8ff; box-shadow:0 0 16px #3dcfff,inset 0 0 14px rgba(117,92,255,.9); }
+        .thunder-tide-icon i { right:1px; top:-1px; color:#e4fdff; font-size:28px; text-shadow:0 0 6px #55e9ff,0 0 12px #8570ff; }
+        .thunder-tide-icon b { left:3px; bottom:1px; color:#7cecff; font-size:22px; transform:rotate(-9deg); }
         .orca-icon { position:relative; display:inline-block; width:70px; height:42px; vertical-align:middle; }
         .orca-icon::before { content:""; position:absolute; left:4px; top:10px; width:60px; height:25px; border-radius:58% 48% 48% 58%; background:#12151d; box-shadow:inset -8px -5px 0 #050608; }
         .orca-icon::after { content:""; position:absolute; right:0; top:15px; width:15px; height:17px; background:#12151d; clip-path:polygon(0 50%,100% 0,82% 50%,100% 100%); }
@@ -684,6 +687,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.6.3"></script>
+    <script src="game.js?v=3.6.4"></script>
 </body>
 </html>

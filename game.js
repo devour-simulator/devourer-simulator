@@ -392,7 +392,7 @@ function heroesByRarity(entries = Object.entries(ANIMALS)) {
 }
 function heroIconMarkup(key, hero, skin = null) {
     if (key === 'seasonStag' && skin?.id === 'starbloom') return '<span class="skin-hero-icon starbloom-stag-icon" role="img" aria-label="繁星花冠">🦌<i>🐾</i><b>✦</b></span>';
-    if (key === 'abyssSwordfish') return `<span class="skin-hero-icon" role="img" aria-label="${skin?.id === 'thunderTide' ? '雷渊潮汐' : '潮汐剑鱼'}">🐟${skin?.id === 'thunderTide' ? '<i>⚡</i>' : ''}</span>`;
+    if (key === 'abyssSwordfish') return `<span class="skin-hero-icon${skin?.id === 'thunderTide' ? ' thunder-tide-icon' : ''}" role="img" aria-label="${skin?.id === 'thunderTide' ? '雷渊潮汐' : '潮汐剑鱼'}">🐟${skin?.id === 'thunderTide' ? '<i>ϟ</i><b>≋</b>' : ''}</span>`;
     if (key === 'hedgehog' && skin?.id === 'durian') return '<span class="durian-hedgehog-icon" role="img" aria-label="榴莲刺猬">🦔</span>';
     if (key === 'fox' && skin?.id === 'moon') return '<span class="skin-hero-icon moon-fox-icon" role="img" aria-label="月影灵狐">🦊<i>☾</i></span>';
     if (key === 'shark' && skin?.id === 'nebula') return '<span class="skin-hero-icon nebula-shark-icon" role="img" aria-label="星海巨鲨">🦈<i>✦</i><b>✦</b></span>';
@@ -418,7 +418,7 @@ const HERO_SKINS = {
     fox:[{id:'default',name:'森林小狐',color:'#e28743'},{id:'rose',name:'玫瑰赤狐',color:'#d95d7a',effectColor:'#ef5f96',price:4000},{id:'moon',name:'月影灵狐',color:'#7767d7',effectColor:'#b79cff',price:10000}],
     eagle:[{id:'default',name:'苍穹猎鹰',color:'#DAA520'},{id:'aurora',name:'极光苍鹰',color:'#6bb7da',effectColor:'#61f0d1',price:6000,rarity:'rare'}],
     seasonStag:[{id:'default',name:'启程星角鹿',color:'#6f73c8'},{id:'starbloom',name:'繁星花冠',color:'#7047b8',effectColor:'#8ff0c7',rarity:'epic',battlePassOnly:true,themeText:'万兽足迹与启程星路'}],
-    abyssSwordfish:[{id:'default',name:'潮汐剑鱼',color:'#245f91',futureSeason:'S2'},{id:'thunderTide',name:'雷渊潮汐',color:'#25236f',effectColor:'#50bfff',rarity:'epic',battlePassOnly:true,futureSeason:'S2'}]
+    abyssSwordfish:[{id:'default',name:'潮汐剑鱼',color:'#245f91',futureSeason:'S2'},{id:'thunderTide',name:'雷渊潮汐',color:'#171f62',effectColor:'#66e6ff',rarity:'epic',battlePassOnly:true,futureSeason:'S2',themeText:'深海雷暴与潮汐电光'}]
 };
 function ownedSkinKeys() {
     try { return new Set(JSON.parse(localStorage.getItem('ownedSkins') || '[]')); } catch { return new Set(); }
@@ -1176,11 +1176,12 @@ function toWorld(entity) { return { x: (entity.x - GAME_WIDTH / 2) / 42, z: (ent
 
 function ensureSkinMotionTrail(mesh, entity) {
     const skinId = entity.skin?.id;
-    if (!Three || !['moon', 'nebula', 'solar', 'starbloom'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
+    if (!Three || !['moon', 'nebula', 'solar', 'starbloom', 'thunderTide'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
     const palettes = {
         moon: [0x7651ff, 0xb46dff, 0xff76d5],
         nebula: [0x37d5ff, 0x7e5bff, 0xec66d6, 0x326cff],
         starbloom: [0x8ff0c7, 0xd1b1ff, 0xffe69b, 0xffffff],
+        thunderTide: [0x53e6ff, 0x397cff, 0x8468ff, 0xd8fbff],
         // 星穹狮王：底下的银河云由 galaxyClouds 保持蓝紫色，星芒本身全部白色。
         solar: [0xffffff]
     };
@@ -1211,13 +1212,21 @@ function ensureSkinMotionTrail(mesh, entity) {
         });
         return paw;
     };
-    const dustCount = skinId === 'solar' ? 34 : skinId === 'starbloom' ? 18 : 24;
+    const makeLightningShard = (size, material) => {
+        const bolt = new Three.Group();
+        [[-.15,.28,-.48],[.13,0,.52],[-.11,-.28,-.48]].forEach(([x,y,turn], index) => {
+            const segment = new Three.Mesh(new Three.BoxGeometry(size * .34, size * (index === 1 ? 1.25 : 1.05), size * .18), material);
+            segment.position.set(x * size, y * size * 1.7, 0); segment.rotation.z = turn; bolt.add(segment);
+        });
+        return bolt;
+    };
+    const dustCount = skinId === 'solar' ? 34 : skinId === 'thunderTide' ? 30 : skinId === 'starbloom' ? 18 : 24;
     const dust = Array.from({ length: dustCount }, (_, index) => {
         const color = palettes[skinId][index % palettes[skinId].length];
-        const size = (skinId === 'solar' ? .065 : skinId === 'starbloom' ? .075 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
+        const size = (skinId === 'solar' ? .065 : skinId === 'thunderTide' ? .07 : skinId === 'starbloom' ? .075 : .052) + (index % 4) * (skinId === 'solar' ? .022 : .018);
         const trailMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:skinId === 'solar' ? .94 : .92, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         // 星穹狮王不再使用圆润星点，而是和击败特效一致的十字星芒、星环与闪光。
-        const part = skinId === 'solar' ? new Three.Group() : skinId === 'starbloom' ? makePawPrint(size, trailMaterial) : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
+        const part = skinId === 'solar' ? new Three.Group() : skinId === 'thunderTide' && index % 3 === 0 ? makeLightningShard(size * 1.35, trailMaterial) : skinId === 'thunderTide' ? new Three.Mesh(new Three.OctahedronGeometry(size, 0), trailMaterial) : skinId === 'starbloom' ? makePawPrint(size, trailMaterial) : new Three.Mesh(new Three.IcosahedronGeometry(size, 1), trailMaterial);
         if (skinId === 'solar') {
             part.add(makeTwinkleStar(size, trailMaterial));
         }
@@ -1229,7 +1238,7 @@ function ensureSkinMotionTrail(mesh, entity) {
     const glitters = palettes[skinId].concat(palettes[skinId]).map((color, index) => {
         const glitterMaterial = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9, blending:skinId === 'solar' ? Three.NormalBlending : Three.AdditiveBlending, depthWrite:skinId === 'solar', side:skinId === 'solar' ? Three.DoubleSide : Three.FrontSide });
         const glitterSize = .035 + (index % 3) * .012;
-        const sparkle = ['solar','starbloom'].includes(skinId) ? new Three.Group() : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
+        const sparkle = ['solar','starbloom'].includes(skinId) ? new Three.Group() : skinId === 'thunderTide' ? makeLightningShard(glitterSize * 1.65, glitterMaterial) : new Three.Mesh(new Three.IcosahedronGeometry(glitterSize, 1), glitterMaterial);
         if (['solar','starbloom'].includes(skinId)) {
             sparkle.add(makeTwinkleStar(glitterSize, glitterMaterial));
         }
@@ -1242,6 +1251,10 @@ function ensureSkinMotionTrail(mesh, entity) {
         { color:0x07146b, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.26 },
         { color:0x16288f, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.24 },
         { color:0x3d258b, x:0, z:1.18, scale:[1.48,1.48], turn:0, opacity:.21 }
+    ] : skinId === 'thunderTide' ? [
+        { color:0x092e78, x:-.16, z:1.22, scale:[.82,1.68], turn:0, opacity:.2 },
+        { color:0x4b32a8, x:.16, z:1.22, scale:[.82,1.68], turn:0, opacity:.18 },
+        { color:0x35d8ff, x:0, z:1.18, scale:[.42,1.55], turn:0, opacity:.13 }
     ] : skinId === 'starbloom' ? [
         { color:0x1a7b68, x:-.12, z:1.22, scale:[.82,1.72], turn:0, opacity:.14 },
         { color:0x7652a6, x:.12, z:1.22, scale:[.82,1.72], turn:0, opacity:.13 },
@@ -1304,15 +1317,19 @@ function build3DMesh(entity, kind) {
         threeScene.add(group); return group;
     }
     if (kind === 'kill') {
-        // 击杀星爆：核心闪光、彩色星环和向外绽放的星尘。
-        const core = new Three.Mesh(new Three.IcosahedronGeometry(.18, 1), new Three.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1 }));
+        const thunderBurst = entity.skinId === 'thunderTide';
+        const ringPalette = thunderBurst ? [0x55edff,0x3f77ff,0x9369ff,0xdffcff,0x6bddff] : [0x55dfff, 0x9677ff, 0xf38ee8, 0xffffff];
+        const sparkPalette = thunderBurst ? [0xffffff,0x65efff,0x477fff,0x9c76ff,0xd7fbff,0x5edfff,0x704cff,0xffffff,0x6ff4ff,0xad8bff,0xffffff,0x4e8cff] : [0xffffff,0x8eeaff,0xb28aff,0xffa6e9,0x73adff,0xffffff,0xa8f5ff,0xe3b5ff,0x8eeaff,0xffffff];
+        const trailPalette = thunderBurst ? [0x60efff,0x416fff,0xa06dff,0xe3fdff,0x47cfff,0x7155ff,0xffffff,0x59ebff] : [0x68e5ff,0xc28cff,0xff9ee9,0xffffff,0x76a7ff,0xa7f7ff];
+        // 雷渊潮汐使用更密集的蓝紫雷爆；其他高品质皮肤继续使用星爆。
+        const core = new Three.Mesh(thunderBurst ? new Three.OctahedronGeometry(.22, 1) : new Three.IcosahedronGeometry(.18, 1), new Three.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1 }));
         core.position.y = .48; group.add(core);
-        const glow = new Three.PointLight(0x91eaff, 2.7, 4.2); glow.position.y = .48; group.add(glow);
-        [0x55dfff, 0x9677ff, 0xf38ee8, 0xffffff].forEach((color, index) => {
+        const glow = new Three.PointLight(thunderBurst ? 0x55eaff : 0x91eaff, thunderBurst ? 3.8 : 2.7, thunderBurst ? 5.2 : 4.2); glow.position.y = .48; group.add(glow);
+        ringPalette.forEach((color, index) => {
             const ring = new Three.Mesh(new Three.TorusGeometry(.22 + index * .1, .026, 5, 24, Math.PI * 1.5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.94 }));
             ring.position.y = .48; ring.rotation.set(Math.PI / 2, index * .7, index * .45); ring.userData.killRing = index; group.add(ring);
         });
-        [0xffffff,0x8eeaff,0xb28aff,0xffa6e9,0x73adff,0xffffff,0xa8f5ff,0xe3b5ff,0x8eeaff,0xffffff].forEach((color, index) => {
+        sparkPalette.forEach((color, index) => {
             const spark = new Three.Group();
             const sparkMat = new Three.MeshBasicMaterial({ color, transparent:true, opacity:.98 });
             spark.add(new Three.Mesh(new Three.BoxGeometry(.026, .18 + (index % 2) * .1, .026), sparkMat));
@@ -1322,7 +1339,7 @@ function build3DMesh(entity, kind) {
             group.add(spark);
         });
         // 星尘拖尾从爆点拉出，保证即使战斗节奏很快也能一眼看见。
-        [0x68e5ff,0xc28cff,0xff9ee9,0xffffff,0x76a7ff,0xa7f7ff].forEach((color, index) => {
+        trailPalette.forEach((color, index) => {
             const trail = new Three.Mesh(new Three.ConeGeometry(.075, .8 + (index % 2) * .18, 5), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.9 }));
             trail.userData.killTrail = index / 6 * Math.PI * 2;
             trail.userData.killTrailOffset = index * .15;
@@ -1444,6 +1461,23 @@ function build3DMesh(entity, kind) {
             const beacon=add(new Three.OctahedronGeometry(.14,0),new Three.MeshStandardMaterial({color:0xfff2a8,emissive:0x8ff0c7,emissiveIntensity:1.8}),0,.42,0);
             beacon.userData.skinTrail=.2; beacon.userData.radius=.12; beacon.userData.sparkle=true;
             group.userData.skinSkill='starbloom';
+        } else if (skinId === 'thunderTide') {
+            const coreMat = new Three.MeshStandardMaterial({ color:0xe3fcff, emissive:0x3da8ff, emissiveIntensity:2.7, roughness:.08 });
+            const core = add(new Three.OctahedronGeometry(.19,1),coreMat,0,.42,0);
+            core.userData.skinTrail=0; core.userData.radius=.1; core.userData.sparkle=true;
+            const tideLight = new Three.PointLight(0x61e7ff,3.2,5); tideLight.position.y=.42; group.add(tideLight);
+            [0x5cecff,0x4b7dff,0x9b6eff,0xcaf8ff].forEach((color,index) => {
+                const arc = new Three.Mesh(new Three.TorusGeometry(.3+index*.075,.034,5,26,Math.PI*1.48),new Three.MeshBasicMaterial({color,transparent:true,opacity:.94}));
+                arc.position.y=.42; arc.rotation.set(Math.PI/2,index*.68,index*.4); arc.userData.skinTrail=index/4*Math.PI*2; arc.userData.ring=true; group.add(arc);
+            });
+            [0x62edff,0x8068ff,0xdffcff,0x4d8cff,0xa981ff,0x6be9ff,0xffffff,0x735cff].forEach((color,index) => {
+                const boltMat=new Three.MeshBasicMaterial({color,transparent:true,opacity:.96});
+                const bolt=new Three.Group();
+                const upper=new Three.Mesh(new Three.BoxGeometry(.035,.2,.035),boltMat); upper.position.y=.08; upper.rotation.z=-.48;
+                const lower=new Three.Mesh(new Three.BoxGeometry(.035,.2,.035),boltMat); lower.position.y=-.08; lower.rotation.z=.48;
+                bolt.add(upper,lower); bolt.userData.skinTrail=index/8*Math.PI*2; bolt.userData.radius=.5+(index%3)*.08; bolt.userData.sparkle=true; group.add(bolt);
+            });
+            group.userData.skinSkill='thunderTide';
         }
         threeScene.add(group); return group;
     }
@@ -1575,14 +1609,27 @@ function build3DMesh(entity, kind) {
         const belly = new Three.MeshStandardMaterial({ color: 0xdde6e8, roughness: .8, flatShading: true });
         add(new Three.SphereGeometry(.28, 10, 6), belly, 0, .38, -.05, 1.35, .25, 1.9);
         if (entity.type === 'abyssSwordfish') {
-            const billMaterial = new Three.MeshStandardMaterial({ color:0x8ed8ef, emissive:0x123e68, emissiveIntensity:.32, roughness:.42, flatShading:true });
+            const thunderSkin = entity.skin?.id === 'thunderTide';
+            const billMaterial = new Three.MeshStandardMaterial({ color:thunderSkin ? 0xbdf8ff : 0x8ed8ef, emissive:thunderSkin ? 0x318dff : 0x123e68, emissiveIntensity:thunderSkin ? 1.65 : .32, roughness:thunderSkin ? .16 : .42, flatShading:true });
             const bill = add(new Three.ConeGeometry(.075, 1.15, 7), billMaterial, 0, .59, -.98);
             bill.rotation.x = -Math.PI / 2;
-            if (entity.skin?.id === 'thunderTide') {
-                const tideGlow = new Three.MeshStandardMaterial({ color:0x50bfff, emissive:0x267cff, emissiveIntensity:1.5, roughness:.18, transparent:true, opacity:.9 });
-                [-.3, 0, .3].forEach((z, index) => add(new Three.BoxGeometry(.62 - index * .08, .045, .075), tideGlow, 0, .71, z));
-                [-1, 1].forEach(side => add(new Three.OctahedronGeometry(.08, 0), tideGlow, side * .32, .73, -.44));
-                const tideLight = new Three.PointLight(0x50bfff, 1.8, 3.2); tideLight.position.set(0,.75,-.05); group.add(tideLight);
+            if (thunderSkin) {
+                const tideGlow = new Three.MeshStandardMaterial({ color:0x6aebff, emissive:0x386fff, emissiveIntensity:2.15, roughness:.12, transparent:true, opacity:.96 });
+                const violetGlow = new Three.MeshStandardMaterial({ color:0x9a78ff, emissive:0x5536d8, emissiveIntensity:1.8, roughness:.16, transparent:true, opacity:.9 });
+                const lightningParts = [];
+                [-.42,-.12,.2,.48].forEach((z, index) => {
+                    [-1,1].forEach(side => {
+                        const stripe = add(new Three.BoxGeometry(.34 - index * .025, .035, .07), index % 2 ? violetGlow : tideGlow, side * .22, .69 - index * .015, z);
+                        stripe.rotation.y = side * (index % 2 ? .48 : -.34); lightningParts.push(stripe);
+                    });
+                });
+                const tideRings = [0,1,2].map((index) => {
+                    const ring = add(new Three.TorusGeometry(.31 + index * .055,.018,5,18,Math.PI * 1.38),index % 2 ? violetGlow : tideGlow,0,.57,-.3 + index * .32);
+                    ring.rotation.set(Math.PI / 2,index * .75,index * .42); return ring;
+                });
+                [-1, 1].forEach(side => lightningParts.push(add(new Three.OctahedronGeometry(.085, 0), tideGlow, side * .32, .74, -.5)));
+                const tideLight = new Three.PointLight(0x55dfff, 2.8, 4.4); tideLight.position.set(0,.76,-.08); group.add(tideLight);
+                group.userData.thunderTideBody = { light:tideLight, lightningParts, tideRings };
             }
         }
         if (entity.type === 'orca') {
@@ -1944,6 +1991,20 @@ function render3D() {
                 bubble.visible = moving || rise < .28;
             });
         }
+        if (mesh.userData.thunderTideBody) {
+            const tide = mesh.userData.thunderTideBody;
+            tide.light.intensity = 2.25 + (Math.sin(phase * 6.5) + 1) * .7;
+            tide.light.color.setHex(Math.sin(phase * 2.2) > 0 ? 0x55e7ff : 0x8b6cff);
+            tide.lightningParts.forEach((part, index) => {
+                const flash = .78 + (Math.sin(phase * 7.5 + index * 1.9) + 1) * .22;
+                part.scale.setScalar(flash);
+                if (part.material) part.material.emissiveIntensity = 1.45 + flash;
+            });
+            tide.tideRings.forEach((ring, index) => {
+                ring.rotation.z += .045 + index * .012;
+                ring.scale.setScalar(.92 + (Math.sin(phase * 3.6 + index) + 1) * .08);
+            });
+        }
         if (mesh.userData.skinOrbit) {
             const skinOrbit = mesh.userData.skinOrbit;
             skinOrbit.parts.forEach((part, index) => {
@@ -1972,6 +2033,11 @@ function render3D() {
                     const progress = index / Math.max(1, trail.dust.length - 1);
                     const scatter = ((index * 37) % 100) / 100 - .5;
                     part.position.set(scatter * (1.04 - progress * .28), .34 + Math.sin(phase * 3 + index * 1.7) * .12, .50 + progress * 1.25 + (moving ? .08 : 0));
+                } else if (trail.id === 'thunderTide') {
+                    const progress = index / Math.max(1, trail.dust.length - 1);
+                    const lane = index % 4 - 1.5;
+                    part.position.set(lane * .16 + Math.sin(phase * 2.6 + index) * .055, .3 + Math.sin(phase * 4 + index * 1.4) * .12, .55 + progress * 1.62 + (moving ? .12 : 0));
+                    part.rotation.z = Math.sin(phase * 3.4 + index) * .22;
                 } else if (trail.id === 'starbloom') {
                     const progress = index / Math.max(1, trail.dust.length - 1);
                     const lane = index % 2 ? .2 : -.2;
@@ -1980,9 +2046,9 @@ function render3D() {
                 } else {
                     part.position.set(lane * .14 * solarBoost + Math.sin(drift) * .09 * solarBoost, .36 + Math.cos(drift * 1.4) * .18 * solarBoost + row * .06, .62 + row * .34 + (moving ? .16 : 0));
                 }
-                const pulse = trail.id === 'starbloom' ? .82 + (Math.sin(phase * 2.2 + index * 1.4) + 1) * .08 : (.65 + (Math.sin(phase * (trail.id === 'solar' ? 2 : 5) + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : 1);
+                const pulse = trail.id === 'starbloom' ? .82 + (Math.sin(phase * 2.2 + index * 1.4) + 1) * .08 : (.65 + (Math.sin(phase * (trail.id === 'solar' ? 2 : trail.id === 'thunderTide' ? 7 : 5) + index * 2.1) + 1) * .5) * (trail.id === 'solar' ? 1.18 : trail.id === 'thunderTide' ? 1.08 : 1);
                 part.scale.setScalar(pulse);
-                part.userData.trailMaterial.opacity = trail.id === 'starbloom' ? .5 + pulse * .28 : trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : .48 + Math.min(.45, pulse * .35);
+                part.userData.trailMaterial.opacity = trail.id === 'starbloom' ? .5 + pulse * .28 : trail.id === 'solar' ? .72 + Math.min(.22, pulse * .18) : trail.id === 'thunderTide' ? .62 + Math.min(.32, pulse * .24) : .48 + Math.min(.45, pulse * .35);
                 if (trail.id === 'solar') {
                     part.rotation.set(0, 0, index * .41);
                 }
@@ -1990,7 +2056,7 @@ function render3D() {
             trail.galaxyClouds?.forEach((cloud, index) => {
                 cloud.rotation.set(-Math.PI / 2, cloud.userData.baseTurn, 0);
                 cloud.scale.set(cloud.userData.baseScale[0], cloud.userData.baseScale[1], 1);
-                cloud.material.opacity = trail.id === 'starbloom' ? .1 + index * .025 : .21 + index * .025;
+                cloud.material.opacity = trail.id === 'starbloom' ? .1 + index * .025 : trail.id === 'thunderTide' ? .15 + index * .025 + Math.sin(phase * 2.4 + index) * .025 : .21 + index * .025;
             });
             trail.glitters.forEach((sparkle, index) => {
                 const angle = phase * 1.9 + sparkle.userData.glitterAngle;
@@ -1999,13 +2065,17 @@ function render3D() {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
                     const scatter = ((index * 53) % 100) / 100 - .5;
                     sparkle.position.set(scatter * .95, .40 + Math.cos(index * 2.1) * .16, .55 + progress * 1.15);
+                } else if (trail.id === 'thunderTide') {
+                    const progress = index / Math.max(1, trail.glitters.length - 1);
+                    sparkle.position.set((index % 2 ? .34 : -.34) + Math.sin(phase * 2.8 + index) * .08, .36 + Math.cos(phase * 4.4 + index) * .15, .62 + progress * 1.3);
+                    sparkle.rotation.z = Math.sin(phase * 5 + index) * .32;
                 } else if (trail.id === 'starbloom') {
                     const progress = index / Math.max(1, trail.glitters.length - 1);
                     sparkle.position.set(Math.sin(index * 2.2) * .48, .28 + Math.cos(index * 1.7) * .11, .55 + progress * 1.38);
                 } else sparkle.position.set(Math.cos(angle) * radius, .42 + Math.sin(angle * 1.7) * .24, Math.sin(angle) * radius);
-                const twinkle = .45 + (Math.sin(phase * (trail.id === 'starbloom' ? 2.8 : trail.id === 'solar' ? 2.2 : 6) + index * 2.4) + 1) * .5;
+                const twinkle = .45 + (Math.sin(phase * (trail.id === 'starbloom' ? 2.8 : trail.id === 'solar' ? 2.2 : trail.id === 'thunderTide' ? 7.5 : 6) + index * 2.4) + 1) * .5;
                 sparkle.scale.setScalar(twinkle);
-                sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : .35 + twinkle * .5;
+                sparkle.userData.glitterMaterial.opacity = trail.id === 'solar' ? .62 + twinkle * .26 : trail.id === 'thunderTide' ? .52 + twinkle * .42 : .35 + twinkle * .5;
             });
         }
         // 爪击、啄击与冲撞都用短促的前探动作表现；Boss 咆哮时会明显放大。
@@ -2047,8 +2117,8 @@ function render3D() {
             mesh.scale.setScalar(pulse);
         }
         if (kind === 'skill' && mesh.userData.skinSkill) {
-            const speed = mesh.userData.skinSkill === 'solar' ? 3.4 : mesh.userData.skinSkill === 'nebula' ? 2.6 : 2.1;
-            mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .13 : .08;
+            const speed = mesh.userData.skinSkill === 'solar' ? 3.4 : mesh.userData.skinSkill === 'thunderTide' ? 3.2 : mesh.userData.skinSkill === 'nebula' ? 2.6 : 2.1;
+            mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .13 : mesh.userData.skinSkill === 'thunderTide' ? .115 : .08;
             mesh.scale.multiplyScalar(1 + Math.sin(phase * speed) * .012);
             mesh.children.forEach((part, index) => {
                 if (part.userData.skinTrail === undefined) return;
@@ -2127,6 +2197,7 @@ function renderEnemyLabels() {
         const progress = 1 - Math.max(0, effect.life) / effect.maxLife;
         const flash = document.createElement('div');
         flash.className = 'kill-flash';
+        flash.style.setProperty('--kill-color', effect.color || '#65e5ff');
         flash.style.left = `${(point.x * .5 + .5) * 100}%`;
         flash.style.top = `${(-point.y * .5 + .5) * 100}%`;
         const size = 1.08 + Math.sin(Math.min(1, progress * 2.8) * Math.PI) * .65;
@@ -2826,9 +2897,9 @@ function spawnSkillEffect(owner, active) {
 
 function spawnKillEffect(x, y, killer = gameState.player) {
     const skinId = killer?.skin?.id;
-    const supported = (killer?.type === 'lion' && skinId === 'solar') || (killer?.type === 'shark' && skinId === 'nebula') || (killer?.type === 'fox' && skinId === 'moon') || (killer?.type === 'seasonStag' && skinId === 'starbloom');
+    const supported = (killer?.type === 'lion' && skinId === 'solar') || (killer?.type === 'shark' && skinId === 'nebula') || (killer?.type === 'fox' && skinId === 'moon') || (killer?.type === 'seasonStag' && skinId === 'starbloom') || (killer?.type === 'abyssSwordfish' && skinId === 'thunderTide');
     if (!supported) return;
-    const color = skinId === 'starbloom' ? '#8ff0c7' : skinId === 'moon' ? '#d7b8ff' : skinId === 'nebula' ? '#8a75ff' : '#8eeaff';
+    const color = skinId === 'thunderTide' ? '#5deaff' : skinId === 'starbloom' ? '#8ff0c7' : skinId === 'moon' ? '#d7b8ff' : skinId === 'nebula' ? '#8a75ff' : '#8eeaff';
     gameState.killEffects.push({ id: nextKillEffectId++, x, y, life: 72, maxLife: 72, color, skinId });
 }
 
