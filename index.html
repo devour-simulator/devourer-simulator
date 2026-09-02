@@ -531,7 +531,7 @@
             <div class="sign-card"><div><strong>🎮 游玩方式</strong><br><small id="deviceModeText">当前：电脑键盘</small></div><div class="device-choice"><button class="btn" id="desktopModeButton" type="button">🖥️ 电脑键鼠</button><button class="btn" id="mobileModeButton" type="button">📱 手机摇杆</button></div></div>
             <div class="sign-card" id="signInCard"><div><strong>📅 新手七日签到</strong><br><small id="signProgress">今天是新手签到第 1 天（进度 0/7）</small><br><small>第 2 天送小狐狸，第 7 天送火凤凰；奖励通过邮件手动领取。</small></div><button class="btn btn-success" id="signButton" type="button">签到第 1 天</button></div>
             <div class="sign-card" id="hundredSignCard" hidden><div><strong>🎉 百天签到</strong><br><small id="hundredSignProgress">新手七日签到完成后开启</small><br><small>普通天数送 150 金币；第 2、7、10、18、25、50、75、100 天有特别奖励。</small></div><button class="btn btn-success" id="hundredSignButton" type="button">百天签到</button></div>
-            <div class="sign-card outside-chest"><div><strong>🎁 局外奖励宝箱</strong><br><small id="outsideChestProgress">每天可挑战一次，最多敲击 4 次升级品质。</small><br><small>点击宝箱或按空格，品质越高奖励越好。</small></div><button class="btn btn-primary" id="outsideChestOpenButton" type="button" onclick="openOutsideChest()">打开宝箱</button></div>
+            <div class="sign-card outside-chest"><div><strong>🎁 局外奖励宝箱</strong><br><small id="outsideChestProgress">每天可挑战一次，最多敲击 4 次升级品质。</small><br><small>点击宝箱或按空格，品质越高奖励越好，也越难继续升级。</small></div><button class="btn btn-primary" id="outsideChestOpenButton" type="button" onclick="openOutsideChest()">打开宝箱</button></div>
         </div>
     </div>
 
@@ -687,6 +687,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.6.5"></script>
+    <script src="game.js?v=3.6.7"></script>
 </body>
 </html>

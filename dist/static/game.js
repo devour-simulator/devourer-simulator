@@ -3689,6 +3689,7 @@ function openAccountPanel(kind) {
     } else if (kind === 'battlePass') {
         title.textContent = `📜 吞噬战令 · ${BATTLE_PASS_SEASON} ${BATTLE_PASS_THEME}`;
         const pass = battlePassState(), level = battlePassLevel(pass), levelExp = pass.exp % 100;
+        const dailyLoginClaimed = pass.dailyLoginExpDate === dailyActivityDate();
         const seasonHero = ANIMALS[BATTLE_PASS_CONFIG.hero];
         const seasonSkin = HERO_SKINS[BATTLE_PASS_CONFIG.skin.type]?.find(skin => skin.id === BATTLE_PASS_CONFIG.skin.id);
         const taskDefs = battlePassTasks(pass);
@@ -3705,7 +3706,7 @@ function openAccountPanel(kind) {
         const premiumPanel = pass.premium
             ? '<div class="tip" style="border-color:#9c72e8">💎 已解锁进阶战令：已达到的进阶奖励均可领取。</div>'
             : `<div class="feedback-box"><div class="feedback-heading">💎 进阶战令</div><div>花费 🪙 ${BATTLE_PASS_PREMIUM_PRICE} 金币解锁本赛季进阶奖励。Lv.50 可获得${seasonHero.name}史诗皮肤「${seasonSkin.name}」${seasonSkin.themeText ? `，专属主题为“${seasonSkin.themeText}”` : ''}。新赛季开启后需重新解锁。</div><button class="btn btn-primary" type="button" ${battlePassSeasonActive() ? '' : 'disabled'} onclick="purchasePremiumBattlePass()">解锁进阶战令</button></div>`;
-        content.innerHTML = `<div class="feedback-box battle-pass-banner" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c)"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>${BATTLE_PASS_CONFIG.description}</div><div>赛季时间：${battlePassDateLabel(BATTLE_PASS_START_AT)}—${battlePassDateLabel(BATTLE_PASS_END_AT)} · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><div>✅ 今日首次登录战令经验 +${BATTLE_PASS_DAILY_LOGIN_EXP} 已自动领取</div><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日首次登录会自动获得 ${BATTLE_PASS_DAILY_LOGIN_EXP} 战令经验；每日任务每天北京时间 00:00 刷新，每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「${seasonHero.name}」。赛季切换后战令等级、任务和领取记录重置，进阶版恢复为未解锁。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
+        content.innerHTML = `<div class="feedback-box battle-pass-banner" style="background:linear-gradient(135deg,#176b5a,#315fa8,#68489c)"><div class="feedback-heading">📜 ${BATTLE_PASS_SEASON} 赛季 · ${BATTLE_PASS_THEME}</div><div>${BATTLE_PASS_CONFIG.description}</div><div>赛季时间：${battlePassDateLabel(BATTLE_PASS_START_AT)}—${battlePassDateLabel(BATTLE_PASS_END_AT)} · ${seasonStatus}</div><div>当前 Lv.${level}/${BATTLE_PASS_LEVELS} · ${level >= BATTLE_PASS_LEVELS ? '已满级' : `距离下一级还需 ${100 - levelExp} 战令经验`}</div><button class="btn ${dailyLoginClaimed ? '' : 'btn-success'}" type="button" ${dailyLoginClaimed || !battlePassSeasonActive() ? 'disabled' : ''} onclick="claimBattlePassDailyLogin()">${dailyLoginClaimed ? '✅ 今日登录经验已领取' : `🎁 领取今日登录经验 +${BATTLE_PASS_DAILY_LOGIN_EXP}`}</button><div style="height:10px;background:#111a36;border-radius:8px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${level >= BATTLE_PASS_LEVELS ? 100 : levelExp}%;background:linear-gradient(90deg,#62efc4,#63b7ff,#c079ff)"></div></div><button class="btn btn-success" type="button" onclick="claimAllBattlePass()">🎁 一键领取</button></div>${premiumPanel}<div class="tip">每日登录战令后需要手动领取 ${BATTLE_PASS_DAILY_LOGIN_EXP} 战令经验；每天北京时间 00:00 刷新。每日任务每天 00:00 刷新，每周任务每周一刷新。免费与进阶战令等级共用，Lv.50 免费奖励为新英雄「${seasonHero.name}」。赛季切换后战令等级、任务和领取记录重置，进阶版恢复为未解锁。</div><h3>每日与每周任务</h3>${taskCards}<h3>免费与进阶奖励</h3><div class="animals-grid">${rewards}</div>`;
     } else if (kind === 'skinChoiceChest') {
         title.textContent = '🎀 开启皮肤碎片自选宝箱';
         content.innerHTML = availableSkinChoiceChestCount() ? skinChoicePickerMarkup() : '<div class="tip">背包里暂时没有皮肤碎片自选宝箱。</div>';
@@ -3965,10 +3966,6 @@ function battlePassState() {
     state.rewardClaims = state.rewardClaims || {};
     state.premium = !!state.premium;
     state.premiumRewardClaims = state.premiumRewardClaims || {};
-    if (battlePassSeasonActive() && state.dailyLoginExpDate !== today) {
-        state.dailyLoginExpDate = today;
-        state.exp += BATTLE_PASS_DAILY_LOGIN_EXP;
-    }
     // Lv.50 奖励从旧宝箱升级为赛季英雄后，让已领取旧奖励的玩家也能领取新英雄。
     if (BATTLE_PASS_SEASON === 'S1' && !state.seasonHeroRewardMigrated) {
         if (state.rewardClaims[50] && !ANIMALS.seasonStag.unlocked) delete state.rewardClaims[50];
@@ -4002,6 +3999,7 @@ function battlePassTasks(state = battlePassState()) {
 function battlePassClaimableCount(state = battlePassState()) {
     let count = 0;
     if (battlePassSeasonActive()) {
+        if (state.dailyLoginExpDate !== dailyActivityDate()) count++;
         battlePassTasks(state).forEach(task => {
             const claimed = task.weekly ? state.weeklyClaimed[task.key] : state.dailyClaimed[task.key];
             if (!claimed && task.progress >= task.target) count++;
@@ -4013,6 +4011,17 @@ function battlePassClaimableCount(state = battlePassState()) {
         if (state.premium && !state.premiumRewardClaims[tier]) count++;
     }
     return count;
+}
+function claimBattlePassDailyLogin() {
+    const state = battlePassState();
+    const today = dailyActivityDate();
+    if (!battlePassSeasonActive()) return window.alert(`${BATTLE_PASS_SEASON} 赛季已经结束。`);
+    if (state.dailyLoginExpDate === today) return window.alert('今天的战令登录经验已经领取过了。');
+    state.dailyLoginExpDate = today;
+    state.exp += BATTLE_PASS_DAILY_LOGIN_EXP;
+    saveBattlePassState(state);
+    window.alert(`领取成功！战令经验 +${BATTLE_PASS_DAILY_LOGIN_EXP}`);
+    openAccountPanel('battlePass');
 }
 function activityClaimableCount() {
     const claims = dailyPlayClaims();
@@ -4419,15 +4428,16 @@ window.showSkinChoiceChestPrompt = showSkinChoiceChestPrompt;
 window.deferSkinChoiceChest = deferSkinChoiceChest;
 window.openSkinChoiceChestFromBag = openSkinChoiceChestFromBag;
 window.openSkinChoiceChestNow = openSkinChoiceChestNow;
+window.claimBattlePassDailyLogin = claimBattlePassDailyLogin;
 window.claimBattlePassTask = claimBattlePassTask;
 window.claimBattlePassReward = claimBattlePassReward;
 window.purchasePremiumBattlePass = purchasePremiumBattlePass;
 window.claimAllBattlePass = claimAllBattlePass;
 const OUTSIDE_CHEST_TIERS = [
-    { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.72, rewards:{ coins:120 } },
-    { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.56, rewards:{ coins:320 } },
-    { name:'史诗宝箱', icon:'🟪', color:'#8753cf', chance:.38, rewards:{ coins:720, rankStarCard:1 } },
-    { name:'神话宝箱', icon:'🔴', color:'#d64b51', chance:.22, rewards:{ coins:1400, rankStarCard:1, rankProtectCard:1 } },
+    { name:'普通宝箱', icon:'📦', color:'#8090a5', chance:.58, rewards:{ coins:120 } },
+    { name:'稀有宝箱', icon:'🟦', color:'#3488df', chance:.36, rewards:{ coins:320 } },
+    { name:'史诗宝箱', icon:'🟪', color:'#8753cf', chance:.18, rewards:{ coins:720, rankStarCard:1 } },
+    { name:'神话宝箱', icon:'🔴', color:'#d64b51', chance:.07, rewards:{ coins:1400, rankStarCard:1, rankProtectCard:1 } },
     { name:'传说宝箱', icon:'🌈', color:'#d88722', chance:0, rewards:{ coins:2800, rankStarCard:1, rankProtectCard:1 } }
 ];
 function outsideChestDate() { return new Date().toDateString(); }
@@ -4475,7 +4485,8 @@ function renderOutsideChest() {
     }
     tierLabel.textContent = state.claimed ? '今日宝箱已领取' : tier.name;
     tierLabel.style.background = tier.color;
-    text.textContent = state.claimed ? '明天再来开启新的局外奖励宝箱吧！' : state.ready ? `最终品质：${tier.name}！请领取你的奖励。` : `已敲击 ${state.taps}/4 次。每次都有机会升级；第 4 次后展示最终品质。`;
+    const upgradeChance = Math.round(tier.chance * 100);
+    text.textContent = state.claimed ? '明天再来开启新的局外奖励宝箱吧！' : state.ready ? `最终品质：${tier.name}！请领取你的奖励。` : `已敲击 ${state.taps}/4 次。当前升级成功率 ${upgradeChance}%，品质越高越难升级；第 4 次后展示最终品质。`;
     tap.hidden = state.ready;
     tap.disabled = state.claimed || state.ready;
     tap.textContent = state.claimed ? '今日已领取' : `✨ 敲击宝箱（${state.taps + 1}/4）`;
@@ -4549,7 +4560,8 @@ function tapOutsideChest() {
         renderOutsideChest();
     } else {
         renderOutsideChest();
-        document.getElementById('outsideChestText').textContent = upgraded ? `✨ 升级成功！现在是${OUTSIDE_CHEST_TIERS[state.tier].name}，还可继续敲击。` : `品质暂时保持在${current.name}，还可继续敲击。`;
+        const nextChance = Math.round(OUTSIDE_CHEST_TIERS[state.tier].chance * 100);
+        document.getElementById('outsideChestText').textContent = upgraded ? `✨ 升级成功！现在是${OUTSIDE_CHEST_TIERS[state.tier].name}，下一次升级成功率 ${nextChance}%。` : `升级失败，品质保持在${current.name}；下一次仍有 ${Math.round(current.chance * 100)}% 概率升级。`;
     }
 }
 function claimHundredSignIn() {
