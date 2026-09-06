@@ -3574,14 +3574,181 @@ function saveAccount() {
     const a = gameState.account;
     localStorage.setItem('playerName', a.name); localStorage.setItem('accountLevel', a.level); localStorage.setItem('accountExp', a.exp); localStorage.setItem('reputation', a.reputation); localStorage.setItem('inventory', JSON.stringify(a.inventory));
 }
-// 存档备份保存在玩家电脑中；它与 GitHub 账号、网站地址无关，可用于换设备恢复记录。
-function exportGameSave() {
+const CLOUD_API_ORIGIN = location.hostname.endsWith('wiserazor.chatgpt.site') ? '' : 'https://devourer-simulator-lukex-2026.wiserazor.chatgpt.site';
+const CLOUD_LOCAL_KEYS = new Set(['cloudAccountToken','cloudAccountUsername','cloudAccountLastSync','cloudAccountLastRevision','cloudAccountAutoSavePaused']);
+let cloudLastUploadedSnapshot = '';
+let cloudAutoSaveTimer = null;
+function collectGameSaveData() {
     saveAccount();
     const data = {};
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key) data[key] = localStorage.getItem(key);
+        if (key && !CLOUD_LOCAL_KEYS.has(key)) data[key] = localStorage.getItem(key);
     }
+    return data;
+}
+function cloudEscapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+}
+function cloudToken() { return localStorage.getItem('cloudAccountToken') || ''; }
+function cloudUsername() { return localStorage.getItem('cloudAccountUsername') || ''; }
+function cloudDateLabel(seconds) {
+    if (!seconds) return '尚未同步';
+    const date = new Date(Number(seconds) * 1000);
+    return Number.isNaN(date.getTime()) ? '尚未同步' : date.toLocaleString('zh-CN', { hour12:false });
+}
+async function cloudApi(path, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const headers = { ...(options.body ? { 'Content-Type':'application/json' } : {}), ...(options.headers || {}) };
+    if (cloudToken()) headers.Authorization = `Bearer ${cloudToken()}`;
+    try {
+        const response = await fetch(`${CLOUD_API_ORIGIN}${path}`, { ...options, headers, credentials:'omit', signal:controller.signal });
+        const result = await response.json().catch(() => ({ message:'云账号服务返回了无法识别的内容。' }));
+        if (!response.ok) throw new Error(result.message || '云账号操作失败。');
+        return result;
+    } catch (error) {
+        if (error.name === 'AbortError') throw new Error('云账号服务连接超时，请检查网络后重试。');
+        if (error instanceof TypeError) throw new Error('暂时无法连接云账号服务，请稍后再试。');
+        throw error;
+    } finally { clearTimeout(timeout); }
+}
+function cloudSetStatus(message, isError = false) {
+    const status = document.getElementById('cloudPanelStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = isError ? '#c64040' : '#247a50';
+}
+function cloudSetBusy(busy) {
+    document.querySelectorAll('[data-cloud-action]').forEach(button => { button.disabled = busy; });
+}
+function cloudInput(id) { return document.getElementById(id)?.value || ''; }
+function cloudAccountMarkup() {
+    const username = cloudEscapeHtml(cloudUsername());
+    if (cloudToken() && username) {
+        const lastSync = cloudDateLabel(localStorage.getItem('cloudAccountLastSync'));
+        const paused = localStorage.getItem('cloudAccountAutoSavePaused') === '1';
+        return `<div class="feedback-box"><div class="feedback-heading">✅ 已登录云账号：${username}</div><div>最近同步：${lastSync}<br>${paused ? '自动保存已暂停，防止意外覆盖云端进度。手动保存一次后会重新开启。' : '已开启自动云保存；回到大厅或持续游玩时会定期同步。'}</div><div class="cloud-actions"><button class="btn btn-success" data-cloud-action type="button" onclick="cloudUploadSave()">☁️ 保存当前进度</button><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRestoreSave()">⬇️ 恢复云端进度</button><button class="btn" data-cloud-action type="button" onclick="cloudLogout()">退出云账号</button></div><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div></div><div class="tip">恢复云端进度会覆盖当前浏览器里的游戏记录。建议仍偶尔使用大厅的“导出存档”保存一份文件备份。</div>`;
+    }
+    return `<div class="feedback-box"><div class="feedback-heading">☁️ 云账号说明</div><div>云账号与游戏昵称分开。注册后可以在其他设备输入账号和密码恢复游戏进度；密码只会以加密结果保存。</div></div><div class="cloud-account-grid"><div class="feedback-box cloud-account-card"><div class="feedback-heading">登录已有账号</div><div class="cloud-form"><label>账号名<input id="cloudLoginUsername" autocomplete="username" maxlength="16" placeholder="3—16 个字符"></label><label>密码<input id="cloudLoginPassword" type="password" autocomplete="current-password" maxlength="64" placeholder="至少 8 个字符"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudLogin()">登录并查找存档</button></div></div><div class="feedback-box cloud-account-card"><div class="feedback-heading">创建云账号</div><div class="cloud-form"><label>账号名<input id="cloudRegisterUsername" autocomplete="username" maxlength="16" placeholder="汉字、字母、数字或下划线"></label><label>密码<input id="cloudRegisterPassword" type="password" autocomplete="new-password" maxlength="64" placeholder="至少 8 个字符"></label><label>再次输入密码<input id="cloudRegisterConfirm" type="password" autocomplete="new-password" maxlength="64" placeholder="再次输入同一密码"></label><button class="btn btn-success" data-cloud-action type="button" onclick="cloudRegister()">注册并保存当前进度</button></div></div></div><details class="cloud-recovery"><summary>忘记密码？使用恢复码重设</summary><div class="cloud-form"><label>账号名<input id="cloudRecoverUsername" autocomplete="username" maxlength="16"></label><label>恢复码<input id="cloudRecoveryCode" autocomplete="off" maxlength="19" placeholder="注册时获得的 16 位恢复码"></label><label>新密码<input id="cloudNewPassword" type="password" autocomplete="new-password" maxlength="64"></label><label>再次输入新密码<input id="cloudNewPasswordConfirm" type="password" autocomplete="new-password" maxlength="64"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRecoverPassword()">重设密码</button></div></details><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div>`;
+}
+async function cloudUploadSave(silent = false) {
+    if (!cloudToken()) { if (!silent) cloudSetStatus('请先登录云账号。', true); return false; }
+    const data = collectGameSaveData(), snapshot = JSON.stringify(data);
+    if (silent && snapshot === cloudLastUploadedSnapshot) return true;
+    if (!silent) { cloudSetBusy(true); cloudSetStatus('正在保存进度……'); }
+    try {
+        const result = await cloudApi('/api/cloud-save', { method:'PUT', body:JSON.stringify({ data }) });
+        cloudLastUploadedSnapshot = snapshot;
+        localStorage.setItem('cloudAccountLastSync', String(result.updatedAt));
+        localStorage.setItem('cloudAccountLastRevision', String(result.revision));
+        localStorage.removeItem('cloudAccountAutoSavePaused');
+        if (!silent) { openAccountPanel('cloud'); cloudSetStatus('云端保存成功！'); window.alert('云端保存成功！'); }
+        return true;
+    } catch (error) {
+        if (!silent) cloudSetStatus(error.message, true);
+        return false;
+    } finally { if (!silent) cloudSetBusy(false); }
+}
+async function cloudRegister() {
+    const username = cloudInput('cloudRegisterUsername'), password = cloudInput('cloudRegisterPassword'), confirmPassword = cloudInput('cloudRegisterConfirm');
+    if (password !== confirmPassword) return cloudSetStatus('两次输入的密码不一样。', true);
+    cloudSetBusy(true); cloudSetStatus('正在创建云账号……');
+    try {
+        const result = await cloudApi('/api/auth/register', { method:'POST', body:JSON.stringify({ username, password }) });
+        localStorage.setItem('cloudAccountToken', result.token);
+        localStorage.setItem('cloudAccountUsername', result.username);
+        localStorage.removeItem('cloudAccountAutoSavePaused');
+        const saved = await cloudUploadSave(true);
+        openAccountPanel('cloud');
+        window.alert(`云账号创建成功！${saved ? '\n当前游戏进度已保存到云端。' : '\n账号已创建，但当前进度暂时未能上传，请稍后手动保存。'}\n\n你的恢复码：${result.recoveryCode}\n\n请把恢复码截图或抄下来。忘记密码时需要它，游戏不会再次显示这个恢复码。`);
+    } catch (error) { cloudSetStatus(error.message, true); }
+    finally { cloudSetBusy(false); }
+}
+async function cloudLogin() {
+    const username = cloudInput('cloudLoginUsername'), password = cloudInput('cloudLoginPassword');
+    cloudSetBusy(true); cloudSetStatus('正在登录……');
+    try {
+        const result = await cloudApi('/api/auth/login', { method:'POST', body:JSON.stringify({ username, password }) });
+        localStorage.setItem('cloudAccountToken', result.token);
+        localStorage.setItem('cloudAccountUsername', result.username);
+        if (result.hasSave) {
+            if (window.confirm('登录成功！检测到云端存档。\n\n是否立即恢复云端进度？这会覆盖当前浏览器里的游戏记录。')) {
+                localStorage.removeItem('cloudAccountAutoSavePaused');
+                await cloudRestoreSave(false);
+                return;
+            }
+            localStorage.setItem('cloudAccountAutoSavePaused', '1');
+            openAccountPanel('cloud');
+            window.alert('登录成功！目前保留当前浏览器进度，自动保存已暂停，以免覆盖云端存档。');
+        } else {
+            localStorage.removeItem('cloudAccountAutoSavePaused');
+            const saved = await cloudUploadSave(true);
+            openAccountPanel('cloud');
+            window.alert(saved ? '登录成功！当前进度已作为第一份云端存档保存。' : '登录成功！请稍后点击“保存当前进度”。');
+        }
+    } catch (error) { cloudSetStatus(error.message, true); }
+    finally { cloudSetBusy(false); }
+}
+async function cloudRestoreSave(askConfirmation = true) {
+    if (!cloudToken()) return cloudSetStatus('请先登录云账号。', true);
+    if (askConfirmation && !window.confirm('确定恢复云端进度吗？当前浏览器里的游戏记录会被覆盖。')) return;
+    cloudSetBusy(true); cloudSetStatus('正在下载云端存档……');
+    try {
+        const result = await cloudApi('/api/cloud-save');
+        if (!result.hasSave) throw new Error('这个账号还没有云端存档。');
+        const backup = result.save;
+        if (backup?.game !== '吞噬模拟器' || !backup.data || typeof backup.data !== 'object') throw new Error('云端存档格式不正确。');
+        const token = cloudToken(), username = result.username || cloudUsername();
+        localStorage.clear();
+        Object.entries(backup.data).forEach(([key, value]) => { if (typeof value === 'string' && !CLOUD_LOCAL_KEYS.has(key)) localStorage.setItem(key, value); });
+        localStorage.setItem('cloudAccountToken', token);
+        localStorage.setItem('cloudAccountUsername', username);
+        localStorage.setItem('cloudAccountLastSync', String(result.updatedAt || Math.floor(Date.now() / 1000)));
+        localStorage.setItem('cloudAccountLastRevision', String(result.revision || 1));
+        window.alert('云端存档恢复成功！游戏将重新打开。');
+        window.location.reload();
+    } catch (error) { cloudSetStatus(error.message, true); }
+    finally { cloudSetBusy(false); }
+}
+async function cloudLogout() {
+    if (!window.confirm('确定退出当前云账号吗？本机游戏记录不会被删除。')) return;
+    cloudSetBusy(true);
+    try { await cloudApi('/api/auth/logout', { method:'POST' }); } catch (_) { /* 本地仍然退出 */ }
+    CLOUD_LOCAL_KEYS.forEach(key => localStorage.removeItem(key));
+    cloudLastUploadedSnapshot = '';
+    openAccountPanel('cloud');
+    window.alert('已退出云账号，本机游戏记录仍然保留。');
+}
+async function cloudRecoverPassword() {
+    const username = cloudInput('cloudRecoverUsername'), recoveryCode = cloudInput('cloudRecoveryCode');
+    const newPassword = cloudInput('cloudNewPassword'), confirmPassword = cloudInput('cloudNewPasswordConfirm');
+    if (newPassword !== confirmPassword) return cloudSetStatus('两次输入的新密码不一样。', true);
+    cloudSetBusy(true); cloudSetStatus('正在重设密码……');
+    try {
+        const result = await cloudApi('/api/auth/recover', { method:'POST', body:JSON.stringify({ username, recoveryCode, newPassword }) });
+        CLOUD_LOCAL_KEYS.forEach(key => localStorage.removeItem(key));
+        openAccountPanel('cloud');
+        window.alert(`${result.message || '密码已重设，请使用新密码登录。'}\n\n新的恢复码：${result.recoveryCode}\n\n旧恢复码已经失效，请把新恢复码截图或抄下来。`);
+    } catch (error) { cloudSetStatus(error.message, true); }
+    finally { cloudSetBusy(false); }
+}
+function scheduleCloudAutoSave() {
+    if (!cloudToken() || localStorage.getItem('cloudAccountAutoSavePaused') === '1' || cloudAutoSaveTimer) return;
+    cloudAutoSaveTimer = setTimeout(async () => {
+        cloudAutoSaveTimer = null;
+        await cloudUploadSave(true);
+    }, 2500);
+}
+window.cloudRegister = cloudRegister;
+window.cloudLogin = cloudLogin;
+window.cloudUploadSave = cloudUploadSave;
+window.cloudRestoreSave = cloudRestoreSave;
+window.cloudLogout = cloudLogout;
+window.cloudRecoverPassword = cloudRecoverPassword;
+// 存档备份保存在玩家电脑中；它与 GitHub 账号、网站地址无关，可用于换设备恢复记录。
+function exportGameSave() {
+    const data = collectGameSaveData();
     const backup = { game:'吞噬模拟器', version:1, exportedAt:new Date().toISOString(), data };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
     const link = document.createElement('a');
@@ -3626,6 +3793,8 @@ function showHall() {
     document.getElementById('hallCoins').textContent = `🪙 ${gameState.stats.coins} 金币`;
     document.getElementById('accountName').textContent = `👤 ${gameState.account.name}`;
     document.getElementById('accountLevel').textContent = `Lv.${gameState.account.level} · ${gameState.account.exp}/${gameState.account.level * 100} 账号经验`;
+    const cloudStatus = document.getElementById('cloudAccountStatus');
+    if (cloudStatus) cloudStatus.textContent = cloudToken() ? `已登录：${cloudUsername()} · ${localStorage.getItem('cloudAccountAutoSavePaused') === '1' ? '自动保存已暂停' : '云端保护中'}` : '尚未登录；注册后可用账号密码找回进度。';
     // 信誉分系统已移除，账号只保留等级与金币进度。
     document.getElementById('hallHeroes').textContent = `英雄图鉴：${unlocked}/${releasedHeroes.length} 已解锁（进入模式后可购买英雄）`;
     const signedToday = localStorage.getItem('signDate') === new Date().toDateString();
@@ -3663,6 +3832,7 @@ function showHall() {
     updateHallBadge('activityBadge', activityClaimableCount());
     updateControlLayout();
     document.getElementById('hallModal').classList.remove('hidden');
+    scheduleCloudAutoSave();
 }
 
 let activeActivityTab = 'limited';
@@ -3670,7 +3840,10 @@ function openAccountPanel(kind) {
     const title = document.getElementById('subPageTitle');
     const content = document.getElementById('subPageContent');
     const cards = (items) => `<div class="animals-grid">${items}</div>`;
-    if (kind === 'hero') {
+    if (kind === 'cloud') {
+        title.textContent = '☁️ 云账号与云存档';
+        content.innerHTML = cloudAccountMarkup();
+    } else if (kind === 'hero') {
         title.textContent = '🦸 英雄图鉴';
         content.innerHTML = cards(heroesByPower().map(([key, h]) => {
             const wardrobe = HERO_SKINS[key]?.filter(isSkinReleased).length > 1 ? `<button class="hero-wardrobe" type="button" onclick="openHeroSkinGallery('${key}')">👕 查看皮肤</button>` : '';
@@ -3713,6 +3886,8 @@ function openAccountPanel(kind) {
         content.innerHTML = availableSkinChoiceChestCount() ? skinChoicePickerMarkup() : '<div class="tip">背包里暂时没有皮肤碎片自选宝箱。</div>';
     } else if (kind === 'activity') {
         title.textContent = '🎉 活动中心';
+        const dailyClaimable = dailyActivityClaimableCount();
+        const limitedClaimable = limitedActivityClaimableCount();
         const played = dailyPlaySeconds();
         const claims = dailyPlayClaims();
         const playCards = DAILY_PLAY_REWARDS.map((reward, index) => {
@@ -3726,7 +3901,7 @@ function openAccountPanel(kind) {
         const fridaySkins = Object.entries(HERO_SKINS).filter(([heroKey]) => isHeroReleased(ANIMALS[heroKey])).flatMap(([heroKey, skins]) => skins.filter(skin => isSkinReleased(skin) && skin.price && ['normal','rare'].includes(skinRarity(skin))).map(skin => ({ heroKey, skin })));
         const fridayTrials = isSuperFriday() ? `<div class="animals-grid">${fridaySkins.map(({heroKey,skin}) => `<div class="animal-card"><div class="animal-emoji">${heroIconMarkup(heroKey, ANIMALS[heroKey], skin)}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${ANIMALS[heroKey].name} · 周五免费体验</div><button class="btn btn-success" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 免费试玩</button></div>`).join('')}</div>` : '<div class="tip">超级星期五将于下一个周五 00:00 开启：届时可免费体验全部普通、稀有皮肤。</div>';
         const fridayStatus = isSuperFriday() ? (localStorage.getItem('superFridayFirstRankDate') === dailyActivityDate() ? '今日首局排位已结算。' : '今天第一局排位胜利可额外 +1 星。') : '每周五 00:00 至 23:59 开启。';
-        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary" data-activity-tab="daily" type="button" onclick="switchActivityTab('daily')">📅 日常活动</button><button class="btn" data-activity-tab="limited" type="button" onclick="switchActivityTab('limited')">⏳ 限时活动</button></div><div id="activityDaily"><div class="feedback-box"><div class="feedback-heading">每日游玩时长</div><div>每天北京时间 00:00 刷新。进入对局后的有效游玩时间会自动累计，奖励会通过邮件发放。</div></div>${playCards}<div class="feedback-box"><div class="feedback-heading">🗓️ 日常签到</div><div>每天 00:00 刷新。今日签到奖励将通过邮件发放。</div></div><div class="animals-grid">${weekly}</div><button class="btn ${signed ? '' : 'btn-success'}" type="button" ${signed ? 'disabled' : ''} onclick="claimWeeklyDailySign()">${signed ? '今日已签到' : '领取今日签到奖励'}</button><div class="feedback-box"><div class="feedback-heading">🎁 礼包码兑换</div><div>输入有效礼包码即可兑换；每个礼包码每个存档只能使用一次，奖励会发送到系统邮件。</div><form class="gift-code-row" onsubmit="redeemGiftCode(event)"><input id="giftCodeInput" class="gift-code-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="请输入礼包码" aria-label="礼包码"><button class="btn btn-success" type="submit">立即兑换</button></form><div id="giftCodeStatus" class="gift-code-status" aria-live="polite"></div></div></div><div id="activityLimited" style="display:none"><div class="feedback-box"><div class="feedback-heading">🌟 超级星期五 ${isSuperFriday() ? '· 正在进行' : ''}</div><div>周五免费体验全部普通、稀有皮肤；当天第一局<strong>排位模式</strong>胜利额外 +1 星。失败不会抵扣扣星，也不会变成保护卡。进化试炼的账号经验与金币奖励提升 50%。<br>${fridayStatus}</div></div>${fridayTrials}<div class="feedback-box"><div class="feedback-heading">🎀 皮肤碎片自选宝箱</div><div>当前拥有：${gameState.account.inventory.skinChoiceChest || 0} 个。每个宝箱可任选一份奖励；有多个宝箱时可分开选择不同品质。</div></div><div class="skill-card"><div class="skill-name">自选一份皮肤碎片</div><div class="skill-desc">普通 ×20 · 稀有 ×10 · 史诗 ×5 · 神话 ×3 · 传说 ×1</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${choices}</div></div><div class="tip">周六、周日的日常签到可获得皮肤碎片自选宝箱。</div></div>`;
+        content.innerHTML = `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-primary notification-entry" data-activity-tab="daily" type="button" onclick="switchActivityTab('daily')">📅 日常活动<span id="dailyActivityBadge" class="mail-badge" ${dailyClaimable ? '' : 'hidden'}>${dailyClaimable}</span></button><button class="btn notification-entry" data-activity-tab="limited" type="button" onclick="switchActivityTab('limited')">⏳ 限时活动<span id="limitedActivityBadge" class="mail-badge" ${limitedClaimable ? '' : 'hidden'}>${limitedClaimable}</span></button></div><div id="activityDaily"><div class="feedback-box"><div class="feedback-heading">每日游玩时长</div><div>每天北京时间 00:00 刷新。进入对局后的有效游玩时间会自动累计，奖励会通过邮件发放。</div></div>${playCards}<div class="feedback-box"><div class="feedback-heading">🗓️ 日常签到</div><div>每天 00:00 刷新。今日签到奖励将通过邮件发放。</div></div><div class="animals-grid">${weekly}</div><button class="btn ${signed ? '' : 'btn-success'}" type="button" ${signed ? 'disabled' : ''} onclick="claimWeeklyDailySign()">${signed ? '今日已签到' : '领取今日签到奖励'}</button><div class="feedback-box"><div class="feedback-heading">🎁 礼包码兑换</div><div>输入有效礼包码即可兑换；每个礼包码每个存档只能使用一次，奖励会发送到系统邮件。</div><form class="gift-code-row" onsubmit="redeemGiftCode(event)"><input id="giftCodeInput" class="gift-code-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="请输入礼包码" aria-label="礼包码"><button class="btn btn-success" type="submit">立即兑换</button></form><div id="giftCodeStatus" class="gift-code-status" aria-live="polite"></div></div></div><div id="activityLimited" style="display:none"><div class="feedback-box"><div class="feedback-heading">🌟 超级星期五 ${isSuperFriday() ? '· 正在进行' : ''}</div><div>周五免费体验全部普通、稀有皮肤；当天第一局<strong>排位模式</strong>胜利额外 +1 星。失败不会抵扣扣星，也不会变成保护卡。进化试炼的账号经验与金币奖励提升 50%。<br>${fridayStatus}</div></div>${fridayTrials}<div class="feedback-box"><div class="feedback-heading">🎀 皮肤碎片自选宝箱</div><div>当前拥有：${gameState.account.inventory.skinChoiceChest || 0} 个。每个宝箱可任选一份奖励；有多个宝箱时可分开选择不同品质。</div></div><div class="skill-card"><div class="skill-name">自选一份皮肤碎片</div><div class="skill-desc">普通 ×20 · 稀有 ×10 · 史诗 ×5 · 神话 ×3 · 传说 ×1</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${choices}</div></div><div class="tip">周六、周日的日常签到可获得皮肤碎片自选宝箱。</div></div>`;
         // 限时活动优先展示：把它放到日常活动前面，并作为进入活动中心时的默认页。
         const activityTabs = content.firstElementChild;
         const activityDaily = document.getElementById('activityDaily');
@@ -4025,13 +4200,18 @@ function claimBattlePassDailyLogin() {
     window.alert(`领取成功！战令经验 +${BATTLE_PASS_DAILY_LOGIN_EXP}`);
     openAccountPanel('battlePass');
 }
-function activityClaimableCount() {
+function dailyActivityClaimableCount() {
     const claims = dailyPlayClaims();
     const played = dailyPlaySeconds();
     const playRewards = DAILY_PLAY_REWARDS.reduce((count, reward, index) => count + (!claims.includes(index) && played >= reward.minutes * 60 ? 1 : 0), 0);
     const dailySign = localStorage.getItem('weeklyDailySignDate') === dailyActivityDate() ? 0 : 1;
-    const limitedCodes = limitedGiftClaimableCount();
-    return playRewards + dailySign + limitedCodes;
+    return playRewards + dailySign;
+}
+function limitedActivityClaimableCount() {
+    return limitedGiftClaimableCount();
+}
+function activityClaimableCount() {
+    return dailyActivityClaimableCount() + limitedActivityClaimableCount();
 }
 function updateHallBadge(id, count) {
     const badge = document.getElementById(id);
@@ -5962,4 +6142,7 @@ window.addEventListener('load', () => {
 setInterval(() => {
     if (gameState.screen === 'hall' && currentBattlePassSeason().id !== BATTLE_PASS_SEASON) window.location.reload();
 }, 60000);
+setInterval(() => {
+    if (document.visibilityState === 'visible' && cloudToken() && localStorage.getItem('cloudAccountAutoSavePaused') !== '1') cloudUploadSave(true);
+}, 120000);
 window.addEventListener('pagehide', saveRankedRun);

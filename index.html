@@ -312,6 +312,17 @@
         .gift-code-input:focus { border-color:#547fea; box-shadow:0 0 0 3px rgba(84,127,234,.16); }
         .gift-code-row .btn { flex:0 0 auto; margin:0; }
         .gift-code-status { min-height:22px; margin-top:8px; font-size:13px; font-weight:700; }
+        .cloud-account-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
+        .cloud-account-card { margin:0; }
+        .cloud-form { display:grid; gap:10px; margin-top:12px; }
+        .cloud-form label { display:grid; gap:5px; color:#36516e; font-size:13px; font-weight:800; }
+        .cloud-form input { width:100%; box-sizing:border-box; padding:11px 12px; border:2px solid #91b9e8; border-radius:10px; background:#fff; color:#243a55; font-size:15px; outline:none; }
+        .cloud-form input:focus { border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,.16); }
+        .cloud-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+        .cloud-status { min-height:24px; margin-top:12px; color:#315d8b; font-weight:800; }
+        .cloud-recovery { margin-top:14px; padding:12px 14px; border:1px solid #a9b9d4; border-radius:10px; background:#f7f9ff; }
+        .cloud-recovery summary { cursor:pointer; color:#563e91; font-weight:800; }
+        @media (max-width:680px) { .cloud-account-grid { grid-template-columns:1fr; } }
         .earned-gift-code { margin-top:10px; padding:10px; border:2px dashed #7764d9; border-radius:10px; background:#f4f0ff; color:#3e318d; font-size:19px; font-weight:900; letter-spacing:2px; text-align:center; }
         @media (max-width:620px) { .gift-code-row { align-items:stretch; flex-direction:column; } .gift-code-row .btn { width:100%; } }
         .skin-gallery-card { border-color:var(--skin-color); box-shadow:0 4px 14px color-mix(in srgb,var(--skin-color) 20%,transparent); }
@@ -530,6 +541,7 @@
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('feedback')"><strong>💬 游戏反馈</strong>反馈 Bug、英雄平衡、皮肤或玩法建议</button>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('skinCodex')"><strong>🎨 皮肤图鉴</strong>查看全部皮肤品质与收藏进度</button>
             <button class="mode-card" style="width:100%;margin-top:10px;min-height:62px" type="button" onclick="openAccountPanel('updates')"><strong>📢 更新公告</strong>查看最新版本新增内容与问题修复</button>
+            <div class="sign-card"><div><strong>☁️ 云账号与云存档</strong><br><small id="cloudAccountStatus">尚未登录；注册后可用账号密码找回进度。</small></div><button class="btn btn-primary" type="button" onclick="openAccountPanel('cloud')">管理云账号</button></div>
             <div class="sign-card"><div><strong>💾 游戏存档备份</strong><br><small>导出记录到电脑；换设备或担心丢档时可导入恢复。</small></div><div class="device-choice"><button class="btn" type="button" onclick="exportGameSave()">导出存档</button><button class="btn btn-primary" type="button" onclick="document.getElementById('importSaveFile').click()">导入存档</button><input id="importSaveFile" type="file" accept="application/json,.json" hidden></div></div>
             <div class="sign-card"><button id="mailButton" class="btn mail-button" type="button" onclick="openAccountPanel('mail')">✉️ 邮件<span id="mailBadge" class="mail-badge" hidden>0</span></button><div id="accountPanel" style="font-size:12px;color:#555;flex:1;">系统邮件与好友邮件入口</div></div>
             <button class="btn" id="replayTutorialButton" type="button">🎓 重看新手教程</button>
@@ -693,6 +705,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.6.9"></script>
+    <script src="game.js?v=3.7.1"></script>
 </body>
 </html>
