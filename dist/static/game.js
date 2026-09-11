@@ -4231,12 +4231,14 @@ function claimBattlePassTask(key) {
 }
 function battlePassReward(level) {
     if (level === 50) return { hero:BATTLE_PASS_CONFIG.hero };
-    if (level % 10 === 0) return { skinChoiceChest:1 };
-    if (level % 5 === 0) return { outsideChestTicket:1, coins:500 };
-    if (level % 4 === 0) return { rankStarCard:1, rankProtectCard:1 };
-    if (level % 3 === 0) return { skinFragments:{ rare:5 } };
-    if (level % 2 === 0) return { skinFragments:{ normal:10 } };
-    return { coins:200 + level * 30 };
+    // 普通战令控制在稳定的小额成长：大奖间隔更远，道具卡不再一次给两张。
+    if (level % 30 === 0) return { skinChoiceChest:1 };
+    if (level % 10 === 0) return { outsideChestTicket:1 };
+    if (level % 5 === 0) return { coins:250 };
+    if (level % 4 === 0) return level % 8 === 0 ? { rankProtectCard:1 } : { rankStarCard:1 };
+    if (level % 3 === 0) return { skinFragments:{ rare:2 } };
+    if (level % 2 === 0) return { skinFragments:{ normal:5 } };
+    return { coins:80 + Math.min(50, Math.floor(level / 30) * 10) };
 }
 function battlePassPremiumReward(level) {
     if (level === 50) return { skin:BATTLE_PASS_CONFIG.skin };
