@@ -13,6 +13,7 @@ function corsHeaders(request) {
     if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
     return {
         'Access-Control-Allow-Origin':origin,
+        'Access-Control-Allow-Credentials':'true',
         'Access-Control-Allow-Headers':'Authorization, Content-Type',
         'Access-Control-Allow-Methods':'GET, POST, PUT, OPTIONS',
         'Access-Control-Max-Age':'86400',
@@ -292,6 +293,11 @@ function embeddedStaticResponse(url) {
     if (url.pathname === '/game.js') {
         const script = typeof __STATIC_GAME_JS__ === 'string' ? __STATIC_GAME_JS__ : null;
         return script === null ? null : new Response(script, { headers:{ ...headers, 'Content-Type':'text/javascript; charset=utf-8', 'Cache-Control':'public, max-age=31536000, immutable' } });
+    }
+    if (url.pathname === '/cloud-connect') {
+        const allowedOrigins = JSON.stringify([...ALLOWED_ORIGINS]);
+        const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连接吞噬模拟器云存档</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(145deg,#eef8ff,#eee9ff);font-family:system-ui,"Microsoft YaHei",sans-serif;color:#284867}.card{max-width:420px;margin:24px;padding:28px;border:2px solid #8dbbe7;border-radius:22px;background:#fff;box-shadow:0 18px 50px rgba(39,77,130,.2);text-align:center}h1{font-size:24px;margin:0 0 12px}p{font-size:16px;line-height:1.7;margin:8px 0}.ok{color:#218354;font-weight:800}</style></head><body><main class="card"><h1>☁️ 云存档连接</h1><p class="ok">连接成功！</p><p>请返回吞噬模拟器。这个小窗口会负责云账号和云存档通信，游戏结束前可以保持打开。</p></main><script>(()=>{const allowed=new Set(${allowedOrigins});const send=(target,origin,data)=>{try{target.postMessage(data,origin)}catch(_){}};addEventListener('message',async event=>{if(!allowed.has(event.origin)||!event.source)return;const data=event.data||{};if(data.type!=='devourer-cloud-request'||typeof data.id!=='string'||typeof data.path!=='string'||!data.path.startsWith('/api/'))return;const options=data.options||{};try{const response=await fetch(data.path,{method:options.method||'GET',headers:options.headers||{},body:options.body,credentials:'same-origin'});const result=await response.json().catch(()=>({message:'云账号服务返回了无法识别的内容。'}));send(event.source,event.origin,{type:'devourer-cloud-response',id:data.id,ok:response.ok,status:response.status,result})}catch(error){send(event.source,event.origin,{type:'devourer-cloud-response',id:data.id,ok:false,status:0,result:{message:'云账号服务连接失败，请稍后重试。'}})}});if(window.opener){send(window.opener,'*',{type:'devourer-cloud-ready'});setTimeout(()=>{try{window.opener.focus()}catch(_){}},300)}setInterval(()=>{if(!window.opener||window.opener.closed)window.close()},3000)})();</script></body></html>`;
+        return new Response(html, { headers:{ ...headers, 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store' } });
     }
     return null;
 }

@@ -3578,6 +3578,9 @@ const CLOUD_API_ORIGIN = location.hostname.endsWith('wiserazor.chatgpt.site') ? 
 const CLOUD_LOCAL_KEYS = new Set(['cloudAccountToken','cloudAccountUsername','cloudAccountLastSync','cloudAccountLastRevision','cloudAccountAutoSavePaused']);
 let cloudLastUploadedSnapshot = '';
 let cloudAutoSaveTimer = null;
+let cloudBridgeWindow = null;
+let cloudBridgeReadyPromise = null;
+let cloudBridgeRequestId = 0;
 function collectGameSaveData() {
     saveAccount();
     const data = {};
@@ -3597,13 +3600,63 @@ function cloudDateLabel(seconds) {
     const date = new Date(Number(seconds) * 1000);
     return Number.isNaN(date.getTime()) ? '尚未同步' : date.toLocaleString('zh-CN', { hour12:false });
 }
+function cloudBridgeIsOpen() { return !!cloudBridgeWindow && !cloudBridgeWindow.closed; }
+async function ensureCloudBridge(allowPopup = true) {
+    if (!CLOUD_API_ORIGIN) return null;
+    if (cloudBridgeIsOpen() && cloudBridgeReadyPromise) return cloudBridgeReadyPromise;
+    if (!allowPopup) return null;
+    cloudBridgeWindow = window.open(`${CLOUD_API_ORIGIN}/cloud-connect`, 'devourer-cloud-connect', 'popup,width=520,height=420');
+    if (!cloudBridgeWindow) throw new Error('浏览器阻止了云服务连接窗口，请允许弹出窗口后再试。');
+    const popup = cloudBridgeWindow;
+    cloudBridgeReadyPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            window.removeEventListener('message', onReady);
+            cloudBridgeReadyPromise = null;
+            reject(new Error('云服务安全验证没有完成，请在连接窗口完成验证后重试。'));
+        }, 30000);
+        function onReady(event) {
+            if (event.origin !== CLOUD_API_ORIGIN || event.source !== popup || event.data?.type !== 'devourer-cloud-ready') return;
+            clearTimeout(timeout);
+            window.removeEventListener('message', onReady);
+            resolve(popup);
+        }
+        window.addEventListener('message', onReady);
+    });
+    return cloudBridgeReadyPromise;
+}
+async function cloudApiViaBridge(path, options, allowPopup) {
+    const bridge = await ensureCloudBridge(allowPopup);
+    if (!bridge) return null;
+    const id = `cloud-${Date.now()}-${++cloudBridgeRequestId}`;
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            window.removeEventListener('message', onResponse);
+            reject(new Error('云账号服务连接超时，请在连接窗口完成验证后重试。'));
+        }, 20000);
+        function onResponse(event) {
+            const data = event.data || {};
+            if (event.origin !== CLOUD_API_ORIGIN || event.source !== bridge || data.type !== 'devourer-cloud-response' || data.id !== id) return;
+            clearTimeout(timeout);
+            window.removeEventListener('message', onResponse);
+            if (!data.ok) reject(new Error(data.result?.message || '云账号操作失败。'));
+            else resolve(data.result);
+        }
+        window.addEventListener('message', onResponse);
+        bridge.postMessage({ type:'devourer-cloud-request', id, path, options:{ method:options.method || 'GET', headers:options.headers || {}, body:options.body } }, CLOUD_API_ORIGIN);
+    });
+}
 async function cloudApi(path, options = {}) {
+    const { allowPopup = true, ...requestOptions } = options;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
-    const headers = { ...(options.body ? { 'Content-Type':'application/json' } : {}), ...(options.headers || {}) };
+    const headers = { ...(requestOptions.body ? { 'Content-Type':'application/json' } : {}), ...(requestOptions.headers || {}) };
     if (cloudToken()) headers.Authorization = `Bearer ${cloudToken()}`;
     try {
-        const response = await fetch(`${CLOUD_API_ORIGIN}${path}`, { ...options, headers, credentials:'omit', signal:controller.signal });
+        if (CLOUD_API_ORIGIN && (cloudBridgeIsOpen() || allowPopup)) {
+            const bridged = await cloudApiViaBridge(path, { ...requestOptions, headers }, allowPopup);
+            if (bridged) return bridged;
+        }
+        const response = await fetch(`${CLOUD_API_ORIGIN}${path}`, { ...requestOptions, headers, credentials:'include', signal:controller.signal });
         const result = await response.json().catch(() => ({ message:'云账号服务返回了无法识别的内容。' }));
         if (!response.ok) throw new Error(result.message || '云账号操作失败。');
         return result;
@@ -3625,12 +3678,13 @@ function cloudSetBusy(busy) {
 function cloudInput(id) { return document.getElementById(id)?.value || ''; }
 function cloudAccountMarkup() {
     const username = cloudEscapeHtml(cloudUsername());
+    const bridgeTip = CLOUD_API_ORIGIN ? '<div class="tip">首次在正式网站使用云账号时，会短暂打开“云存档连接”小窗口。它用于绕过浏览器的跨网站拦截，请允许弹出并在游戏期间保持打开。</div>' : '';
     if (cloudToken() && username) {
         const lastSync = cloudDateLabel(localStorage.getItem('cloudAccountLastSync'));
         const paused = localStorage.getItem('cloudAccountAutoSavePaused') === '1';
-        return `<div class="feedback-box"><div class="feedback-heading">✅ 已登录云账号：${username}</div><div>最近同步：${lastSync}<br>${paused ? '自动保存已暂停，防止意外覆盖云端进度。手动保存一次后会重新开启。' : '已开启自动云保存；回到大厅或持续游玩时会定期同步。'}</div><div class="cloud-actions"><button class="btn btn-success" data-cloud-action type="button" onclick="cloudUploadSave()">☁️ 保存当前进度</button><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRestoreSave()">⬇️ 恢复云端进度</button><button class="btn" data-cloud-action type="button" onclick="cloudLogout()">退出云账号</button></div><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div></div><div class="tip">恢复云端进度会覆盖当前浏览器里的游戏记录。建议仍偶尔使用大厅的“导出存档”保存一份文件备份。</div>`;
+        return `<div class="feedback-box"><div class="feedback-heading">✅ 已登录云账号：${username}</div><div>最近同步：${lastSync}<br>${paused ? '自动保存已暂停，防止意外覆盖云端进度。手动保存一次后会重新开启。' : '已开启自动云保存；回到大厅或持续游玩时会定期同步。'}</div><div class="cloud-actions"><button class="btn btn-success" data-cloud-action type="button" onclick="cloudUploadSave()">☁️ 保存当前进度</button><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRestoreSave()">⬇️ 恢复云端进度</button><button class="btn" data-cloud-action type="button" onclick="cloudLogout()">退出云账号</button></div><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div></div>${bridgeTip}<div class="tip">恢复云端进度会覆盖当前浏览器里的游戏记录。建议仍偶尔使用大厅的“导出存档”保存一份文件备份。</div>`;
     }
-    return `<div class="feedback-box"><div class="feedback-heading">☁️ 云账号说明</div><div>云账号与游戏昵称分开。注册后可以在其他设备输入账号和密码恢复游戏进度；密码只会以加密结果保存。</div></div><div class="cloud-account-grid"><div class="feedback-box cloud-account-card"><div class="feedback-heading">登录已有账号</div><div class="cloud-form"><label>账号名<input id="cloudLoginUsername" autocomplete="username" maxlength="16" placeholder="3—16 个字符"></label><label>密码<input id="cloudLoginPassword" type="password" autocomplete="current-password" maxlength="64" placeholder="至少 8 个字符"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudLogin()">登录并查找存档</button></div></div><div class="feedback-box cloud-account-card"><div class="feedback-heading">创建云账号</div><div class="cloud-form"><label>账号名<input id="cloudRegisterUsername" autocomplete="username" maxlength="16" placeholder="汉字、字母、数字或下划线"></label><label>密码<input id="cloudRegisterPassword" type="password" autocomplete="new-password" maxlength="64" placeholder="至少 8 个字符"></label><label>再次输入密码<input id="cloudRegisterConfirm" type="password" autocomplete="new-password" maxlength="64" placeholder="再次输入同一密码"></label><button class="btn btn-success" data-cloud-action type="button" onclick="cloudRegister()">注册并保存当前进度</button></div></div></div><details class="cloud-recovery"><summary>忘记密码？使用恢复码重设</summary><div class="cloud-form"><label>账号名<input id="cloudRecoverUsername" autocomplete="username" maxlength="16"></label><label>恢复码<input id="cloudRecoveryCode" autocomplete="off" maxlength="19" placeholder="注册时获得的 16 位恢复码"></label><label>新密码<input id="cloudNewPassword" type="password" autocomplete="new-password" maxlength="64"></label><label>再次输入新密码<input id="cloudNewPasswordConfirm" type="password" autocomplete="new-password" maxlength="64"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRecoverPassword()">重设密码</button></div></details><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div>`;
+    return `<div class="feedback-box"><div class="feedback-heading">☁️ 云账号说明</div><div>云账号与游戏昵称分开。注册后可以在其他设备输入账号和密码恢复游戏进度；密码只会以加密结果保存。</div></div>${bridgeTip}<div class="cloud-account-grid"><div class="feedback-box cloud-account-card"><div class="feedback-heading">登录已有账号</div><div class="cloud-form"><label>账号名<input id="cloudLoginUsername" autocomplete="username" maxlength="16" placeholder="3—16 个字符"></label><label>密码<input id="cloudLoginPassword" type="password" autocomplete="current-password" maxlength="64" placeholder="至少 8 个字符"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudLogin()">登录并查找存档</button></div></div><div class="feedback-box cloud-account-card"><div class="feedback-heading">创建云账号</div><div class="cloud-form"><label>账号名<input id="cloudRegisterUsername" autocomplete="username" maxlength="16" placeholder="汉字、字母、数字或下划线"></label><label>密码<input id="cloudRegisterPassword" type="password" autocomplete="new-password" maxlength="64" placeholder="至少 8 个字符"></label><label>再次输入密码<input id="cloudRegisterConfirm" type="password" autocomplete="new-password" maxlength="64" placeholder="再次输入同一密码"></label><button class="btn btn-success" data-cloud-action type="button" onclick="cloudRegister()">注册并保存当前进度</button></div></div></div><details class="cloud-recovery"><summary>忘记密码？使用恢复码重设</summary><div class="cloud-form"><label>账号名<input id="cloudRecoverUsername" autocomplete="username" maxlength="16"></label><label>恢复码<input id="cloudRecoveryCode" autocomplete="off" maxlength="19" placeholder="注册时获得的 16 位恢复码"></label><label>新密码<input id="cloudNewPassword" type="password" autocomplete="new-password" maxlength="64"></label><label>再次输入新密码<input id="cloudNewPasswordConfirm" type="password" autocomplete="new-password" maxlength="64"></label><button class="btn btn-primary" data-cloud-action type="button" onclick="cloudRecoverPassword()">重设密码</button></div></details><div id="cloudPanelStatus" class="cloud-status" aria-live="polite"></div>`;
 }
 async function cloudUploadSave(silent = false) {
     if (!cloudToken()) { if (!silent) cloudSetStatus('请先登录云账号。', true); return false; }
@@ -3638,7 +3692,7 @@ async function cloudUploadSave(silent = false) {
     if (silent && snapshot === cloudLastUploadedSnapshot) return true;
     if (!silent) { cloudSetBusy(true); cloudSetStatus('正在保存进度……'); }
     try {
-        const result = await cloudApi('/api/cloud-save', { method:'PUT', body:JSON.stringify({ data }) });
+        const result = await cloudApi('/api/cloud-save', { method:'PUT', body:JSON.stringify({ data }), allowPopup:!silent });
         cloudLastUploadedSnapshot = snapshot;
         localStorage.setItem('cloudAccountLastSync', String(result.updatedAt));
         localStorage.setItem('cloudAccountLastRevision', String(result.revision));
@@ -3695,7 +3749,7 @@ async function cloudRestoreSave(askConfirmation = true) {
     if (askConfirmation && !window.confirm('确定恢复云端进度吗？当前浏览器里的游戏记录会被覆盖。')) return;
     cloudSetBusy(true); cloudSetStatus('正在下载云端存档……');
     try {
-        const result = await cloudApi('/api/cloud-save');
+        const result = await cloudApi('/api/cloud-save', { allowPopup:askConfirmation });
         if (!result.hasSave) throw new Error('这个账号还没有云端存档。');
         const backup = result.save;
         if (backup?.game !== '吞噬模拟器' || !backup.data || typeof backup.data !== 'object') throw new Error('云端存档格式不正确。');
