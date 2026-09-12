@@ -4294,8 +4294,14 @@ function purchasePremiumBattlePass() {
 }
 function claimAllBattlePass() {
     const state = battlePassState();
-    let taskCount = 0, taskExp = 0;
+    let taskCount = 0, taskExp = 0, dailyLoginExp = 0;
     if (battlePassSeasonActive()) {
+        const today = dailyActivityDate();
+        if (state.dailyLoginExpDate !== today) {
+            state.dailyLoginExpDate = today;
+            state.exp += BATTLE_PASS_DAILY_LOGIN_EXP;
+            dailyLoginExp = BATTLE_PASS_DAILY_LOGIN_EXP;
+        }
         battlePassTasks(state).forEach(task => {
             const claimed = task.weekly ? state.weeklyClaimed[task.key] : state.dailyClaimed[task.key];
             if (claimed || task.progress < task.target) return;
@@ -4310,10 +4316,10 @@ function claimAllBattlePass() {
         if (!state.rewardClaims[level]) { const reward = battlePassReward(level); state.rewardClaims[level] = true; grantBattlePassReward(reward); mergeBattlePassReward(total, reward); rewardCount++; }
         if (state.premium && !state.premiumRewardClaims[level]) { const reward = battlePassPremiumReward(level); state.premiumRewardClaims[level] = true; grantBattlePassReward(reward); mergeBattlePassReward(total, reward); rewardCount++; }
     }
-    if (!taskCount && !rewardCount) return window.alert('当前没有可以一键领取的战令任务或奖励。');
+    if (!dailyLoginExp && !taskCount && !rewardCount) return window.alert('当前没有可以一键领取的战令经验、任务或奖励。');
     saveBattlePassState(state); saveAccount();
     const details = rewardText(total);
-    window.alert(`一键领取成功！${taskCount ? `\n任务 ${taskCount} 个 · 战令经验 +${taskExp}` : ''}${rewardCount ? `\n奖励 ${rewardCount} 份\n${details}${total.special.length ? `\n${total.special.join('\n')}` : ''}` : ''}`);
+    window.alert(`一键领取成功！${dailyLoginExp ? `\n每日登录 · 战令经验 +${dailyLoginExp}` : ''}${taskCount ? `\n任务 ${taskCount} 个 · 战令经验 +${taskExp}` : ''}${rewardCount ? `\n奖励 ${rewardCount} 份\n${details}${total.special.length ? `\n${total.special.join('\n')}` : ''}` : ''}`);
     openAccountPanel('battlePass');
     if (total.skinChoiceChest) showSkinChoiceChestPrompt(total.skinChoiceChest);
 }
