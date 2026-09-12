@@ -4461,7 +4461,7 @@ function redeemGiftCode(event) {
     localStorage.setItem('redeemedGiftCodes', JSON.stringify([...redeemed]));
     sendRewardMail(gift.title || `礼包码奖励 · ${code}`, gift.content || '礼包码兑换成功！附件奖励请手动领取。', gift.rewards || {});
     if (input) input.value = '';
-    setGiftCodeStatus(`兑换成功！${gift.tierLabel ? `抽中了「${gift.tierLabel}」，` : ''}奖励已经发送到邮件。`, true);
+    setGiftCodeStatus('兑换成功！奖励已发送到邮件，请前往邮件查看。', true);
 }
 window.redeemGiftCode = redeemGiftCode;
 function limitedGiftEventActive() {
