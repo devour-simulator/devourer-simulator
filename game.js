@@ -4527,12 +4527,6 @@ function limitedGiftMetricLabel(task, value) {
 function limitedGiftEventMarkup() {
     const state = limitedGiftEventState();
     const active = limitedGiftEventActive();
-    const nextSeason = BATTLE_PASS_SEASONS.find(season => season.id === 'S2');
-    const previewHero = ANIMALS[nextSeason.hero];
-    const previewDefaultSkin = HERO_SKINS[nextSeason.hero].find(skin => skin.id === 'default');
-    const previewSkin = HERO_SKINS[nextSeason.skin.type].find(skin => skin.id === nextSeason.skin.id);
-    const previewStatus = Date.now() < nextSeason.start.getTime() ? '即将开启' : Date.now() < nextSeason.end.getTime() ? '正在进行' : '已结束';
-    const seasonPreview = `<div class="feedback-box season-preview-panel" style="background:linear-gradient(135deg,rgba(10,48,91,.96),rgba(39,27,103,.96));border-color:#52c8ff;box-shadow:0 0 24px rgba(63,174,255,.24)"><div class="feedback-heading">🌊 S2 新赛季预告 · ${nextSeason.theme}</div><div>${nextSeason.description}</div><div>赛季时间：${battlePassDateLabel(nextSeason.start)}—${battlePassDateLabel(nextSeason.end)} · ${previewStatus}</div><div class="tip">预告试玩只用于体验新英雄和皮肤，不会提前解锁英雄、皮肤或战令奖励，也不会影响段位和存档。</div></div><div class="animals-grid"><div class="animal-card season-preview-card" style="border-color:#d64b51;background:linear-gradient(160deg,rgba(21,55,91,.96),rgba(21,28,68,.96))"><div class="animal-emoji">${heroIconMarkup(nextSeason.hero, previewHero, previewDefaultSkin)}</div><h3>${previewHero.name} ${heroRarityMarkup(previewHero)}</h3><p>免费战令 Lv.50 英雄<br>提前体验深海冲刺与潮汐力量</p><button class="btn btn-primary" type="button" onclick="startSkinTrial('${nextSeason.hero}','default',true)">试玩新英雄</button></div><div class="animal-card season-preview-card" style="border-color:${SKIN_RARITY_INFO[skinRarity(previewSkin)].color};background:linear-gradient(160deg,rgba(31,34,102,.96),rgba(12,59,105,.96));box-shadow:0 0 20px rgba(80,191,255,.2)"><div class="animal-emoji">${heroIconMarkup(nextSeason.skin.type, previewHero, previewSkin)}</div><h3>${previewSkin.name} ${skinRarityMarkup(previewSkin)}</h3><p>进阶战令 Lv.50 史诗皮肤<br>体验雷光配色与专属技能特效</p><button class="btn btn-primary" type="button" onclick="startSkinTrial('${nextSeason.skin.type}','${nextSeason.skin.id}',true)">试玩赛季皮肤</button></div></div>`;
     const taskCards = LIMITED_GIFT_EVENT.tasks.map(task => {
         const hero = ANIMALS[task.hero], progress = Math.min(task.target, Math.max(0, Number(state.progress[task.id]) || 0));
         const complete = progress >= task.target, code = state.codes[task.id];
@@ -4541,7 +4535,7 @@ function limitedGiftEventMarkup() {
     }).join('');
     const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', year:'numeric', month:'long', day:'numeric' });
     const rewardPool = `<div class="skill-card"><div class="skill-name">🎁 兑换码随机奖励池</div><div class="skill-desc">所有档位都有保底：金币 ×300、普通皮肤碎片 ×10。<br>普通礼包 50%：额外金币 ×200、普通碎片 ×10<br>稀有礼包 30%：额外金币 ×500、稀有碎片 ×10<br>史诗礼包 15%：额外金币 ×1000、史诗碎片 ×10、局外宝箱券 ×1<br>幸运大奖 5%：额外金币 ×2000、神话碎片 ×10、排位加星卡和保护卡各 ×1</div></div>`;
-    return `${seasonPreview}<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；奖励档位在兑换码生成时固定，刷新页面或重新登录都不能重抽。</div></div>${rewardPool}${taskCards}`;
+    return `<div class="feedback-box"><div class="feedback-heading">🔐 S1 限时活动 · ${LIMITED_GIFT_EVENT.name}</div><div>使用指定英雄完成挑战即可领取专属随机礼包码。每个任务只能领取一个码，刷新或退出不会丢失。</div><div>活动时间：${formatter.format(LIMITED_GIFT_EVENT.start)}—${formatter.format(LIMITED_GIFT_EVENT.end)} · ${active ? '正在进行' : '已结束'}</div><div class="tip">兑换码严格区分大小写；奖励档位在兑换码生成时固定，刷新页面或重新登录都不能重抽。</div></div>${rewardPool}${taskCards}`;
 }
 function limitedGiftClaimableCount() {
     if (!limitedGiftEventActive()) return 0;
