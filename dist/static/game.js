@@ -1430,8 +1430,9 @@ function build3DMesh(entity, kind) {
             }
         } else if (entity.effect === 'ink') {
             const evolvedMoon = skinId === 'moon' && entity.owner?.evolved;
-            const mistColor = evolvedMoon ? 0xb79cff : entity.color;
-            const mistMat = new Three.MeshStandardMaterial({ color:mistColor, emissive:mistColor, emissiveIntensity:evolvedMoon ? 1.9 : 1.15, transparent:true, opacity:.34, roughness:.2, side:Three.DoubleSide });
+            const evolvedRose = skinId === 'rose' && entity.owner?.evolved;
+            const mistColor = evolvedMoon ? 0xb79cff : evolvedRose ? 0xef5f96 : entity.color;
+            const mistMat = new Three.MeshStandardMaterial({ color:mistColor, emissive:mistColor, emissiveIntensity:evolvedMoon || evolvedRose ? 1.9 : 1.15, transparent:true, opacity:.34, roughness:.2, side:Three.DoubleSide });
             const mist = new Three.Mesh(new Three.CylinderGeometry(entity.radius / 46, entity.radius / 34, .08, 28), mistMat);
             mist.position.y=.08; group.add(mist);
             if (evolvedMoon) {
@@ -1440,6 +1441,13 @@ function build3DMesh(entity, kind) {
                     const angle=i/9*Math.PI*2;
                     const flame=add(new Three.ConeGeometry(.09,.38,7), new Three.MeshStandardMaterial({ color:i%2?0xdac8ff:0x8b68ef, emissive:i%2?0xb79cff:0x6241cf, emissiveIntensity:2.1, transparent:true, opacity:.9 }), Math.cos(angle)*1.1, .28+(i%3)*.07, Math.sin(angle)*1.1);
                     flame.userData.skinTrail=angle; flame.userData.radius=1.1+(i%2)*.12; flame.userData.sparkle=true;
+                }
+            } else if (evolvedRose) {
+                // 玫瑰九尾狐的觉醒狐火：九片玫瑰花瓣围绕粉红雾场绽放。
+                for (let i=0; i<9; i++) {
+                    const angle=i/9*Math.PI*2;
+                    const petal=add(new Three.SphereGeometry(.12,8,6),new Three.MeshStandardMaterial({color:i%2?0xffa0bd:0xe83e78,emissive:i%2?0xf15b91:0xb91f57,emissiveIntensity:1.7,transparent:true,opacity:.92}),Math.cos(angle)*1.04,.26+(i%3)*.065,Math.sin(angle)*1.04,.72,1.5,.35);
+                    petal.rotation.y=-angle; petal.rotation.z=.42; petal.userData.skinTrail=angle; petal.userData.radius=1.04+(i%2)*.1; petal.userData.sparkle=true;
                 }
             }
         } else if (entity.kind === 'aura') {
@@ -1499,6 +1507,15 @@ function build3DMesh(entity, kind) {
                 star.userData.skinTrail = index / 4 * Math.PI * 2; star.userData.radius = .34 + index * .03; group.add(star);
             });
             group.userData.skinSkill = 'moon';
+        } else if (skinId === 'rose') {
+            const bloomMat = new Three.MeshStandardMaterial({ color:0xff9dbb, emissive:0xd82f68, emissiveIntensity:1.45, transparent:true, opacity:.94, roughness:.24 });
+            for (let i=0; i<6; i++) {
+                const angle=i/6*Math.PI*2;
+                const petal=add(new Three.SphereGeometry(.075,7,5),bloomMat,Math.cos(angle)*.27,.42,Math.sin(angle)*.27,1.1,.48,.72);
+                petal.rotation.y=-angle; petal.userData.skinTrail=angle; petal.userData.radius=.3; petal.userData.sparkle=true;
+            }
+            add(new Three.SphereGeometry(.1,8,6),new Three.MeshStandardMaterial({color:0xffd36f,emissive:0xff8a38,emissiveIntensity:1.4}),0,.42,0);
+            group.userData.skinSkill = 'rose';
         } else if (skinId === 'starbloom') {
             const pathMat = new Three.MeshBasicMaterial({ color:0x8ff0c7, transparent:true, opacity:.9 });
             const ring = new Three.Mesh(new Three.TorusGeometry(.44,.045,7,24),pathMat);
@@ -2854,12 +2871,13 @@ class SkillEffect {
         const hue = (performance.now() / 4) % 360;
         ctx.strokeStyle = this.rainbowSkin ? `hsl(${hue} 95% 60%)` : this.color;
         ctx.fillStyle = this.rainbowSkin ? `hsl(${(hue + 42) % 360} 95% 60%)` : this.color;
-        if (['solar','nebula','moon'].includes(this.skinEffect)) {
-            const colors = this.rainbowSkin ? [0,52,105,166,222,282,325] : this.skinEffect === 'nebula' ? [258,195,306,0] : [260,286,220];
+        if (['solar','nebula','moon','rose'].includes(this.skinEffect)) {
+            const colors = this.rainbowSkin ? [0,52,105,166,222,282,325] : this.skinEffect === 'nebula' ? [258,195,306,0] : this.skinEffect === 'rose' ? [330,345,10,320] : [260,286,220];
+            const paletteHue = this.skinEffect === 'rose' ? 0 : hue;
             colors.forEach((offset, index) => {
                 const angle = performance.now() / 300 + index / colors.length * Math.PI * 2;
                 const radius = this.radius * (.58 + (index % 2) * .18);
-                ctx.fillStyle = `hsl(${(hue + offset) % 360} 95% 72%)`;
+                ctx.fillStyle = `hsl(${(paletteHue + offset) % 360} 95% 72%)`;
                 ctx.beginPath(); ctx.arc(this.x + Math.cos(angle) * radius, this.y + Math.sin(angle) * radius, 3 + index % 2, 0, Math.PI * 2); ctx.fill();
             });
             ctx.strokeStyle = this.rainbowSkin ? `hsl(${hue} 95% 60%)` : this.color;
@@ -2962,10 +2980,11 @@ class SkillEffect {
             }
         } else if (this.effect === 'ink') {
             const evolvedMoon = this.skinEffect === 'moon' && this.owner.evolved;
+            const evolvedRose = this.skinEffect === 'rose' && this.owner.evolved;
             const mist = ctx.createRadialGradient(this.x,this.y,4,this.x,this.y,this.radius);
-            mist.addColorStop(0, evolvedMoon ? 'rgba(220,200,255,.54)' : 'rgba(80,105,150,.42)');
-            mist.addColorStop(.58, evolvedMoon ? 'rgba(136,92,225,.34)' : 'rgba(45,70,110,.25)');
-            mist.addColorStop(1, 'rgba(65,35,110,0)');
+            mist.addColorStop(0, evolvedMoon ? 'rgba(220,200,255,.54)' : evolvedRose ? 'rgba(255,185,209,.58)' : 'rgba(80,105,150,.42)');
+            mist.addColorStop(.58, evolvedMoon ? 'rgba(136,92,225,.34)' : evolvedRose ? 'rgba(226,55,112,.38)' : 'rgba(45,70,110,.25)');
+            mist.addColorStop(1, evolvedRose ? 'rgba(165,20,72,0)' : 'rgba(65,35,110,0)');
             ctx.fillStyle=mist; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fill();
             if (evolvedMoon) {
                 for (let i=0;i<9;i++) {
@@ -2974,6 +2993,14 @@ class SkillEffect {
                     const x=this.x+Math.cos(angle)*distance, y=this.y+Math.sin(angle)*distance;
                     ctx.fillStyle=i%2?'#e4d8ff':'#9c78ff';
                     ctx.beginPath(); ctx.moveTo(x,y-10); ctx.quadraticCurveTo(x+8,y,x,y+9); ctx.quadraticCurveTo(x-8,y,x,y-10); ctx.fill();
+                }
+            } else if (evolvedRose) {
+                for (let i=0;i<9;i++) {
+                    const angle=i/9*Math.PI*2+performance.now()/1100;
+                    const distance=this.radius*(.68+(i%2)*.15);
+                    const x=this.x+Math.cos(angle)*distance, y=this.y+Math.sin(angle)*distance;
+                    ctx.save(); ctx.translate(x,y); ctx.rotate(angle+.45); ctx.fillStyle=i%2?'#ffabc3':'#e53972';
+                    ctx.beginPath(); ctx.moveTo(0,-10); ctx.bezierCurveTo(9,-5,8,7,0,11); ctx.bezierCurveTo(-8,7,-9,-5,0,-10); ctx.fill(); ctx.restore();
                 }
             }
         } else if (this.kind === 'aura') {
