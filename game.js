@@ -333,7 +333,8 @@ function tryEvolvePlayer(player) {
     player.evolution = route;
     player.name = route.name;
     player.emoji = route.emoji;
-    player.color = route.color;
+    // 进化只替换形态与能力；已穿戴皮肤继续决定角色和技能的主色。
+    player.color = player.skin?.color || route.color;
     player.attack += route.bonus.attack;
     player.defense += route.bonus.defense;
     player.speed += route.bonus.speed;
@@ -600,8 +601,9 @@ const SHOP_ITEMS = {
     rankProtectCard: { name:'排位保护卡', emoji:'🛡️', price:3500, desc:'排位失败需要扣星时自动使用，本局不扣星。' }
 };
 // 宝箱会掉落以下战斗道具；拾取后立即生效，不占背包格子。
+const MAGNET_RANGE = 620;
 const CHEST_ITEMS = {
-    magnet: { name:'星尘吸铁石', emoji:'🧲', desc:'持续 12 秒，吸取 280 码内的经验点。', color:'#57b7ff' },
+    magnet: { name:'星尘吸铁石', emoji:'🧲', desc:`持续 12 秒，吸取 ${MAGNET_RANGE} 码内的经验点。`, color:'#57b7ff' },
     expScroll: { name:'成长卷轴', emoji:'📜', desc:'立刻获得 100 点经验。', color:'#c785ff' },
     battleTonic: { name:'锋芒药剂', emoji:'🧪', desc:'持续 15 秒，攻击力 +8。', color:'#ff7a4f' }
 };
@@ -1377,7 +1379,10 @@ function build3DMesh(entity, kind) {
                 spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
             }
         } else if (entity.effect === 'reflectBurst') {
-            const burstMat = new Three.MeshStandardMaterial({ color:0x163f9d, emissive:0x2f78ff, emissiveIntensity:1.8, transparent:true, opacity:.78, roughness:.18 });
+            const durian = entity.owner?.skin?.id === 'durian';
+            const burstColor = durian ? 0xc7d84a : 0x163f9d;
+            const burstGlow = durian ? 0xf2d14c : 0x2f78ff;
+            const burstMat = new Three.MeshStandardMaterial({ color:burstColor, emissive:burstGlow, emissiveIntensity:1.8, transparent:true, opacity:.78, roughness:.18 });
             const ring = new Three.Mesh(new Three.TorusGeometry(.55, .055, 6, 20), burstMat); ring.rotation.x=Math.PI/2; ring.position.y=.28; group.add(ring);
             for (let i=0; i<10; i++) {
                 const angle=i/10*Math.PI*2;
@@ -1385,11 +1390,27 @@ function build3DMesh(entity, kind) {
                 spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
             }
         } else if (entity.effect === 'pull') {
-            const vortexMat = new Three.MeshStandardMaterial({ color:0x3ac7ee, emissive:0x127caa, emissiveIntensity:1.6, transparent:true, opacity:.8, roughness:.2 });
+            const nebula = entity.owner?.skin?.id === 'nebula';
+            const vortexColor = new Three.Color(entity.color || skillEffectColor(entity.owner));
+            const vortexGlow = nebula ? new Three.Color(0x724cff) : vortexColor.clone().multiplyScalar(.62);
+            const vortexMat = new Three.MeshStandardMaterial({ color:vortexColor, emissive:vortexGlow, emissiveIntensity:nebula ? 2.15 : 1.6, transparent:true, opacity:.82, roughness:.16 });
             [1, .64, .32].forEach((scale, index) => {
                 const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42 * scale, .045, 7, 24), vortexMat);
                 ring.rotation.x = -Math.PI / 2; ring.position.y = .12 + index * .07; group.add(ring);
             });
+            if (nebula) {
+                // 神话鲨鱼进化后仍保留“星云虹吸”：范围边缘有蓝紫星尘，不再退回普通巨齿鲨特效。
+                [0xffffff,0xcbb7ff,0x72d9ff,0xffffff,0x9b78ff,0xe8dcff,0x55d9ff,0xffffff].forEach((color,index) => {
+                    const star = new Three.Mesh(new Three.OctahedronGeometry(index % 3 === 0 ? .105 : .072, 0), new Three.MeshBasicMaterial({ color, transparent:true, opacity:.96 }));
+                    const angle = index / 8 * Math.PI * 2;
+                    const distance = entity.radius / 42 * (.4 + (index % 3) * .2);
+                    star.position.set(Math.cos(angle) * distance, .22 + (index % 2) * .12, Math.sin(angle) * distance);
+                    star.userData.sparkle = true;
+                    star.userData.skinTrail = angle;
+                    star.userData.radius = distance;
+                    group.add(star);
+                });
+            }
         } else if (entity.kind === 'aura') {
             const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42, .055, 7, 16), skillMat);
             ring.rotation.x = -Math.PI / 2; ring.position.y = .09; group.add(ring);
@@ -2763,13 +2784,13 @@ class SkillEffect {
             this.damage = Math.ceil(owner.attack * 1.35 * (1 + owner.skillPower));
         } else if (active.effect === 'pull') {
             this.kind = 'pull'; this.radius = active.radius || 280; this.life = 34; this.damage = 0;
-            this.color = '#3ac7ee';
+            this.color = skillEffectColor(owner);
         } else if (active.effect === 'reflect') {
             this.kind = 'aura'; this.radius = 56; this.life = 420; this.damage = 0;
             this.color = owner.skin?.id === 'durian' ? '#c7d84a' : '#4d82ff';
         } else if (active.effect === 'reflectBurst') {
             this.kind = 'reflectBurst'; this.radius = 22; this.maxRadius = 105; this.life = 24; this.damage = 0;
-            this.color = '#1b4fb4';
+            this.color = owner.skin?.id === 'durian' ? skillEffectColor(owner) : '#1b4fb4';
         } else {
             this.kind = 'aura'; this.radius = active.effect === 'grow' ? 62 : 48; this.life = 75;
             this.damage = 0;
@@ -2865,10 +2886,11 @@ class SkillEffect {
                 ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(7,8); ctx.lineTo(-7,8); ctx.closePath(); ctx.fill(); ctx.restore();
             }
         } else if (this.kind === 'reflectBurst') {
+            const durian = this.owner.skin?.id === 'durian';
             ctx.lineWidth = 5;
-            ctx.strokeStyle = '#16439e';
+            ctx.strokeStyle = this.color;
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
-            ctx.fillStyle = '#377eff';
+            ctx.fillStyle = durian ? '#f2d14c' : '#377eff';
             for (let i=0; i<10; i++) {
                 const angle = i / 10 * Math.PI * 2;
                 const x = this.x + Math.cos(angle) * this.radius;
@@ -2878,9 +2900,27 @@ class SkillEffect {
         } else if (this.kind === 'pull') {
             const pulse = 1 - this.life / 34;
             ctx.lineWidth = 5;
-            ctx.strokeStyle = '#49dbff';
+            ctx.strokeStyle = this.color;
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = this.skinEffect === 'nebula' ? 22 : 10;
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * (1 - pulse * .38), 0, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * .48 * (1 - pulse * .45), 0, Math.PI * 2); ctx.stroke();
+            if (this.skinEffect === 'nebula') {
+                ctx.shadowBlur = 14;
+                for (let i=0; i<8; i++) {
+                    const angle = i / 8 * Math.PI * 2 + pulse * .65;
+                    const distance = this.radius * (.4 + (i % 3) * .18) * (1 - pulse * .28);
+                    const x = this.x + Math.cos(angle) * distance;
+                    const y = this.y + Math.sin(angle) * distance;
+                    const size = i % 3 === 0 ? 7 : 4.5;
+                    ctx.strokeStyle = i % 2 ? '#cbb7ff' : '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x - size, y); ctx.lineTo(x + size, y);
+                    ctx.moveTo(x, y - size); ctx.lineTo(x, y + size);
+                    ctx.stroke();
+                }
+            }
         } else if (this.kind === 'aura') {
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
         } else {
@@ -3911,9 +3951,9 @@ function openAccountPanel(kind) {
             const hero = ANIMALS[heroKey], owned = ownsSkin(heroKey, skin);
             const preview = heroIconMarkup(heroKey, hero, skin);
             const how = skin.battlePassOnly ? `${skin.futureSeason || 'S1'} 进阶战令 Lv.50` : `商城售价：🪙 ${skin.price}`;
-            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}</div></div>`;
+            return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div>${skinRarityMarkup(skin)}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">${hero.name} · ${owned ? '✅ 已拥有' : '🔒 未拥有'}<br>${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}</div><button class="btn" type="button" onclick="startSkinTrial('${heroKey}','${skin.id}')">🎮 试玩皮肤</button></div>`;
         }).join('');
-        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
+        content.innerHTML = `<div class="feedback-box"><div class="feedback-heading">皮肤收藏进度：${ownedCount}/${allSkins.length}</div><div>这里展示全部皮肤的品质与拥有状态；无论是否拥有，都可以点击试玩。皮肤仅改变外观和技能特效颜色，不改变英雄属性。</div></div><div class="animals-grid">${cardsMarkup}</div>`;
     } else if (kind === 'battlePass') {
         title.textContent = `📜 吞噬战令 · ${BATTLE_PASS_SEASON} ${BATTLE_PASS_THEME}`;
         const pass = battlePassState(), level = battlePassLevel(pass), levelExp = pass.exp % 100;
@@ -4033,9 +4073,9 @@ function openHeroSkinGallery(key) {
         const how = skin.id === 'default' ? '英雄自带' : skin.battlePassOnly ? `${skin.futureSeason || 'S1'} 进阶战令 Lv.50` : skin.price ? `商城购买 · 🪙 ${skin.price}` : '特殊活动获得';
         const owned = ownsSkin(key, skin);
         const preview = heroIconMarkup(key, hero, skin);
-        return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div></div>`;
+        return `<div class="animal-card skin-gallery-card" style="--skin-color:${skin.color}"><div class="skin-preview">${preview}</div><div class="animal-name">${skin.name}</div><div class="animal-stats">获取方式：${how}${skin.themeText ? `<br>赛季主题：${skin.themeText}` : ''}<br>${owned ? '✅ 已拥有' : '🔒 未拥有'}</div><button class="btn" type="button" onclick="startSkinTrial('${key}','${skin.id}')">🎮 试玩皮肤</button></div>`;
     }).join('');
-    document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里展示皮肤和获取方式；已拥有的皮肤可在选英雄界面切换，商城皮肤需前往商城购买。</div><div class="animals-grid">${cards}</div>`;
+    document.getElementById('subPageContent').innerHTML = `<button class="btn" type="button" onclick="openAccountPanel('hero')">← 返回英雄图鉴</button><div class="tip">这里展示皮肤和获取方式，所有皮肤都可试玩；已拥有的皮肤可在选英雄界面切换，商城皮肤需前往商城购买。</div><div class="animals-grid">${cards}</div>`;
     document.getElementById('hallModal').classList.add('hidden');
     document.getElementById('subPageModal').classList.remove('hidden');
 }
@@ -5020,7 +5060,7 @@ function startGame(animalType, savedRun = null) {
         if (savedPlayer.evolved && EVOLUTION_ROUTES[gameState.player.type]) {
             const route = EVOLUTION_ROUTES[gameState.player.type];
             gameState.player.evolved = true; gameState.player.evolution = route;
-            gameState.player.name = route.name; gameState.player.emoji = route.emoji; gameState.player.color = route.color;
+            gameState.player.name = route.name; gameState.player.emoji = route.emoji; gameState.player.color = gameState.player.skin?.color || route.color;
             gameState.player.activeAbility = route.active;
         }
         gameState.player.critChance = Math.min(1, Math.max(0, gameState.player.critChance || 0));
@@ -6119,7 +6159,7 @@ function gameLoop(timestamp = performance.now()) {
         if (gameState.player.magnetTicks > 0) {
             gameState.player.magnetTicks = Math.max(0, gameState.player.magnetTicks - frameScale);
             gameState.particles.forEach(particle => {
-                if (particle.type === 'exp' && Math.hypot(particle.x - gameState.player.x, particle.y - gameState.player.y) <= 280) particle.autoCollect = true;
+                if (particle.type === 'exp' && Math.hypot(particle.x - gameState.player.x, particle.y - gameState.player.y) <= MAGNET_RANGE) particle.autoCollect = true;
             });
         }
         if (gameState.player.battleTonicTicks > 0) {
