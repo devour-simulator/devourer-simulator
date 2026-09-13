@@ -5894,6 +5894,8 @@ joystick.addEventListener('pointerup', resetJoystick);
 joystick.addEventListener('pointercancel', resetJoystick);
 
 window.addEventListener('keydown', (e) => {
+    const targetTag = e.target?.tagName;
+    if (e.target?.isContentEditable || targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') return;
     if (!document.getElementById('outsideChestModal').classList.contains('hidden') && e.code === 'Space') {
         e.preventDefault();
         if (!e.repeat) tapOutsideChest();
