@@ -625,38 +625,46 @@ function rankLabel() {
     const rank = gameState.rank;
     return rank.tier === RANK_TIERS.length - 1 ? `王者 · ${rank.stars} 星` : `${RANK_TIERS[rank.tier]} ${rank.division} · ${rank.stars} 星`;
 }
+function persistRank() {
+    const rank = gameState.rank;
+    localStorage.setItem('rankTier', rank.tier);
+    localStorage.setItem('rankDivision', rank.division);
+    localStorage.setItem('rankStars', rank.stars);
+}
 function changeRankStars(delta) {
     const rank = gameState.rank;
     const tierBefore = rank.tier;
-    const direction = delta >= 0 ? 1 : -1;
-    for (let step = 0; step < Math.abs(delta); step++) {
+    let remaining = Math.trunc(Number(delta) || 0);
+    // 整局奖励一次性结算；王者星数不设上限，也不会只记第一颗星。
+    while (remaining > 0) {
         if (rank.tier === RANK_TIERS.length - 1) {
             rank.division = 0;
-            if (direction > 0) { rank.stars++; continue; }
-            if (rank.stars > 1) { rank.stars--; continue; }
-            rank.tier--; rank.division = 1; rank.stars = 2;
-            continue;
-        }
-        if (direction > 0) {
+            rank.stars = Math.max(1, Number(rank.stars) || 1) + remaining;
+            remaining = 0;
+        } else {
             rank.stars++;
+            remaining--;
             if (rank.stars >= 3) {
                 rank.stars = 0;
                 if (rank.division > 1) rank.division--;
                 else if (rank.tier < RANK_TIERS.length - 2) { rank.tier++; rank.division = 3; }
                 else {
-                    // 登上王者先固定获得 1 星；若本局结算本身还有额外星数（例如登顶 +4），
-                    // 则在这颗基础星上继续叠加，成为王者 5 星。
                     rank.tier++; rank.division = 0; rank.stars = 1;
-                    if (Math.abs(delta) > 1) { rank.stars += Math.abs(delta); break; }
                 }
             }
+        }
+    }
+    while (remaining < 0) {
+        if (rank.tier === RANK_TIERS.length - 1) {
+            rank.division = 0;
+            if (rank.stars > 1) rank.stars--;
+            else { rank.tier--; rank.division = 1; rank.stars = 2; }
         } else if (rank.stars > 0) rank.stars--;
         else if (rank.division < 3) { rank.division++; rank.stars = 2; }
         else if (rank.tier > 0) { rank.tier--; rank.division = 1; rank.stars = 2; }
+        remaining++;
     }
-    localStorage.setItem('rankTier', rank.tier);
-    localStorage.setItem('rankDivision', rank.division);
-    localStorage.setItem('rankStars', rank.stars);
+    persistRank();
     if (rank.tier > tierBefore) grantEligiblePolarRewards();
 }
 
@@ -866,6 +874,7 @@ function settleAbandonedRun(mode) {
 function updateControlLayout() {
     const joystick = document.getElementById('mobileJoystick');
     if (!joystick) return;
+    document.getElementById('gameContainer')?.classList.toggle('mobile-controls', controlMode === 'mobile');
     joystick.style.display = gameState.screen === 'playing' && controlMode === 'mobile' ? 'block' : 'none';
 }
 
@@ -1367,26 +1376,34 @@ function build3DMesh(entity, kind) {
         } else if (entity.effect === 'reflect') {
             // 刺猬反伤是贴身转动的荆棘甲：榴莲皮肤换成黄绿外壳和金色尖刺。
             const durian = entity.owner?.skin?.id === 'durian';
+            const evolvedDurian = durian && entity.owner?.evolved;
             const shellColor = durian ? 0x9ab43b : 0x214eaa;
             const thornColor = durian ? 0xe8c944 : 0x76a9ff;
             const shellMat = new Three.MeshStandardMaterial({ color:shellColor, emissive:shellColor, emissiveIntensity:1.05, transparent:true, opacity:.38, roughness:.3 });
             const thornMat = new Three.MeshStandardMaterial({ color:thornColor, emissive:thornColor, emissiveIntensity:1.35, roughness:.22, flatShading:true });
-            const shell = new Three.Mesh(new Three.SphereGeometry(.74, 16, 12), shellMat); shell.position.y=.6; group.add(shell);
-            const ring = new Three.Mesh(new Three.TorusGeometry(.76, .035, 6, 18), thornMat); ring.rotation.x=Math.PI/2; ring.position.y=.6; group.add(ring);
-            for (let i=0; i<12; i++) {
-                const angle=i/12*Math.PI*2;
-                const spike=add(new Three.ConeGeometry(.105,.42,5), thornMat, Math.cos(angle)*.78, .62 + (i%2 ? .16 : -.12), Math.sin(angle)*.78);
+            const shellSize = evolvedDurian ? .9 : .74;
+            const shell = new Three.Mesh(new Three.SphereGeometry(shellSize, 16, 12), shellMat); shell.position.y=.6; group.add(shell);
+            const ring = new Three.Mesh(new Three.TorusGeometry(shellSize+.02, evolvedDurian ? .065 : .035, 6, 20), thornMat); ring.rotation.x=Math.PI/2; ring.position.y=.6; group.add(ring);
+            if (evolvedDurian) { const innerRing=new Three.Mesh(new Three.TorusGeometry(.58,.045,6,18),thornMat); innerRing.rotation.x=Math.PI/2; innerRing.position.y=.62; group.add(innerRing); }
+            const spikeCount = evolvedDurian ? 18 : 12;
+            for (let i=0; i<spikeCount; i++) {
+                const angle=i/spikeCount*Math.PI*2;
+                const spike=add(new Three.ConeGeometry(evolvedDurian ? .13 : .105, evolvedDurian ? .55 : .42, 5), thornMat, Math.cos(angle)*(shellSize+.04), .62 + (i%2 ? .18 : -.14), Math.sin(angle)*(shellSize+.04));
                 spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
             }
         } else if (entity.effect === 'reflectBurst') {
             const durian = entity.owner?.skin?.id === 'durian';
+            const evolvedDurian = durian && entity.owner?.evolved;
             const burstColor = durian ? 0xc7d84a : 0x163f9d;
             const burstGlow = durian ? 0xf2d14c : 0x2f78ff;
             const burstMat = new Three.MeshStandardMaterial({ color:burstColor, emissive:burstGlow, emissiveIntensity:1.8, transparent:true, opacity:.78, roughness:.18 });
-            const ring = new Three.Mesh(new Three.TorusGeometry(.55, .055, 6, 20), burstMat); ring.rotation.x=Math.PI/2; ring.position.y=.28; group.add(ring);
-            for (let i=0; i<10; i++) {
-                const angle=i/10*Math.PI*2;
-                const spike=add(new Three.ConeGeometry(.07,.52,4), burstMat, Math.cos(angle)*.58, .34, Math.sin(angle)*.58);
+            const burstRadius = evolvedDurian ? .74 : .55;
+            const ring = new Three.Mesh(new Three.TorusGeometry(burstRadius, evolvedDurian ? .08 : .055, 6, 20), burstMat); ring.rotation.x=Math.PI/2; ring.position.y=.28; group.add(ring);
+            if (evolvedDurian) { const crown=new Three.Mesh(new Three.TorusGeometry(.42,.045,6,18),burstMat); crown.rotation.x=Math.PI/2; crown.position.y=.42; group.add(crown); }
+            const burstSpikes = evolvedDurian ? 18 : 10;
+            for (let i=0; i<burstSpikes; i++) {
+                const angle=i/burstSpikes*Math.PI*2;
+                const spike=add(new Three.ConeGeometry(evolvedDurian ? .095 : .07,evolvedDurian ? .7 : .52,4), burstMat, Math.cos(angle)*(burstRadius+.03), .34+(i%2)*.13, Math.sin(angle)*(burstRadius+.03));
                 spike.rotation.z=-Math.PI/2; spike.rotation.y=-angle;
             }
         } else if (entity.effect === 'pull') {
@@ -1410,6 +1427,20 @@ function build3DMesh(entity, kind) {
                     star.userData.radius = distance;
                     group.add(star);
                 });
+            }
+        } else if (entity.effect === 'ink') {
+            const evolvedMoon = skinId === 'moon' && entity.owner?.evolved;
+            const mistColor = evolvedMoon ? 0xb79cff : entity.color;
+            const mistMat = new Three.MeshStandardMaterial({ color:mistColor, emissive:mistColor, emissiveIntensity:evolvedMoon ? 1.9 : 1.15, transparent:true, opacity:.34, roughness:.2, side:Three.DoubleSide });
+            const mist = new Three.Mesh(new Three.CylinderGeometry(entity.radius / 46, entity.radius / 34, .08, 28), mistMat);
+            mist.position.y=.08; group.add(mist);
+            if (evolvedMoon) {
+                // 月影九尾狐的觉醒狐火：九簇蓝紫火焰随减速雾环绕，而不是普通狐狸的单色烟圈。
+                for (let i=0; i<9; i++) {
+                    const angle=i/9*Math.PI*2;
+                    const flame=add(new Three.ConeGeometry(.09,.38,7), new Three.MeshStandardMaterial({ color:i%2?0xdac8ff:0x8b68ef, emissive:i%2?0xb79cff:0x6241cf, emissiveIntensity:2.1, transparent:true, opacity:.9 }), Math.cos(angle)*1.1, .28+(i%3)*.07, Math.sin(angle)*1.1);
+                    flame.userData.skinTrail=angle; flame.userData.radius=1.1+(i%2)*.12; flame.userData.sparkle=true;
+                }
             }
         } else if (entity.kind === 'aura') {
             const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42, .055, 7, 16), skillMat);
@@ -2873,29 +2904,37 @@ class SkillEffect {
         ctx.lineWidth = 4;
         if (this.effect === 'reflect') {
             const durian = this.owner.skin?.id === 'durian';
+            const evolvedDurian = durian && this.owner.evolved;
             const spin = performance.now() * .008;
-            ctx.lineWidth = 5;
+            ctx.lineWidth = evolvedDurian ? 8 : 5;
             ctx.strokeStyle = this.color;
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+            if (evolvedDurian) { ctx.lineWidth=3; ctx.strokeStyle='#fff08a'; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius*.72,0,Math.PI*2); ctx.stroke(); }
             ctx.fillStyle = durian ? '#f2d14c' : '#88b6ff';
-            for (let i=0; i<12; i++) {
-                const angle = spin + i / 12 * Math.PI * 2;
+            const spikeCount = evolvedDurian ? 18 : 12;
+            for (let i=0; i<spikeCount; i++) {
+                const angle = spin + i / spikeCount * Math.PI * 2;
                 const x = this.x + Math.cos(angle) * this.radius;
                 const y = this.y + Math.sin(angle) * this.radius;
                 ctx.save(); ctx.translate(x,y); ctx.rotate(angle + Math.PI/2);
-                ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(7,8); ctx.lineTo(-7,8); ctx.closePath(); ctx.fill(); ctx.restore();
+                const length=evolvedDurian?19:14, width=evolvedDurian?9:7;
+                ctx.beginPath(); ctx.moveTo(0,-length); ctx.lineTo(width,8); ctx.lineTo(-width,8); ctx.closePath(); ctx.fill(); ctx.restore();
             }
         } else if (this.kind === 'reflectBurst') {
             const durian = this.owner.skin?.id === 'durian';
-            ctx.lineWidth = 5;
+            const evolvedDurian = durian && this.owner.evolved;
+            ctx.lineWidth = evolvedDurian ? 8 : 5;
             ctx.strokeStyle = this.color;
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+            if (evolvedDurian) { ctx.lineWidth=3; ctx.strokeStyle='#fff08a'; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius*.68,0,Math.PI*2); ctx.stroke(); }
             ctx.fillStyle = durian ? '#f2d14c' : '#377eff';
-            for (let i=0; i<10; i++) {
-                const angle = i / 10 * Math.PI * 2;
+            const burstSpikes = evolvedDurian ? 18 : 10;
+            for (let i=0; i<burstSpikes; i++) {
+                const angle = i / burstSpikes * Math.PI * 2;
                 const x = this.x + Math.cos(angle) * this.radius;
                 const y = this.y + Math.sin(angle) * this.radius;
-                ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + Math.cos(angle-.35)*12,y + Math.sin(angle-.35)*12); ctx.lineTo(x + Math.cos(angle+.35)*12,y + Math.sin(angle+.35)*12); ctx.closePath(); ctx.fill();
+                const spikeLength = evolvedDurian ? 19 : 12;
+                ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + Math.cos(angle-.35)*spikeLength,y + Math.sin(angle-.35)*spikeLength); ctx.lineTo(x + Math.cos(angle+.35)*spikeLength,y + Math.sin(angle+.35)*spikeLength); ctx.closePath(); ctx.fill();
             }
         } else if (this.kind === 'pull') {
             const pulse = 1 - this.life / 34;
@@ -2919,6 +2958,22 @@ class SkillEffect {
                     ctx.moveTo(x - size, y); ctx.lineTo(x + size, y);
                     ctx.moveTo(x, y - size); ctx.lineTo(x, y + size);
                     ctx.stroke();
+                }
+            }
+        } else if (this.effect === 'ink') {
+            const evolvedMoon = this.skinEffect === 'moon' && this.owner.evolved;
+            const mist = ctx.createRadialGradient(this.x,this.y,4,this.x,this.y,this.radius);
+            mist.addColorStop(0, evolvedMoon ? 'rgba(220,200,255,.54)' : 'rgba(80,105,150,.42)');
+            mist.addColorStop(.58, evolvedMoon ? 'rgba(136,92,225,.34)' : 'rgba(45,70,110,.25)');
+            mist.addColorStop(1, 'rgba(65,35,110,0)');
+            ctx.fillStyle=mist; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fill();
+            if (evolvedMoon) {
+                for (let i=0;i<9;i++) {
+                    const angle=i/9*Math.PI*2+performance.now()/900;
+                    const distance=this.radius*(.72+(i%2)*.16);
+                    const x=this.x+Math.cos(angle)*distance, y=this.y+Math.sin(angle)*distance;
+                    ctx.fillStyle=i%2?'#e4d8ff':'#9c78ff';
+                    ctx.beginPath(); ctx.moveTo(x,y-10); ctx.quadraticCurveTo(x+8,y,x,y+9); ctx.quadraticCurveTo(x-8,y,x,y-10); ctx.fill();
                 }
             }
         } else if (this.kind === 'aura') {
@@ -5262,6 +5317,7 @@ function checkCollisions() {
 }
 
 function finishRankedMatch(won, rankRewardOverride = null) {
+    if (gameState.screen === 'gameover') return;
     gameState.screen = 'gameover';
     exitGameFullscreen();
     trackBattlePassMatch(won);
@@ -5277,9 +5333,11 @@ function finishRankedMatch(won, rankRewardOverride = null) {
     const accountReward = isFridayEvolution() ? Math.ceil(baseAccountReward * 1.5) : baseAccountReward;
     accountExp(accountReward);
     let rankReward = 0;
+    let rankBeforeLabel = '';
     gameState.rankItemNotice = '';
     if (rankProgress) {
         const floor = gameState.world.level;
+        rankBeforeLabel = rankLabel();
         // 排位爬塔：第 6/10/30 层分别 +1/+2/+3，50 层通关 +4；第 6 层前失败才扣星。
         if (rankRewardOverride !== null) rankReward = rankRewardOverride;
         else if (floor >= 30) rankReward = 3 + Math.floor((floor - 30) / 20);
@@ -5310,8 +5368,11 @@ function finishRankedMatch(won, rankRewardOverride = null) {
             gameState.rankItemNotice += `${gameState.rankItemNotice ? '<br>' : ''}🛡️ 已自动使用排位保护卡：本局不扣星。`;
             saveAccount();
         }
-        const times = Math.abs(rankReward);
-        for (let i = 0; i < times; i++) changeRankStars(rankReward > 0 ? 1 : -1);
+        changeRankStars(rankReward);
+        const rankAfterLabel = rankLabel();
+        localStorage.setItem('lastRankSettlement', JSON.stringify({ mode:gameState.mode, floor, reward:rankReward, before:rankBeforeLabel, after:rankAfterLabel, settledAt:Date.now() }));
+        gameState.rankItemNotice += `${gameState.rankItemNotice ? '<br>' : ''}📊 星数结算：${rankBeforeLabel} → ${rankAfterLabel}`;
+        scheduleCloudAutoSave();
     }
     document.getElementById('gameOverTitle').textContent = gameState.mode === 'team' ? (won ? '🏆 团队胜利！' : '💥 团队落败') : gameState.mode === 'evolution' ? (rankRewardOverride !== null ? '✨ 进化试炼登顶！' : won ? '✨ 进化试炼胜利！' : '💥 进化试炼落败') : (rankRewardOverride !== null ? '👑 排位爬塔登顶！' : won ? '🏅 排位胜利！' : '💥 排位落败');
     document.getElementById('characterInfo').innerHTML = `本局使用：<strong>${gameState.player.name} ${gameState.player.emoji}</strong><br>击败敌人：<strong>${gameState.stats.killCount}</strong>`;
@@ -5855,9 +5916,23 @@ document.getElementById('replayTutorialButton').addEventListener('click', () => 
     startTutorialBattle();
 });
 document.getElementById('tutorialExitButton').addEventListener('click', finishTutorial);
-document.getElementById('activeSkillButton').addEventListener('click', () => {
-    if (gameState.player) gameState.player.useActiveSkill();
+const activeSkillButton = document.getElementById('activeSkillButton');
+let lastTouchSkillAt = 0;
+function activatePlayerSkill() { if (gameState.player) gameState.player.useActiveSkill(); }
+// 手机端在按住摇杆时，另一根手指按下技能按钮就立即施放；不等待 click，也不会触发双击缩放。
+activeSkillButton.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch') return;
+    event.preventDefault();
+    lastTouchSkillAt = performance.now();
+    activatePlayerSkill();
 });
+activeSkillButton.addEventListener('click', () => {
+    if (performance.now() - lastTouchSkillAt > 500) activatePlayerSkill();
+});
+// 阻止部分手机浏览器把“双指移动 + 点技能”识别成页面缩放手势。
+['gesturestart','gesturechange','gestureend'].forEach(type => document.addEventListener(type, event => {
+    if (controlMode === 'mobile' && gameState.screen === 'playing') event.preventDefault();
+}, { passive:false }));
 let skillInfoHoldTimer = null;
 function openSkillInfo() {
     skillInfoHoldTimer = null;
