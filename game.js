@@ -306,7 +306,7 @@ Object.entries(REALISTIC_SKILLS).forEach(([type, [name, desc, effect, values]]) 
 
 // 进化试炼是独立的实验玩法：仅开放少数基础英雄，升到 Lv.25 后才会觉醒为传说形态。
 const EVOLUTION_ROUTES = {
-    fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:25, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'狐火震慑附近敌人，自己短暂加速',effect:'ink',cooldown:8} },
+    fox: { name:'九尾狐', emoji:'🦊', color:'#e9b7ff', level:25, bonus:{attack:9,defense:4,speed:4,hp:55}, active:{name:'九尾狐火',desc:'释放九团狐火，震慑并减速 250 范围内的敌人，自己加速 3 秒',effect:'ink',radius:250,cooldown:8} },
     falcon: { name:'不死火凤凰', emoji:'🐦‍🔥', color:'#ff5c2e', level:25, bonus:{attack:11,defense:6,speed:3,hp:65}, active:{name:'涅槃烈焰',desc:'恢复 35% 最大生命并获得减伤护盾',effect:'healShield',amount:.35,hits:2,reduction:.55,cooldown:10} },
     wolf: { name:'月影狼王', emoji:'🐺', color:'#8da2da', level:25, bonus:{attack:10,defense:3,speed:6,hp:58}, active:{name:'月影突袭',desc:'向前冲刺并撞击路径上的敌人',effect:'dash',distance:230,cooldown:8} },
     shark: { name:'巨齿鲨', emoji:'🦈', color:'#315d77', level:25, bonus:{attack:13,defense:5,speed:3,hp:72}, active:{name:'巨力虹吸',desc:'将 280 范围内的敌人吸到身边，造成攻击力 280% 的伤害',effect:'pull',radius:280,damagePercent:280,cooldown:11} },
@@ -333,8 +333,8 @@ function tryEvolvePlayer(player) {
     player.evolution = route;
     player.name = route.name;
     player.emoji = route.emoji;
-    // 进化只替换形态与能力；已穿戴皮肤继续决定角色和技能的主色。
-    player.color = player.skin?.color || route.color;
+    // 原皮觉醒后使用九尾狐的粉紫色；只有真正穿戴了皮肤时才继续沿用皮肤主色。
+    player.color = player.skin?.id && player.skin.id !== 'default' ? player.skin.color : route.color;
     player.attack += route.bonus.attack;
     player.defense += route.bonus.defense;
     player.speed += route.bonus.speed;
@@ -342,6 +342,7 @@ function tryEvolvePlayer(player) {
     player.hp = player.maxHp;
     player.radius += 7;
     player.activeAbility = route.active;
+    if (route.name === '九尾狐') player.evolutionBurstPending = true;
     const previousPlayerMesh = threeMeshes?.get('player');
     if (previousPlayerMesh) { threeScene?.remove(previousPlayerMesh); threeMeshes.delete('player'); }
     gameState.evolutionMessage = `✨ 传说进化！${route.name}觉醒，获得全新能力与强大属性。`;
@@ -816,8 +817,9 @@ function restoreSavedParticles(savedParticles) {
 function saveRankedRun() {
     const player = gameState.player;
     if (!['ranked','tower','evolution'].includes(gameState.mode) || !['playing','levelup'].includes(gameState.screen) || !player) return;
-    const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved'];
-    const playerState = { type: player.type };
+    const fields = ['x','y','radius','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved','evolutionBurstPending'];
+    // 把这局实际使用的皮肤也写进存档，避免恢复前试玩/换装导致九尾狐突然换皮。
+    const playerState = { type: player.type, skinId:player.skin?.id || 'default' };
     fields.forEach(field => { playerState[field] = player[field]; });
     localStorage.setItem(runSaveKey(), JSON.stringify({
         player: playerState,
@@ -1185,6 +1187,42 @@ function applySceneEnvironment() {
 
 function toWorld(entity) { return { x: (entity.x - GAME_WIDTH / 2) / 42, z: (entity.y - GAME_HEIGHT / 2) / 42 }; }
 
+// 沿曲线生成“根部自然、中段蓬松、尾尖收束”的连续曲面，避免九尾狐尾巴像等粗钢管。
+function makeTaperedTailGeometry(curve, size = 1, segments = 44, radialSegments = 12) {
+    const frames = curve.computeFrenetFrames(segments, false);
+    const positions = [];
+    const indices = [];
+    for (let segment = 0; segment <= segments; segment++) {
+        const t = segment / segments;
+        const point = curve.getPointAt(t);
+        // 中间最蓬松，尾根保持足够厚度，末端逐渐收尖。
+        const softFluff = 1 + Math.sin(t * Math.PI * 7) * .026 * Math.pow(Math.sin(Math.PI * t), .7);
+        const radius = size * (.035 + .105 * (1 - t) + .16 * Math.pow(Math.sin(Math.PI * t), .78)) * softFluff;
+        const normal = frames.normals[segment];
+        const binormal = frames.binormals[segment];
+        for (let side = 0; side < radialSegments; side++) {
+            const angle = side / radialSegments * Math.PI * 2;
+            const offset = normal.clone().multiplyScalar(Math.cos(angle) * radius).add(binormal.clone().multiplyScalar(Math.sin(angle) * radius));
+            positions.push(point.x + offset.x, point.y + offset.y, point.z + offset.z);
+        }
+    }
+    for (let segment = 0; segment < segments; segment++) {
+        for (let side = 0; side < radialSegments; side++) {
+            const nextSide = (side + 1) % radialSegments;
+            const a = segment * radialSegments + side;
+            const b = (segment + 1) * radialSegments + side;
+            const c = (segment + 1) * radialSegments + nextSide;
+            const d = segment * radialSegments + nextSide;
+            indices.push(a, b, d, b, c, d);
+        }
+    }
+    const geometry = new Three.BufferGeometry();
+    geometry.setAttribute('position', new Three.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+}
+
 function ensureSkinMotionTrail(mesh, entity) {
     const skinId = entity.skin?.id;
     if (!Three || !['moon', 'nebula', 'solar', 'starbloom', 'thunderTide'].includes(skinId) || mesh.userData.skinMotionTrail?.id === skinId) return;
@@ -1429,26 +1467,45 @@ function build3DMesh(entity, kind) {
                 });
             }
         } else if (entity.effect === 'ink') {
-            const evolvedMoon = skinId === 'moon' && entity.owner?.evolved;
-            const evolvedRose = skinId === 'rose' && entity.owner?.evolved;
-            const mistColor = evolvedMoon ? 0xb79cff : evolvedRose ? 0xef5f96 : entity.color;
-            const mistMat = new Three.MeshStandardMaterial({ color:mistColor, emissive:mistColor, emissiveIntensity:evolvedMoon || evolvedRose ? 1.9 : 1.15, transparent:true, opacity:.34, roughness:.2, side:Three.DoubleSide });
-            const mist = new Three.Mesh(new Three.CylinderGeometry(entity.radius / 46, entity.radius / 34, .08, 28), mistMat);
+            const evolvedNineFox = entity.owner?.type === 'fox' && entity.owner?.evolution?.name === '九尾狐';
+            const fieldRadius = entity.radius / 42;
+            const foxPalette = skinId === 'moon'
+                ? { primary:0x8968e8, secondary:0xdccfff, core:0xffffff }
+                : skinId === 'rose'
+                    ? { primary:0xe33370, secondary:0xffa4c1, core:0xffdb78 }
+                    : { primary:0xf04f96, secondary:0xffbfdb, core:0xffffff };
+            const mistColor = evolvedNineFox ? foxPalette.primary : entity.color;
+            const mistMat = new Three.MeshStandardMaterial({ color:mistColor, emissive:mistColor, emissiveIntensity:evolvedNineFox ? 1.75 : 1.15, transparent:true, opacity:evolvedNineFox ? .42 : .34, roughness:.2, side:Three.DoubleSide, depthWrite:false });
+            const mist = new Three.Mesh(new Three.CylinderGeometry(fieldRadius * .96, fieldRadius, .08, 36), mistMat);
             mist.position.y=.08; group.add(mist);
-            if (evolvedMoon) {
-                // 月影九尾狐的觉醒狐火：九簇蓝紫火焰随减速雾环绕，而不是普通狐狸的单色烟圈。
+            if (evolvedNineFox) {
+                // 觉醒狐火分为三层扩散光环与九团独立狐火；原皮、月影和玫瑰使用各自主题色。
+                const rings = [0,1,2].map(index => {
+                    const ringMat = new Three.MeshBasicMaterial({ color:index % 2 ? foxPalette.secondary : foxPalette.primary, transparent:true, opacity:.76-index*.14, blending:Three.AdditiveBlending, depthWrite:false });
+                    const ring = new Three.Mesh(new Three.TorusGeometry(fieldRadius * (.34+index*.27),.045-index*.006,6,44),ringMat);
+                    ring.rotation.x=Math.PI/2; ring.position.y=.11+index*.018; ring.userData.baseScale=.65+index*.06; group.add(ring); return ring;
+                });
+                const wisps = [];
                 for (let i=0; i<9; i++) {
                     const angle=i/9*Math.PI*2;
-                    const flame=add(new Three.ConeGeometry(.09,.38,7), new Three.MeshStandardMaterial({ color:i%2?0xdac8ff:0x8b68ef, emissive:i%2?0xb79cff:0x6241cf, emissiveIntensity:2.1, transparent:true, opacity:.9 }), Math.cos(angle)*1.1, .28+(i%3)*.07, Math.sin(angle)*1.1);
-                    flame.userData.skinTrail=angle; flame.userData.radius=1.1+(i%2)*.12; flame.userData.sparkle=true;
+                    const wisp = new Three.Group();
+                    const wispMat = new Three.MeshStandardMaterial({ color:i%2?foxPalette.secondary:foxPalette.primary, emissive:foxPalette.primary, emissiveIntensity:2.15, transparent:true, opacity:.94, roughness:.12, blending:Three.AdditiveBlending, depthWrite:false });
+                    const wispSize = .12 + Math.min(.055, fieldRadius * .009);
+                    if (skinId === 'rose') {
+                        const petal = new Three.Mesh(new Three.SphereGeometry(wispSize,8,6),wispMat); petal.scale.set(.72,1.45,.38); petal.rotation.z=.38; wisp.add(petal);
+                        const heart = new Three.Mesh(new Three.SphereGeometry(.04,7,5),new Three.MeshBasicMaterial({color:foxPalette.core})); heart.position.y=-.025; wisp.add(heart);
+                    } else {
+                        const flameCore = new Three.Mesh(new Three.SphereGeometry(wispSize * .82,9,7),wispMat); flameCore.scale.set(1,.9,.82); wisp.add(flameCore);
+                        const flameTip = new Three.Mesh(new Three.ConeGeometry(wispSize * .88,wispSize * 3.05,8),wispMat); flameTip.position.y=wispSize * 1.75; flameTip.rotation.z=(i%2?-.13:.13); wisp.add(flameTip);
+                        const pearl = new Three.Mesh(new Three.OctahedronGeometry(.035,0),new Three.MeshBasicMaterial({color:foxPalette.core,transparent:true,opacity:.95})); pearl.position.y=.02; wisp.add(pearl);
+                    }
+                    const baseRadius=fieldRadius*(.48+(i%3)*.065);
+                    wisp.position.set(Math.cos(angle)*baseRadius,.32+(i%3)*.06,Math.sin(angle)*baseRadius);
+                    wisp.userData.baseAngle=angle; wisp.userData.baseRadius=baseRadius; wisp.userData.outward=fieldRadius*(.18+(i%3)*.035); wisp.userData.wispMaterial=wispMat;
+                    group.add(wisp); wisps.push(wisp);
                 }
-            } else if (evolvedRose) {
-                // 玫瑰九尾狐的觉醒狐火：九片玫瑰花瓣围绕粉红雾场绽放。
-                for (let i=0; i<9; i++) {
-                    const angle=i/9*Math.PI*2;
-                    const petal=add(new Three.SphereGeometry(.12,8,6),new Three.MeshStandardMaterial({color:i%2?0xffa0bd:0xe83e78,emissive:i%2?0xf15b91:0xb91f57,emissiveIntensity:1.7,transparent:true,opacity:.92}),Math.cos(angle)*1.04,.26+(i%3)*.065,Math.sin(angle)*1.04,.72,1.5,.35);
-                    petal.rotation.y=-angle; petal.rotation.z=.42; petal.userData.skinTrail=angle; petal.userData.radius=1.04+(i%2)*.1; petal.userData.sparkle=true;
-                }
+                const foxLight = new Three.PointLight(foxPalette.primary,3.1,Math.max(5.2,fieldRadius*2)); foxLight.position.y=.48; group.add(foxLight);
+                group.userData.nineFoxSkill={ rings,wisps,light:foxLight,mist };
             }
         } else if (entity.kind === 'aura') {
             const ring = new Three.Mesh(new Three.TorusGeometry(entity.radius / 42, .055, 7, 16), skillMat);
@@ -1796,50 +1853,62 @@ function build3DMesh(entity, kind) {
     const type = entity.type;
     const isPhoenixEvolution = type === 'phoenix' || entity.evolution?.name === '不死火凤凰';
     if (entity.evolution?.name === '九尾狐') {
-        // 九条尾巴都从同一个尾根长出，再由内向外像花瓣一样舒展；尾身连续、带纹线，末端自然弯曲。
-        const furMat = new Three.MeshStandardMaterial({ color:0xfff7fc, emissive:0x563152, emissiveIntensity:.12, roughness:.92, flatShading:false });
-        const softFurMat = new Three.MeshStandardMaterial({ color:0xf3e5f1, emissive:0x8f4b80, emissiveIntensity:.2, roughness:1, flatShading:false });
-        const tipMat = new Three.MeshStandardMaterial({ color:0xe45091, emissive:0x8a1649, emissiveIntensity:.48, roughness:.75, flatShading:false });
+        // 九条尾巴从同一个尾根向外扇形舒展。不同皮肤只换主题材质，仍保持九尾狐统一的柔软轮廓。
+        const nineTailSkin = entity.skin?.id || 'default';
+        const palette = nineTailSkin === 'moon'
+            ? { fur:0xe9e2ff, soft:0xffffff, tip:0x8968e8, glow:0xbda8ff }
+            : nineTailSkin === 'rose'
+                ? { fur:0xffd7e3, soft:0xfff1f5, tip:0xd92f6c, glow:0xff7da8 }
+                : { fur:0xfff4fa, soft:0xffffff, tip:0xe45091, glow:0xff86bb };
+        const furMat = new Three.MeshStandardMaterial({ color:palette.fur, emissive:palette.glow, emissiveIntensity:.18, roughness:.78, flatShading:false });
+        const softFurMat = new Three.MeshStandardMaterial({ color:palette.soft, emissive:palette.glow, emissiveIntensity:.22, roughness:.88, flatShading:false });
+        const tipMat = new Three.MeshStandardMaterial({ color:palette.tip, emissive:palette.glow, emissiveIntensity:.72, roughness:.58, flatShading:false });
+        const tailEntries = [];
         for (let i = 0; i < 9; i++) {
-            // 尾巴整体缩小，但把尾根略微前移，仍保持从身体自然生长出来的感觉。
             const tailGroup = new Three.Group();
-            tailGroup.scale.setScalar(.8);
-            tailGroup.position.set(0, .12 * size, .10 * size);
+            const baseScale = .73;
+            tailGroup.scale.setScalar(baseScale);
             const spread = (i - 4) / 4;
             const outer = Math.abs(spread);
-            const root = new Three.Vector3(0, .55 * size, .47 * size);
-            const mid = new Three.Vector3(spread * .50 * size, (.86 + (1 - outer) * .48) * size, (1.00 + outer * .18) * size);
-            const end = new Three.Vector3(spread * 1.28 * size, (.72 + (1 - outer) * 1.04) * size, (1.58 + outer * .34) * size);
+            const rootLayer = i % 3 - 1;
+            // 把组的原点放在尾根，并做很小的前后分层；九条尾巴不会挤成一束，也不会脱离身体。
+            tailGroup.position.set(spread * .028 * size, (.43 + rootLayer * .014) * size, (.46 + outer * .024 + rootLayer * .012) * size);
+            const root = new Three.Vector3(0, 0, 0);
+            const shoulder = new Three.Vector3(spread * .12 * size, (.08 + (1 - outer) * .08) * size, .18 * size);
+            const mid = new Three.Vector3(spread * .5 * size, (.3 + (1 - outer) * .48) * size, (.72 + outer * .12) * size);
+            const end = new Three.Vector3(spread * 1.12 * size, (.38 + (1 - outer) * .86) * size, (1.48 + outer * .25) * size);
             const curlSide = spread === 0 ? (i % 2 ? 1 : -1) : Math.sign(spread);
-            const curl = new Three.Vector3(end.x + curlSide * .36 * size, end.y + (.20 + outer * .14) * size, end.z + .12 * size);
-            const curve = new Three.CatmullRomCurve3([root, mid, end, curl]);
-            // 每条尾巴使用一整根连续的弯曲尾身，彻底取消会看成豆豆或断节的多段模型。
-            const tail = new Three.Mesh(new Three.TubeGeometry(curve, 40, (.19 + (1 - outer) * .035) * size, 12, false), furMat);
+            const curl = new Three.Vector3(end.x + curlSide * (.24 + outer * .08) * size, end.y + (.22 + outer * .08) * size, end.z + .1 * size);
+            const curve = new Three.CatmullRomCurve3([root, shoulder, mid, end, curl], false, 'catmullrom', .5);
+            const tail = new Three.Mesh(makeTaperedTailGeometry(curve, size * (1 - outer * .08)), furMat);
             tailGroup.add(tail);
-            // 顶部毛纹是一根贴着尾身的细曲线；最后一段变深粉并随尾尖向上弯钩。
-            // 三条略微偏开的细软毛流，让轮廓看起来蓬松，而不是一根光滑塑料管。
-            [-1, 0, 1].forEach((side, strandIndex) => {
-                const points = curve.getPoints(26).map((point, pointIndex) => {
-                    const t = pointIndex / 26;
-                    return point.clone().add(new Three.Vector3(side * (.08 + t * .055) * size, (.09 + Math.sin(t * Math.PI) * .04) * size, side * .035 * size));
-                });
-                const strand = new Three.Mesh(new Three.TubeGeometry(new Three.CatmullRomCurve3(points), 26, (.052 - strandIndex * .004) * size, 7, false), softFurMat);
-                tailGroup.add(strand);
+
+            // 单条柔和高光顺着尾巴生长，不再用三根并列细管破坏整体轮廓。
+            const highlightPoints = curve.getPoints(30).map((point, pointIndex) => {
+                const t = pointIndex / 30;
+                return point.clone().add(new Three.Vector3(-spread * .025 * size, (.055 + Math.sin(t * Math.PI) * .035) * size, -.045 * size));
             });
-            // 尾尖使用短毛束收束成弯钩，不做硬直的粉色管线。
-            const tipCurve = new Three.CatmullRomCurve3([curve.getPoint(.7), curve.getPoint(.88), curl]);
-            tailGroup.add(new Three.Mesh(new Three.TubeGeometry(tipCurve, 14, .09 * size, 8, false), tipMat));
-            [.18,.34,.52,.69,.83].forEach(t => {
-                const point = curve.getPoint(t), tangent = curve.getTangent(t).normalize();
-                [-1, 1].forEach(side => {
-                    const tuft = new Three.Mesh(new Three.ConeGeometry((.07 + (1-t) * .04) * size, (.18 + (1-t) * .13) * size, 6), softFurMat);
-                    tuft.position.copy(point).add(new Three.Vector3(side * .12 * size, .08 * size, 0));
-                    tuft.quaternion.setFromUnitVectors(new Three.Vector3(0,1,0), tangent.clone().add(new Three.Vector3(side * .18,.16,0)).normalize());
-                    tailGroup.add(tuft);
-                });
-            });
+            const highlight = new Three.Mesh(new Three.TubeGeometry(new Three.CatmullRomCurve3(highlightPoints), 30, .026 * size, 6, false), softFurMat);
+            tailGroup.add(highlight);
+
+            // 蓬松起伏已经直接做进连续尾身的曲面，不再额外堆叠球形毛束，手机端也更流畅。
+            const tipPoint = curve.getPoint(.95), tipTangent = curve.getTangent(.95).normalize();
+            const tipTuft = new Three.Mesh(new Three.SphereGeometry(.12 * size,9,7),tipMat);
+            tipTuft.scale.set(.78,.62,1.7); tipTuft.position.copy(tipPoint);
+            tipTuft.quaternion.setFromUnitVectors(new Three.Vector3(0,0,1),tipTangent); tailGroup.add(tipTuft);
             group.add(tailGroup);
+            tailEntries.push({ group:tailGroup, phase:i * .72, outer, baseScale });
         }
+        // 觉醒常驻效果：尾根光环与九枚微光围绕身体，颜色由当前皮肤决定。
+        const auraMat = new Three.MeshBasicMaterial({ color:palette.glow, transparent:true, opacity:.42, blending:Three.AdditiveBlending, depthWrite:false });
+        const auraRing = new Three.Mesh(new Three.TorusGeometry(.62 * size,.025 * size,6,30),auraMat);
+        auraRing.rotation.x=Math.PI/2; auraRing.position.set(0,.12 * size,.5 * size); group.add(auraRing);
+        const motes = Array.from({length:9},(_,index) => {
+            const mote = new Three.Mesh(new Three.OctahedronGeometry((index%3===0?.06:.042)*size,0),new Three.MeshBasicMaterial({color:index%2?palette.soft:palette.glow,transparent:true,opacity:.8,blending:Three.AdditiveBlending,depthWrite:false}));
+            mote.userData.baseAngle=index/9*Math.PI*2; group.add(mote); return mote;
+        });
+        const foxLight = new Three.PointLight(palette.glow,1.35,3.8); foxLight.position.set(0,.72 * size,.25 * size); group.add(foxLight);
+        group.userData.nineTailFox = { tails:tailEntries, auraRing, motes, light:foxLight };
     }
     if (['cat','fox','wolf','tiger','leopard','lion','dog','raccoon','squirrel'].includes(type)) { ear(-0.25); ear(0.25); if (!(type === 'fox' && entity.evolution?.name === '九尾狐')) add(new Three.ConeGeometry(0.1 * size, 0.4 * size, 6), material, 0, 0.33 * size, 0.7 * size).rotation.x = Math.PI / 2; }
     if (type === 'rabbit') { ear(-0.18, 0.6, 0.1); ear(0.18, 0.6, 0.1); }
@@ -1928,7 +1997,8 @@ function build3DMesh(entity, kind) {
         const moonMat = new Three.MeshStandardMaterial({ color:0xe8e4ff, emissive:0x7b5cff, emissiveIntensity:.55, roughness:.35, flatShading:true });
         add(new Three.SphereGeometry(.21 * size, 9, 7), moonMat, 0, .45 * size, -.39 * size, 1.1, .84, .42);
         [-1, 1].forEach(side => add(new Three.ConeGeometry(.07 * size, .22 * size, 5), moonMat, side * .25 * size, 1.2 * size, -.02 * size));
-        const tailTip = add(new Three.ConeGeometry(.14 * size, .35 * size, 6), moonMat, 0, .34 * size, .9 * size); tailTip.rotation.x=Math.PI/2;
+        // 普通形态才追加单尾尾尖；觉醒后由九条完整尾巴各自收尖，不能残留“第十条尾尖”。
+        if (!entity.evolved) { const tailTip = add(new Three.ConeGeometry(.14 * size, .35 * size, 6), moonMat, 0, .34 * size, .9 * size); tailTip.rotation.x=Math.PI/2; }
         const crescent = new Three.Mesh(new Three.TorusGeometry(.18 * size,.035 * size,6,18,Math.PI*1.5), moonMat);
         crescent.position.set(.34 * size, 1.17 * size, .1 * size); crescent.rotation.y=.65; group.add(crescent);
     }
@@ -2040,6 +2110,29 @@ function render3D() {
     if (!flying && mesh.userData.legs) mesh.userData.legs.forEach((leg, index) => {
             leg.rotation.x = moving ? Math.sin(phase * 3 + (index % 2 ? Math.PI : 0)) * .65 : 0;
         });
+        if (mesh.userData.nineTailFox) {
+            const foxFx = mesh.userData.nineTailFox;
+            const motionStrength = moving ? 1.28 : .72;
+            // 九条尾巴错开相位缓慢摆动：不会僵住，也不会像风扇一样整齐同步旋转。
+            foxFx.tails.forEach((tail, index) => {
+                const wave = phase * .58 + tail.phase;
+                tail.group.rotation.y = Math.sin(wave) * (.055 + tail.outer * .025) * motionStrength;
+                tail.group.rotation.z = Math.sin(wave * .82 + index * .21) * (.032 + tail.outer * .018) * motionStrength;
+                tail.group.rotation.x = Math.cos(wave * .7) * .018 * motionStrength;
+                tail.group.scale.setScalar(tail.baseScale * (1 + Math.sin(wave * 1.15) * .018));
+            });
+            foxFx.auraRing.rotation.z += .012;
+            foxFx.auraRing.scale.setScalar(.96 + (Math.sin(phase * 1.35) + 1) * .045);
+            foxFx.motes.forEach((mote,index) => {
+                const angle = phase * .42 + mote.userData.baseAngle;
+                const radius = .5 + (index % 3) * .09;
+                mote.position.set(Math.cos(angle) * radius, .48 + Math.sin(angle * 2 + index) * .28, .26 + Math.sin(angle) * radius);
+                const twinkle=.62+(Math.sin(phase*2.5+index*1.7)+1)*.24;
+                mote.scale.setScalar(twinkle); mote.rotation.y += .035;
+                if (mote.material) mote.material.opacity=.48+twinkle*.38;
+            });
+            foxFx.light.intensity=1.05+(Math.sin(phase*1.7)+1)*.42;
+        }
         if (mesh.userData.swimming) {
             mesh.rotation.z = moving ? Math.sin(phase * 2.2) * .08 : 0;
             // 鱼尾和鱼鳍左右摆动，游动时会在身后持续吐出小气泡。
@@ -2185,9 +2278,36 @@ function render3D() {
             mesh.rotation.y += entity.effect === 'reflectBurst' ? .24 : .075;
             mesh.scale.setScalar(pulse);
         }
+        if (kind === 'skill' && mesh.userData.nineFoxSkill) {
+            const foxSkill = mesh.userData.nineFoxSkill;
+            const maxLife = entity.maxLife || 90;
+            const remaining = Math.max(0, Math.min(1, entity.life / maxLife));
+            const progress = 1 - remaining;
+            // 觉醒狐火先柔和亮起，结束前完整淡出，避免最后一帧突然消失。
+            const fade = Math.max(0, Math.min(1, progress * 6, remaining * 5));
+            foxSkill.rings.forEach((ring,index) => {
+                ring.rotation.z += .035 + index * .014;
+                const expansion = ring.userData.baseScale + progress * (.45 - index * .04);
+                ring.scale.setScalar(expansion * (1 + Math.sin(phase * 2.4 + index) * .045));
+                ring.material.opacity = Math.max(0, (.78-progress*.24-index*.1) * fade);
+            });
+            foxSkill.wisps.forEach((wisp,index) => {
+                const angle = wisp.userData.baseAngle + phase * (index % 2 ? 1.08 : -.92) + progress * .8;
+                const radius = wisp.userData.baseRadius + progress * wisp.userData.outward;
+                wisp.position.set(Math.cos(angle)*radius,.28+Math.sin(phase*2.5+index)*.16+progress*.28,Math.sin(angle)*radius);
+                wisp.rotation.y=-angle; wisp.rotation.z=Math.sin(phase*2+index)*.18;
+                const pulse=.72+(Math.sin(phase*4.2+index*1.7)+1)*.2;
+                wisp.scale.setScalar(pulse*(1-progress*.18));
+                if (wisp.userData.wispMaterial) wisp.userData.wispMaterial.opacity=Math.max(0,(.96-progress*.34)*fade);
+            });
+            if (foxSkill.mist?.material) foxSkill.mist.material.opacity=Math.max(0,.42*fade*(1-progress*.28));
+            foxSkill.light.intensity=Math.max(0,(2.2+(Math.sin(phase*3.4)+1)*.85-progress*.65)*fade);
+        }
         if (kind === 'skill' && mesh.userData.skinSkill) {
-            const speed = mesh.userData.skinSkill === 'solar' ? 3.4 : mesh.userData.skinSkill === 'thunderTide' ? 3.2 : mesh.userData.skinSkill === 'nebula' ? 2.6 : 2.1;
-            mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .13 : mesh.userData.skinSkill === 'thunderTide' ? .115 : .08;
+            const isNineFoxSkill = !!mesh.userData.nineFoxSkill;
+            const speed = isNineFoxSkill ? .82 : mesh.userData.skinSkill === 'solar' ? 3.4 : mesh.userData.skinSkill === 'thunderTide' ? 3.2 : mesh.userData.skinSkill === 'nebula' ? 2.6 : 2.1;
+            // 九尾法阵已有九团狐火独立运转，皮肤装饰只缓慢呼吸，不再带着整个法阵高速旋转。
+            if (!isNineFoxSkill) mesh.rotation.y += mesh.userData.skinSkill === 'solar' ? .13 : mesh.userData.skinSkill === 'thunderTide' ? .115 : .08;
             mesh.scale.multiplyScalar(1 + Math.sin(phase * speed) * .012);
             mesh.children.forEach((part, index) => {
                 if (part.userData.skinTrail === undefined) return;
@@ -2502,7 +2622,8 @@ class Character {
         if (active.effect === 'reflect') { this.reflectHits = active.hits || 4; this.reflectRatio = active.ratio || .5; }
         if (active.effect === 'ink') {
             this.speedBoostTicks = 180;
-            gameState.enemies.forEach(enemy => { if (Math.hypot(enemy.x - this.x, enemy.y - this.y) < 250) enemy.slowTicks = 180; });
+            const radius = active.radius || 250;
+            gameState.enemies.forEach(enemy => { if (Math.hypot(enemy.x - this.x, enemy.y - this.y) < radius) enemy.slowTicks = 180; });
         }
         if (active.effect === 'poison') {
             gameState.enemies.forEach(enemy => { if (Math.hypot(enemy.x - this.x, enemy.y - this.y) < 230) { enemy.poisonTicks = 240; enemy.poisonSource = this; } });
@@ -2640,6 +2761,40 @@ class Character {
             ctx.lineTo(this.x + 10, this.y - this.radius - 48);
             ctx.closePath();
             ctx.fill();
+        }
+        if (this.evolution?.name === '九尾狐') {
+            // WebGL 不可用时也绘制真正的九尾：九条曲线从尾根向身后舒展，并带柔光与彩色尾尖。
+            const skinId = this.skin?.id || 'default';
+            const palette = skinId === 'moon'
+                ? { fur:'#d9ceff', glow:'#a989f2', tip:'#7154cf', highlight:'#ffffff' }
+                : skinId === 'rose'
+                    ? { fur:'#ffc2d4', glow:'#ef719b', tip:'#b9225b', highlight:'#fff1f5' }
+                    : { fur:'#f4b4d4', glow:'#e968a6', tip:'#bd397b', highlight:'#fff1f8' };
+            const facingLength = Math.hypot(this.facing?.x || 0, this.facing?.y || -1) || 1;
+            const backAngle = Math.atan2(-(this.facing?.y || -1) / facingLength, -(this.facing?.x || 0) / facingLength);
+            const time = gameState.world.time || 0;
+            ctx.save();
+            ctx.lineCap='round'; ctx.lineJoin='round'; ctx.shadowColor=palette.glow; ctx.shadowBlur=9;
+            for (let i=0;i<9;i++) {
+                const spread=(i-4)/4, outer=Math.abs(spread);
+                const angle=backAngle+spread*.82+Math.sin(time*1.3+i*.74)*.035;
+                const dir={x:Math.cos(angle),y:Math.sin(angle)}, side={x:-dir.y,y:dir.x};
+                const length=this.radius*(2.12+(1-outer)*.55);
+                const curl=(spread===0?(i%2?1:-1):Math.sign(spread))*this.radius*(.5+outer*.24);
+                const p0={x:this.x+dir.x*this.radius*.08,y:this.y+dir.y*this.radius*.08};
+                const p1={x:p0.x+dir.x*length*.31-side.x*curl*.16,y:p0.y+dir.y*length*.31-side.y*curl*.16};
+                const p2={x:p0.x+dir.x*length*.74-side.x*curl*.32,y:p0.y+dir.y*length*.74-side.y*curl*.32};
+                const p3={x:p0.x+dir.x*length+side.x*curl,y:p0.y+dir.y*length+side.y*curl};
+                const tailGradient=ctx.createLinearGradient(p0.x,p0.y,p3.x,p3.y);
+                tailGradient.addColorStop(0,palette.fur); tailGradient.addColorStop(.66,palette.fur); tailGradient.addColorStop(.84,palette.glow); tailGradient.addColorStop(1,palette.tip);
+                ctx.strokeStyle=palette.glow; ctx.globalAlpha=.24; ctx.lineWidth=Math.max(13,this.radius*.48*(1-outer*.1));
+                ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.bezierCurveTo(p1.x,p1.y,p2.x,p2.y,p3.x,p3.y); ctx.stroke();
+                ctx.strokeStyle=tailGradient; ctx.globalAlpha=.96; ctx.lineWidth=Math.max(10,this.radius*.38*(1-outer*.1));
+                ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.bezierCurveTo(p1.x,p1.y,p2.x,p2.y,p3.x,p3.y); ctx.stroke();
+                ctx.strokeStyle=palette.highlight; ctx.globalAlpha=.42; ctx.lineWidth=2.2;
+                ctx.beginPath(); ctx.moveTo(p0.x-side.x*2,p0.y-side.y*2); ctx.bezierCurveTo(p1.x-side.x*2,p1.y-side.y*2,p2.x-side.x*2,p2.y-side.y*2,p3.x,p3.y); ctx.stroke();
+            }
+            ctx.restore();
         }
         // 绘制生命值显示
         ctx.font = 'bold 28px Arial';
@@ -2833,6 +2988,9 @@ class SkillEffect {
         } else if (active.effect === 'pull') {
             this.kind = 'pull'; this.radius = active.radius || 280; this.life = 34; this.damage = 0;
             this.color = skillEffectColor(owner);
+        } else if (active.effect === 'ink') {
+            // 九尾狐火是以施法点为中心绽放的范围法阵；不再跟着玩家移动而让显示范围偏离命中范围。
+            this.kind = 'burstAura'; this.radius = active.radius || 250; this.life = 90; this.damage = 0;
         } else if (active.effect === 'reflect') {
             this.kind = 'aura'; this.radius = 56; this.life = 420; this.damage = 0;
             this.color = owner.skin?.id === 'durian' ? '#c7d84a' : '#4d82ff';
@@ -2845,6 +3003,7 @@ class SkillEffect {
         }
         // 极地的雪景很亮，所有会造成伤害的实体改成黑色，飞行轨迹更容易辨认。
         if (gameState.environment === 'polar' && this.damage > 0) this.color = '#111820';
+        this.maxLife = this.life;
     }
 
     update(frameScale = 1) {
@@ -2867,7 +3026,12 @@ class SkillEffect {
     draw(ctx) {
         ctx.save();
         const alpha = Math.max(0, Math.min(1, this.life / 35));
-        ctx.globalAlpha = alpha;
+        const maxLife = this.maxLife || Math.max(1, this.life);
+        const lifeRemaining = Math.max(0, Math.min(1, this.life / maxLife));
+        const lifeProgress = 1 - lifeRemaining;
+        const isNineFoxBurst = this.effect === 'ink' && this.owner.type === 'fox' && this.owner.evolution?.name === '九尾狐';
+        const effectEnvelope = isNineFoxBurst ? Math.max(0, Math.min(1, lifeProgress * 6, lifeRemaining * 5)) : 1;
+        ctx.globalAlpha = alpha * effectEnvelope;
         const hue = (performance.now() / 4) % 360;
         ctx.strokeStyle = this.rainbowSkin ? `hsl(${hue} 95% 60%)` : this.color;
         ctx.fillStyle = this.rainbowSkin ? `hsl(${(hue + 42) % 360} 95% 60%)` : this.color;
@@ -2979,29 +3143,40 @@ class SkillEffect {
                 }
             }
         } else if (this.effect === 'ink') {
-            const evolvedMoon = this.skinEffect === 'moon' && this.owner.evolved;
-            const evolvedRose = this.skinEffect === 'rose' && this.owner.evolved;
+            const evolvedNineFox = this.owner.type === 'fox' && this.owner.evolution?.name === '九尾狐';
+            const foxColors = this.skinEffect === 'moon'
+                ? { core:'#f7f2ff', bright:'#cbb8ff', deep:'#7959dc', fade:'rgba(81,45,168,0)' }
+                : this.skinEffect === 'rose'
+                    ? { core:'#ffe492', bright:'#ff9fbd', deep:'#d92f69', fade:'rgba(165,20,72,0)' }
+                    : { core:'#ffffff', bright:'#ffc3dd', deep:'#ed4b94', fade:'rgba(174,30,101,0)' };
             const mist = ctx.createRadialGradient(this.x,this.y,4,this.x,this.y,this.radius);
-            mist.addColorStop(0, evolvedMoon ? 'rgba(220,200,255,.54)' : evolvedRose ? 'rgba(255,185,209,.58)' : 'rgba(80,105,150,.42)');
-            mist.addColorStop(.58, evolvedMoon ? 'rgba(136,92,225,.34)' : evolvedRose ? 'rgba(226,55,112,.38)' : 'rgba(45,70,110,.25)');
-            mist.addColorStop(1, evolvedRose ? 'rgba(165,20,72,0)' : 'rgba(65,35,110,0)');
+            mist.addColorStop(0, evolvedNineFox ? foxColors.core : 'rgba(80,105,150,.42)');
+            mist.addColorStop(.16, evolvedNineFox ? foxColors.bright : 'rgba(65,88,130,.36)');
+            mist.addColorStop(.62, evolvedNineFox ? `${foxColors.deep}88` : 'rgba(45,70,110,.25)');
+            mist.addColorStop(1, evolvedNineFox ? foxColors.fade : 'rgba(65,35,110,0)');
             ctx.fillStyle=mist; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fill();
-            if (evolvedMoon) {
-                for (let i=0;i<9;i++) {
-                    const angle=i/9*Math.PI*2+performance.now()/900;
-                    const distance=this.radius*(.72+(i%2)*.16);
-                    const x=this.x+Math.cos(angle)*distance, y=this.y+Math.sin(angle)*distance;
-                    ctx.fillStyle=i%2?'#e4d8ff':'#9c78ff';
-                    ctx.beginPath(); ctx.moveTo(x,y-10); ctx.quadraticCurveTo(x+8,y,x,y+9); ctx.quadraticCurveTo(x-8,y,x,y-10); ctx.fill();
+            if (evolvedNineFox) {
+                const now=performance.now(), progress=lifeProgress;
+                ctx.globalCompositeOperation='lighter';
+                // 三层法阵依次向外舒展，避免只看到一个普通圆圈。
+                for(let ring=0;ring<3;ring++){
+                    const ringRadius=this.radius*(.34+ring*.2+progress*(.09+ring*.035));
+                    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate((ring%2?1:-1)*now/(1500+ring*350));
+                    ctx.strokeStyle=ring%2?foxColors.bright:foxColors.deep; ctx.globalAlpha=.72-ring*.14-progress*.22; ctx.lineWidth=4-ring*.7;
+                    ctx.setLineDash([ringRadius*.24,ringRadius*.12]); ctx.beginPath(); ctx.arc(0,0,ringRadius,0,Math.PI*2); ctx.stroke(); ctx.restore();
                 }
-            } else if (evolvedRose) {
+                // 九团狐火分不同方向和高度绽放；玫瑰皮肤用花瓣，其余皮肤用双层火焰。
                 for (let i=0;i<9;i++) {
-                    const angle=i/9*Math.PI*2+performance.now()/1100;
-                    const distance=this.radius*(.68+(i%2)*.15);
+                    const angle=i/9*Math.PI*2+(i%2?1:-1)*now/1250+progress*.65;
+                    const distance=this.radius*(.58+(i%3)*.075+progress*.2);
                     const x=this.x+Math.cos(angle)*distance, y=this.y+Math.sin(angle)*distance;
-                    ctx.save(); ctx.translate(x,y); ctx.rotate(angle+.45); ctx.fillStyle=i%2?'#ffabc3':'#e53972';
-                    ctx.beginPath(); ctx.moveTo(0,-10); ctx.bezierCurveTo(9,-5,8,7,0,11); ctx.bezierCurveTo(-8,7,-9,-5,0,-10); ctx.fill(); ctx.restore();
+                    const pulse=.78+(Math.sin(now/145+i*1.8)+1)*.14;
+                    ctx.save(); ctx.translate(x,y); ctx.rotate(angle+.45); ctx.scale(pulse,pulse);
+                    ctx.fillStyle=i%2?foxColors.bright:foxColors.deep;
+                    ctx.beginPath(); ctx.moveTo(0,-13); ctx.bezierCurveTo(9,-7,9,5,0,12); ctx.bezierCurveTo(-9,5,-9,-7,0,-13); ctx.fill();
+                    ctx.fillStyle=foxColors.core; ctx.globalAlpha=.9; ctx.beginPath(); ctx.moveTo(0,-6); ctx.quadraticCurveTo(4,0,0,6); ctx.quadraticCurveTo(-4,0,0,-6); ctx.fill(); ctx.restore();
                 }
+                ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=alpha*effectEnvelope;
             }
         } else if (this.kind === 'aura') {
             ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
@@ -5137,13 +5312,23 @@ function startGame(animalType, savedRun = null) {
     if (gameState.mode === 'tutorial' && gameState.environment === 'land') placeTutorialPlayerSafely(gameState.player);
     if (savedRun && ['ranked','tower','evolution'].includes(gameState.mode)) {
         const savedPlayer = savedRun.player;
-        const fields = ['x','y','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved'];
+        // 恢复这局开始时实际穿戴的皮肤，避免在大厅换装或试玩后污染进化存档。
+        const savedSkin = savedPlayer.skinId ? HERO_SKINS[gameState.player.type]?.find(skin => skin.id === savedPlayer.skinId && isSkinReleased(skin)) : null;
+        if (savedSkin && ownsSkin(gameState.player.type, savedSkin)) {
+            gameState.player.skin = savedSkin;
+            gameState.player.color = savedSkin.color;
+        }
+        const fields = ['x','y','radius','level','exp','expToLevel','attack','defense','speed','maxHp','hp','skills','regenBonus','critChance','comboChance','lifesteal','skillPower','activeCooldownReduction','activeCooldown','empoweredHits','empoweredDamage','shieldHits','shieldReduction','evolved','evolutionBurstPending'];
         fields.forEach(field => { if (savedPlayer[field] !== undefined) gameState.player[field] = savedPlayer[field]; });
         if (savedPlayer.evolved && EVOLUTION_ROUTES[gameState.player.type]) {
             const route = EVOLUTION_ROUTES[gameState.player.type];
             gameState.player.evolved = true; gameState.player.evolution = route;
-            gameState.player.name = route.name; gameState.player.emoji = route.emoji; gameState.player.color = gameState.player.skin?.color || route.color;
+            const hasEquippedSkin = gameState.player.skin?.id && gameState.player.skin.id !== 'default';
+            gameState.player.name = route.name; gameState.player.emoji = route.emoji; gameState.player.color = hasEquippedSkin ? gameState.player.skin.color : route.color;
             gameState.player.activeAbility = route.active;
+            // 兼容旧版本进化存档：旧存档没有记录变大的碰撞半径和觉醒演出标志。
+            if (savedPlayer.radius === undefined) gameState.player.radius = 32;
+            if (savedPlayer.evolutionBurstPending === undefined && savedRun.awaitingLevelUp && route.name === '九尾狐') gameState.player.evolutionBurstPending = true;
         }
         gameState.player.critChance = Math.min(1, Math.max(0, gameState.player.critChance || 0));
         gameState.player.comboChance = Math.min(MAX_COMBO_CHANCE, Math.max(0, gameState.player.comboChance || 0));
@@ -5171,12 +5356,13 @@ function startGame(animalType, savedRun = null) {
         spawnAmbientPickups();
         if (gameState.world.level === 1) spawnChest();
     }
-    saveRankedRun();
     // 如果退出时正在选升级技能，继续游戏后先恢复相同的三张卡，再继续战斗。
     if (savedRun?.awaitingLevelUp) {
         gameState.screen = 'levelup';
         gameState.levelUpShown = false;
     }
+    // 先恢复“正在选技能”的画面状态再保存，防止继续游戏时把待选技能误写成普通战斗。
+    saveRankedRun();
     // 首帧必须由浏览器提供时间戳，避免直接调用时产生无效坐标。
     requestAnimationFrame(gameLoop);
 }
@@ -5857,11 +6043,18 @@ function showLevelUpSkills() {
             document.getElementById('levelUpModal').classList.add('hidden');
 
             // 溢出的经验按等级逐次结算：每一级都能获得一次技能选择。
-            if (!gameState.player.tryLevelUp()) {
+            const advancedAgain = gameState.player.tryLevelUp();
+            if (!advancedAgain) {
                 gameState.screen = 'playing';
                 // 升级选择需要临时退出全屏；玩家点击技能后立刻回到沉浸式全屏战斗。
                 enterGameFullscreen();
+                if (gameState.player.evolutionBurstPending) {
+                    // 所有连续升级卡都选完、重新回到战场后才播放；否则特效会被下一张升级界面遮住。
+                    spawnSkillEffect(gameState.player, { ...gameState.player.activeAbility, name:'九尾觉醒' });
+                    gameState.player.evolutionBurstPending = false;
+                }
             }
+            saveRankedRun();
         };
         grid.appendChild(card);
     });
@@ -6173,7 +6366,7 @@ function updateUI() {
     document.getElementById('passiveSkill').textContent = `被动·${player.passiveAbility.name}：${player.passiveAbility.desc}`;
     const activeButton = document.getElementById('activeSkillButton');
     const cooldownSeconds = Math.ceil(player.activeCooldown / TARGET_FPS);
-    const skillIcon = player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '🎯' : player.activeAbility.effect === 'pull' ? '🌀' : player.activeAbility.effect === 'ink' ? '🌊' : player.activeAbility.effect === 'poison' ? '☠️' : player.activeAbility.effect === 'reflect' ? '🦔' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
+    const skillIcon = player.activeAbility.name === '九尾狐火' ? '🔥' : player.activeAbility.effect === 'dash' ? '💨' : player.activeAbility.effect === 'empower' ? '🎯' : player.activeAbility.effect === 'pull' ? '🌀' : player.activeAbility.effect === 'ink' ? '🌊' : player.activeAbility.effect === 'poison' ? '☠️' : player.activeAbility.effect === 'reflect' ? '🦔' : player.activeAbility.effect.includes('heal') ? '💚' : player.activeAbility.effect === 'shield' ? '🛡️' : '✨';
     activeButton.textContent = cooldownSeconds > 0
         ? `${skillIcon} ${player.activeAbility.name} · 冷却 ${cooldownSeconds}s`
         : `${skillIcon} ${player.activeAbility.name}（${controlMode === 'mobile' ? '点击' : '空格'}）`;
