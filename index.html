@@ -80,6 +80,7 @@
         .status-effects { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; max-width:244px; }
         .status-effect { display:inline-flex; align-items:center; gap:3px; padding:3px 6px; border:1px solid rgba(63,126,210,.48); border-radius:999px; color:#173d73; background:rgba(225,243,255,.92); font-size:11px; font-weight:800; box-shadow:0 1px 3px rgba(17,70,130,.16); }
         #fullscreenButton { position:absolute; z-index:260; right:12px; bottom:12px; }
+        #soundToggleButton { position:absolute; z-index:260; top:12px; right:128px; min-width:92px; }
         #skinTrialExitButton { position:absolute; z-index:270; top:12px; right:12px; box-shadow:0 3px 12px rgba(0,0,0,.25); }
         #gameContainer:fullscreen, #gameContainer:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
 
@@ -145,12 +146,13 @@
         #gameContainer.mobile-controls .provoke-btn { right:max(18px,env(safe-area-inset-right)); top:auto; bottom:max(24px,env(safe-area-inset-bottom)); transform:none; min-width:132px; min-height:46px; }
         #gameContainer.mobile-controls .skill-info-hold { right:max(164px,calc(env(safe-area-inset-right) + 164px)); top:auto; bottom:max(28px,calc(env(safe-area-inset-bottom) + 28px)); min-height:40px; }
         #gameContainer.mobile-controls #fullscreenButton { top:max(10px,env(safe-area-inset-top)); right:max(10px,env(safe-area-inset-right)); bottom:auto; }
+        #gameContainer.mobile-controls #soundToggleButton { top:max(10px,env(safe-area-inset-top)); right:max(112px,calc(env(safe-area-inset-right) + 112px)); min-height:42px; touch-action:manipulation; }
         .device-choice { display:flex; gap:8px; margin-top:10px; }
         .device-choice .btn { flex:1; }
         .device-choice .selected { outline:3px solid #ffd84d; background:#3fa66d; }
         .mail-button, .notification-entry { position:relative; }
         .mail-badge { position:absolute; top:-9px; right:-10px; min-width:19px; height:19px; padding:0 5px; border-radius:12px; background:#e73b3b; color:#fff; font-size:11px; line-height:19px; font-weight:bold; box-shadow:0 1px 4px rgba(0,0,0,.35); }
-        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100svh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:128px; left:10px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } .skill-info-hold { right:14px; top:calc(59% + 54px); font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
+        @media (max-width: 1050px) { #gameContainer { width:100vw; height:70vw; max-height:100svh; border-radius:0; } #playerStats,#gameStats { font-size:10px; padding:5px 6px; max-width:48vw; } #gameStats { top:128px; left:10px; } #playerStats .stat-bar-fill { width:64px; } #playerStats .active-skill-btn { right:14px; min-width:108px; padding:9px 10px; font-size:10px; } .skill-info-hold { right:14px; top:calc(59% + 54px); font-size:10px; } #fullscreenButton { right:10px; bottom:10px; } #soundToggleButton { top:10px; right:112px; padding:8px 10px; min-width:84px; } .modal-content { max-width:92vw; max-height:92vh; overflow:auto; } }
         @media (pointer:coarse) and (orientation:landscape) { #gameContainer.mobile-controls { width:100vw; height:100svh; max-height:100svh; } #mobileJoystick { width:146px; height:146px; left:max(18px,env(safe-area-inset-left)); bottom:max(18px,env(safe-area-inset-bottom)); } #joystickStick { left:41px; top:41px; width:60px; height:60px; } }
 
         .ability-info {
@@ -528,6 +530,7 @@
         <button id="tutorialExitButton" class="btn" type="button">跳过新手实战</button>
         <div id="mobileJoystick" aria-label="移动摇杆"><div id="joystickStick"></div></div>
         <button id="fullscreenButton" class="btn" type="button">⛶ 全屏</button>
+        <button id="soundToggleButton" class="btn" type="button" aria-pressed="true">🔊 音效</button>
     </div>
 
     <!-- 大厅 -->
@@ -555,6 +558,7 @@
             <div class="sign-card"><button id="mailButton" class="btn mail-button" type="button" onclick="openAccountPanel('mail')">✉️ 邮件<span id="mailBadge" class="mail-badge" hidden>0</span></button><div id="accountPanel" style="font-size:12px;color:#555;flex:1;">系统邮件与好友邮件入口</div></div>
             <button class="btn" id="replayTutorialButton" type="button">🎓 重看新手教程</button>
             <button class="btn" id="hallFullscreenButton" type="button">⛶ 大厅全屏</button>
+            <button class="btn" id="hallSoundToggleButton" type="button" aria-pressed="true">🔊 音效：开</button>
             <div class="sign-card"><div><strong>🎮 游玩方式</strong><br><small id="deviceModeText">当前：电脑键盘</small></div><div class="device-choice"><button class="btn" id="desktopModeButton" type="button">🖥️ 电脑键鼠</button><button class="btn" id="mobileModeButton" type="button">📱 手机摇杆</button></div></div>
             <div class="sign-card" id="signInCard"><div><strong>📅 新手七日签到</strong><br><small id="signProgress">今天是新手签到第 1 天（进度 0/7）</small><br><small>第 2 天送小狐狸，第 7 天送火凤凰；奖励通过邮件手动领取。</small></div><button class="btn btn-success" id="signButton" type="button">签到第 1 天</button></div>
             <div class="sign-card" id="hundredSignCard" hidden><div><strong>🎉 百天签到</strong><br><small id="hundredSignProgress">新手七日签到完成后开启</small><br><small>普通天数送 150 金币；第 2、7、10、18、25、50、75、100 天有特别奖励。</small></div><button class="btn btn-success" id="hundredSignButton" type="button">百天签到</button></div>
@@ -714,6 +718,6 @@
     </div>
     <button id="skinTrialExitButton" class="btn" type="button" hidden>🏠 返回大厅</button>
 
-    <script src="game.js?v=3.7.11"></script>
+    <script src="game.js?v=3.7.12"></script>
 </body>
 </html>

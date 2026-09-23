@@ -743,6 +743,93 @@ let gameState = {
 
 let controlMode = localStorage.getItem('controlMode') || 'desktop';
 const mobileInput = { x: 0, y: 0, active: false };
+
+// ============ 轻量音效系统 ============
+// 使用浏览器实时合成短音效，不加载外部音频文件，手机端也可以快速开始游戏。
+const gameAudio = {
+    enabled: localStorage.getItem('soundEnabled') !== '0',
+    context: null,
+    master: null,
+    lastPlayed: Object.create(null)
+};
+
+function ensureAudioContext() {
+    if (!gameAudio.enabled) return null;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!gameAudio.context) {
+        gameAudio.context = new AudioContextClass();
+        gameAudio.master = gameAudio.context.createGain();
+        gameAudio.master.gain.value = .42;
+        gameAudio.master.connect(gameAudio.context.destination);
+    }
+    if (gameAudio.context.state === 'suspended') gameAudio.context.resume().catch(() => {});
+    return gameAudio.context;
+}
+
+function soundTone(context, frequency, offset, duration, type = 'sine', volume = .08, endFrequency = frequency) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const start = context.currentTime + offset;
+    const end = start + duration;
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(Math.max(30, frequency), start);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, endFrequency), end);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), start + Math.min(.012, duration / 3));
+    gain.gain.exponentialRampToValueAtTime(.0001, end);
+    oscillator.connect(gain);
+    gain.connect(gameAudio.master);
+    oscillator.start(start);
+    oscillator.stop(end + .025);
+}
+
+function playGameSound(name, details = {}) {
+    if (!gameAudio.enabled) return;
+    const now = performance.now();
+    const throttle = { click:35, pickup:55, attack:55, hurt:80, defeat:90, skill:120 }[name] || 0;
+    if (now - (gameAudio.lastPlayed[name] || 0) < throttle) return;
+    gameAudio.lastPlayed[name] = now;
+    const context = ensureAudioContext();
+    if (!context) return;
+    const pitch = Math.min(180, Math.max(0, Number(details.pitch) || 0));
+    const tone = (frequency, offset, duration, type, volume, endFrequency) => soundTone(context, frequency, offset, duration, type, volume, endFrequency);
+    if (name === 'click') tone(470, 0, .045, 'sine', .045, 650);
+    else if (name === 'pickup') { tone(690 + pitch * 2, 0, .07, 'sine', .055, 920 + pitch * 2); tone(980 + pitch, .045, .06, 'sine', .04, 1180 + pitch); }
+    else if (name === 'item') { tone(330, 0, .09, 'triangle', .07, 520); tone(660, .055, .11, 'sine', .06, 980); }
+    else if (name === 'chest') { [196, 294, 440, 659].forEach((frequency, index) => tone(frequency, index * .055, .13, 'triangle', .075, frequency * 1.12)); }
+    else if (name === 'attack') tone(170, 0, .085, 'sawtooth', .06, 82);
+    else if (name === 'critical') { tone(360, 0, .11, 'square', .075, 760); tone(820, .04, .14, 'sine', .075, 1320); }
+    else if (name === 'hurt') tone(130, 0, .14, 'sawtooth', .07, 68);
+    else if (name === 'skill') { tone(230, 0, .22, 'triangle', .075, 780); tone(480, .04, .25, 'sine', .06, 1180); }
+    else if (name === 'defeat') { tone(250, 0, .12, 'triangle', .07, 430); tone(520, .08, .16, 'sine', .065, 820); }
+    else if (name === 'levelup') [523, 659, 784, 1047].forEach((frequency, index) => tone(frequency, index * .07, .16, 'triangle', .065, frequency * 1.06));
+    else if (name === 'victory') [392, 523, 659, 784, 1047].forEach((frequency, index) => tone(frequency, index * .085, .2, index === 4 ? 'sine' : 'triangle', .075, frequency * 1.05));
+    else if (name === 'lose') [440, 330, 220].forEach((frequency, index) => tone(frequency, index * .11, .24, 'triangle', .065, frequency * .88));
+    else if (name === 'chestUpgrade') [440, 659, 880].forEach((frequency, index) => tone(frequency, index * .065, .17, 'triangle', .07, frequency * 1.08));
+    else if (name === 'chestFail') tone(220, 0, .22, 'sawtooth', .055, 145);
+}
+
+function updateSoundButtons() {
+    const gameButton = document.getElementById('soundToggleButton');
+    const hallButton = document.getElementById('hallSoundToggleButton');
+    if (gameButton) {
+        gameButton.textContent = gameAudio.enabled ? '🔊 音效' : '🔇 静音';
+        gameButton.setAttribute('aria-pressed', String(gameAudio.enabled));
+    }
+    if (hallButton) {
+        hallButton.textContent = gameAudio.enabled ? '🔊 音效：开' : '🔇 音效：关';
+        hallButton.setAttribute('aria-pressed', String(gameAudio.enabled));
+    }
+}
+
+function toggleGameSound() {
+    gameAudio.enabled = !gameAudio.enabled;
+    localStorage.setItem('soundEnabled', gameAudio.enabled ? '1' : '0');
+    updateSoundButtons();
+    if (gameAudio.enabled) playGameSound('click');
+}
+
 const RANKED_RUN_SAVE_KEY = 'rankedTowerRun';
 const TOWER_RUN_SAVE_KEY = 'towerRun';
 const EVOLUTION_RUN_SAVE_KEY = 'evolutionTrialRun';
@@ -2647,6 +2734,7 @@ class Character {
         }
 
         spawnSkillEffect(this, active);
+        if (this === gameState.player) playGameSound('skill');
         const angelCooldown = this.teamAngel ? .20 : 0;
         this.activeCooldown = active.cooldown * Math.max(.1, 1 - this.activeCooldownReduction - angelCooldown) * TARGET_FPS;
         if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 3) {
@@ -3211,6 +3299,7 @@ function defeatEnemyBySkill(enemy) {
     const player = gameState.player;
     const index = gameState.enemies.indexOf(enemy);
     if (!player || index < 0) return;
+    playGameSound('defeat');
     // 团队战不会永久移除英雄；技能击败后同样进入 3 秒复活倒计时。
     if (gameState.mode === 'team') {
         markTeamDefeated(enemy);
@@ -3335,7 +3424,10 @@ function attackOnce(attacker, defender) {
     } else attacker.bossRoar = false;
     const source = attacker === gameState.player ? 'player' : 'enemy';
     const actualDamage = defender.takeDamage(damage, attacker);
-    spawnDamageNumber(defender, actualDamage, attacker.lastCritical, source);
+    const openingCritical = attacker.lastCritical;
+    spawnDamageNumber(defender, actualDamage, openingCritical, source);
+    if (attacker === gameState.player) playGameSound(openingCritical ? 'critical' : 'attack');
+    else if (defender === gameState.player) playGameSound('hurt');
     let comboHits = 0;
     while (attacker.hp > 0 && defender.hp > 0 && Math.random() < Math.min(MAX_COMBO_CHANCE, attacker.comboChance || 0) && comboHits < 5) {
         comboHits++;
@@ -5072,6 +5164,7 @@ function claimOutsideChest() {
     if (!state.ready || state.claimed) return;
     localStorage.setItem('outsideChestClaimDate', outsideChestDate());
     if (state.ticketRun) localStorage.removeItem('outsideChestTicketRunDate');
+    playGameSound('chest');
     grantOutsideChestReward(OUTSIDE_CHEST_TIERS[state.tier], false, state.rewards || rollOutsideChestRewards(state.tier));
     document.getElementById('outsideChestModal').classList.add('hidden');
     showHall();
@@ -5090,6 +5183,7 @@ function tapOutsideChest() {
     const current = OUTSIDE_CHEST_TIERS[state.tier];
     let upgraded = false;
     if (state.tier < OUTSIDE_CHEST_TIERS.length - 1 && Math.random() < current.chance) { state.tier++; upgraded = true; }
+    playGameSound(upgraded ? 'chestUpgrade' : 'chestFail');
     saveOutsideChestState(state);
     if (state.taps >= 4) {
         localStorage.setItem('outsideChestReadyDate', outsideChestDate());
@@ -5426,6 +5520,7 @@ function checkCollisions() {
     for (let i = gameState.chests.length - 1; i >= 0; i--) {
         const chest = gameState.chests[i];
         if (Math.hypot(chest.x - player.x, chest.y - player.y) < player.radius + chest.radius) {
+            playGameSound('chest');
             spawnChestRewards(chest.x, chest.y);
             gameState.chests.splice(i, 1);
             if (gameState.mode === 'tutorial' && chest.tutorialChest) setTutorialStep(3);
@@ -5448,6 +5543,7 @@ function checkCollisions() {
 
             if (enemyDefeated) {
                 // 获胜
+                playGameSound('defeat');
                 spawnKillEffect(enemy.x, enemy.y);
                 if (gameState.mode !== 'skinTrial' && gameState.mode !== 'team') {
                     gameState.stats.killCount++;
@@ -5520,6 +5616,7 @@ function checkCollisions() {
             } else if (particle.type === 'item') {
                 activateChestItem(particle.itemKey);
             }
+            playGameSound(particle.type === 'item' ? 'item' : 'pickup', { pitch: particle.value || 0 });
             gameState.particles.splice(i, 1);
             if (gameState.mode === 'tutorial' && gameState.tutorial && gameState.tutorial.step === 1) setTutorialStep(2);
 
@@ -5532,6 +5629,7 @@ function checkCollisions() {
 function finishRankedMatch(won, rankRewardOverride = null) {
     if (gameState.screen === 'gameover') return;
     gameState.screen = 'gameover';
+    playGameSound(won ? 'victory' : 'lose');
     exitGameFullscreen();
     trackBattlePassMatch(won);
     trackLimitedGiftProgress('matches', 1);
@@ -5602,6 +5700,7 @@ function finishRankedMatch(won, rankRewardOverride = null) {
 function finishSkinTrial(won) {
     exitGameFullscreen();
     gameState.screen = 'gameover';
+    playGameSound(won ? 'victory' : 'lose');
     gameState.skinTrial = null;
     document.getElementById('skinTrialExitButton').hidden = true;
     document.getElementById('gameOverTitle').textContent = won ? '🎨 皮肤试玩完成！' : '🎨 皮肤试玩结束';
@@ -5904,6 +6003,7 @@ function updateBossSkills() {
         boss.attackFlash = 42;
         player.lastCombatTime = gameState.world.time;
         spawnDamageNumber(player, actualDamage, false, 'enemy');
+        playGameSound('hurt');
         // 咆哮会在 Boss 脚下释放一圈持续扩散的红色冲击波。
         const roar = new SkillEffect(boss, { name: boss.lastActionText, effect: 'roar' });
         roar.radius = 154;
@@ -5924,6 +6024,7 @@ function endGame() {
     trackLimitedGiftProgress('matches', 1);
     trackBattlePassMatch(false);
     gameState.screen = 'gameover';
+    playGameSound('lose');
     accountExp(15 + gameState.stats.killCount * 2);
     const score = gameState.stats.killCount;
     const highScore = Math.max(parseInt(gameState.stats.highScore) || 0, score);
@@ -5984,6 +6085,7 @@ function showLevelUpSkills() {
     if (gameState.levelUpShown) return;
     exitGameFullscreen();
     gameState.levelUpShown = true;
+    playGameSound('levelup');
     
     const skillsToShow = [...(gameState.pendingLevelUpSkills || [])];
     const canUseSkillDamage = ['empower', 'dash'].includes(gameState.player.activeAbility.effect);
@@ -6106,6 +6208,15 @@ document.getElementById('deleteSaveButton').addEventListener('click', () => {
 document.getElementById('saveChoiceBackButton').addEventListener('click', () => {
     pendingSaveMode = null; document.getElementById('saveChoiceModal').classList.add('hidden'); showHall();
 });
+// 浏览器要求声音必须由玩家的点击或按键解锁；同时给所有界面按钮一声轻提示。
+document.addEventListener('pointerdown', event => {
+    const interactive = event.target.closest?.('button, [role="button"], .skill-card');
+    if (!interactive || interactive.disabled) return;
+    playGameSound('click');
+}, { passive:true });
+window.addEventListener('keydown', () => ensureAudioContext(), { capture:true });
+document.getElementById('soundToggleButton').addEventListener('click', toggleGameSound);
+document.getElementById('hallSoundToggleButton').addEventListener('click', toggleGameSound);
 document.getElementById('fullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('hallFullscreenButton').addEventListener('click', toggleFullscreen);
 document.getElementById('skinTrialExitButton').addEventListener('click', exitSkinTrialToHall);
@@ -6527,6 +6638,7 @@ window.addEventListener('load', () => {
     });
     init();
     init3DRenderer();
+    updateSoundButtons();
     document.getElementById('importSaveFile')?.addEventListener('change', event => {
         importGameSave(event.target.files?.[0]);
         event.target.value = '';
